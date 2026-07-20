@@ -1,0 +1,167 @@
+.lobby-screen {
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+}
+
+.lobby-card {
+  background: #16213e;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.lobby-card h1 {
+  margin: 0 0 0.3rem;
+  font-size: 1.4rem;
+  color: #f0c040;
+}
+
+.lobby-subtitle {
+  color: #888;
+  font-size: 0.85rem;
+  margin: 0 0 1.5rem;
+}
+
+.player-list {
+  margin-bottom: 1.5rem;
+}
+
+.player-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #1a1a2e;
+}
+
+.player-item:last-child {
+  border-bottom: none;
+}
+
+.player-name {
+  font-weight: 600;
+}
+
+.player-class {
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.empty-slot {
+  color: #555;
+  padding: 0.6rem 0;
+  font-style: italic;
+}
+
+.launch-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #f0c040;
+  color: #16213e;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.launch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.launch-btn:not(:disabled) {
+  margin-top: 1rem;
+}
+
+.join-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #f0c040;
+  border-radius: 6px;
+  background: transparent;
+  color: #f0c040;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.join-btn:hover {
+  background: rgba(240, 192, 64, 0.1);
+}
+
+.join-form {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+  border: 1px solid #2a2a4a;
+}
+
+.class-select {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.class-select .count-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 0.5rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f3460;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.class-select .count-btn.selected {
+  border-color: #f0c040;
+  background: #1a3a6a;
+  color: #f0c040;
+}
+
+.join-submit-btn {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #f0c040;
+  color: #16213e;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.join-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.loading-msg {
+  text-align: center;
+  color: #aaa;
+  padding: 3rem 0;
+}

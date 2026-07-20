@@ -1,0 +1,155 @@
+.setup-screen {
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+}
+
+.setup-header {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.setup-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #f0c040;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid #555;
+  color: #aaa;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.create-card {
+  background: #16213e;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  margin-bottom: 2rem;
+}
+
+.create-card h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.2rem;
+  color: #f0c040;
+}
+
+.create-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #f0c040;
+  color: #16213e;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.player-count {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.count-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0f3460;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.count-btn.selected {
+  border-color: #f0c040;
+  background: #1a3a6a;
+  color: #f0c040;
+}
+
+.games-list-card {
+  background: #16213e;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.games-list-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+  color: #f0c040;
+}
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.game-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.game-row:hover {
+  border-color: #f0c040;
+}
+
+.game-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.game-row-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.game-row-meta {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.game-row-arrow {
+  color: #f0c040;
+  font-size: 1.2rem;
+}

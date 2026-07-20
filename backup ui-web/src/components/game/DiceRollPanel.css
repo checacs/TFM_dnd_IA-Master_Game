@@ -1,0 +1,30 @@
+.dice-panel {
+  padding: 0.4rem 1rem;
+  background: #16213e;
+  flex-shrink: 0;
+}
+
+.dice-panel h3 {
+  display: none;
+}
+
+.dice-results {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dice-result {
+  background: #0f3460;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #e0e0e0;
+  border: 1px solid #333;
+}
+
+.no-results {
+  color: #555;
+  font-style: italic;
+  font-size: 0.7rem;
+}
