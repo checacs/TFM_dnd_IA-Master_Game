@@ -231,7 +231,76 @@ const maps = [
       { name: 'Entrada', cells: [{ rowStart: 20, rowEnd: 21, colStart: 6, colEnd: 8 }] },
     ],
   },
-
+  {
+    _id: 'almacen-piso1',
+    name: 'Almacén (planta superior)',
+    description: 'Planta superior de un gran almacén de mercancías, conectada a la planta baja (mapId ' +
+        'almacen-piso2) por una escalera de carga central: estanterías y barriles a ambos lados de la ' +
+        'nave, el hueco de la escalera en el centro, y grandes puertas de carga al norte y al sur.',
+    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso1'],
+    rows: 32,
+    cols: 61,
+    imageUrl: '/maps/battleMap12-AlmacenPiso1.png',
+    zones: [
+      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 25 }] },
+      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 28, colStart: 26, colEnd: 44 }] },
+      { name: 'Almacén Este', cells: [{ rowStart: 0, rowEnd: 31, colStart: 45, colEnd: 60 }] },
+      { name: 'Entrada Norte', cells: [{ rowStart: 0, rowEnd: 3, colStart: 26, colEnd: 34 }] },
+      { name: 'Entrada Sur', cells: [{ rowStart: 28, rowEnd: 31, colStart: 26, colEnd: 34 }] },
+    ],
+  },
+  {
+    _id: 'almacen-piso2',
+    name: 'Almacén (planta baja)',
+    description: 'Planta baja del almacén, conectada a la planta superior (mapId almacen-piso1) por una ' +
+        'escalera de carga central: estanterías de mercancías al oeste, el hueco de la escalera, y al este ' +
+        'la oficina del encargado con un ventanal enrejado y una pequeña armería con lanzas y escudo. La ' +
+        'única puerta de carga está al sur.',
+    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso2'],
+    rows: 32,
+    cols: 61,
+    imageUrl: '/maps/battleMap12-AlmacenPiso2.png',
+    zones: [
+      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 25 }] },
+      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 28, colStart: 26, colEnd: 44 }] },
+      { name: 'Oficina del Encargado', cells: [{ rowStart: 0, rowEnd: 15, colStart: 45, colEnd: 60 }] },
+      { name: 'Armería', cells: [{ rowStart: 16, rowEnd: 31, colStart: 45, colEnd: 60 }] },
+      { name: 'Entrada', cells: [{ rowStart: 28, rowEnd: 31, colStart: 26, colEnd: 34 }] },
+    ],
+  },
+  {
+    _id: 'almacen-mercancias',
+    name: 'Almacén de mercancías',
+    description: 'Nave de almacén estrecha y alargada: una estantería alta recorre todo el muro oeste, tres ' +
+        'pasillos centrales de barriles y cajas, un pequeño rincón del encargado con escritorio junto a una ' +
+        'polea de carga, y una armería de reserva con lanzas colgadas. Las puertas de carga están al sur.',
+    tags: ['interior', 'almacen', 'comercio', 'tienda'],
+    rows: 22,
+    cols: 11,
+    imageUrl: '/maps/battleMap13-Almacen1.png',
+    zones: [
+      { name: 'Estantería Oeste', cells: [{ rowStart: 1, rowEnd: 20, colStart: 0, colEnd: 1 }] },
+      { name: 'Pasillo de Barriles', cells: [{ rowStart: 2, rowEnd: 19, colStart: 2, colEnd: 6 }] },
+      { name: 'Rincón del Encargado', cells: [{ rowStart: 0, rowEnd: 4, colStart: 7, colEnd: 10 }] },
+      { name: 'Armería de Reserva', cells: [{ rowStart: 5, rowEnd: 19, colStart: 7, colEnd: 10 }] },
+      { name: 'Entrada', cells: [{ rowStart: 20, rowEnd: 21, colStart: 3, colEnd: 7 }] },
+    ],
+  },
+  {
+    _id: 'almacen-suministros',
+    name: 'Almacén de suministros',
+    description: 'Nave de almacén dividida en dos largos pasillos de estanterías por un muro central de ' +
+        'estanterías, cada uno repleto de cajas, telas y provisiones. La puerta de carga está al sur.',
+    tags: ['interior', 'almacen', 'comercio', 'tienda'],
+    rows: 22,
+    cols: 11,
+    imageUrl: '/maps/battleMap14-Almacen2.png',
+    zones: [
+      { name: 'Pasillo Oeste', cells: [{ rowStart: 0, rowEnd: 21, colStart: 0, colEnd: 5 }] },
+      { name: 'Pasillo Este', cells: [{ rowStart: 0, rowEnd: 21, colStart: 6, colEnd: 10 }] },
+      { name: 'Entrada', cells: [{ rowStart: 20, rowEnd: 21, colStart: 3, colEnd: 7 }] },
+    ],
+  },
 ];
 
 async function seed() {
