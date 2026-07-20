@@ -301,6 +301,46 @@ const maps = [
       { name: 'Entrada', cells: [{ rowStart: 20, rowEnd: 21, colStart: 3, colEnd: 7 }] },
     ],
   },
+  {
+    _id: 'cabana-bosque-grande',
+    name: 'Cabaña grande del bosque',
+    description: 'Interior de una amplia cabaña de troncos en el bosque, con varias estancias: dormitorios ' +
+        'con camas individuales al norte, un estudio con estanterías al ala este, un comedor central con mesa ' +
+        'larga y chimenea de cocina, una despensa y cocina que recorre todo el muro oeste, alcobas y un rincón ' +
+        'de lectura al ala este, y al sur una zona de almacenaje con un cofre junto a la entrada porticada.',
+    tags: ['interior', 'cabana', 'bosque', 'multisala'],
+    rows: 21,
+    cols: 11,
+    imageUrl: '/maps/battleMap15-cabañaBosqueGrande.png',
+    zones: [
+      { name: 'Dormitorios Norte', cells: [{ rowStart: 0, rowEnd: 6, colStart: 3, colEnd: 10 }] },
+      { name: 'Cocina y Despensa Oeste', cells: [{ rowStart: 3, rowEnd: 14, colStart: 0, colEnd: 2 }] },
+      { name: 'Comedor Central', cells: [{ rowStart: 6, rowEnd: 11, colStart: 3, colEnd: 7 }] },
+      { name: 'Ala Este (Alcobas)', cells: [{ rowStart: 6, rowEnd: 18, colStart: 8, colEnd: 10 }] },
+      { name: 'Almacenaje Sur', cells: [{ rowStart: 14, rowEnd: 19, colStart: 3, colEnd: 7 }] },
+      { name: 'Entrada Sur', cells: [{ rowStart: 19, rowEnd: 20, colStart: 3, colEnd: 7 }] },
+    ],
+  },
+  {
+    _id: 'cabana-bosque-pequena',
+    name: 'Cabaña pequeña del bosque',
+    description: 'Vista aérea de una pequeña cabaña de troncos aislada en un claro nevado del bosque, rodeada ' +
+        'de árboles y rocas. Por dentro es una única estancia: cocina y mesa junto a la puerta al oeste, dos ' +
+        'camas y una chimenea central al este. Una pequeña entrada porticada da acceso por el sur.',
+    tags: ['exterior', 'interior', 'cabana', 'bosque'],
+    rows: 22,
+    cols: 11,
+    imageUrl: '/maps/battleMap16-cabañaBosquePequeña.png',
+    zones: [
+      { name: 'Bosque Norte', cells: [{ rowStart: 0, rowEnd: 7, colStart: 0, colEnd: 10 }] },
+      { name: 'Bosque Oeste', cells: [{ rowStart: 8, rowEnd: 15, colStart: 0, colEnd: 2 }] },
+      { name: 'Interior Cabaña - Cocina', cells: [{ rowStart: 8, rowEnd: 14, colStart: 3, colEnd: 5 }] },
+      { name: 'Interior Cabaña - Dormitorio', cells: [{ rowStart: 8, rowEnd: 14, colStart: 6, colEnd: 8 }] },
+      { name: 'Bosque Este', cells: [{ rowStart: 8, rowEnd: 15, colStart: 9, colEnd: 10 }] },
+      { name: 'Porche Sur', cells: [{ rowStart: 14, rowEnd: 15, colStart: 4, colEnd: 7 }] },
+      { name: 'Bosque Sur', cells: [{ rowStart: 16, rowEnd: 21, colStart: 0, colEnd: 10 }] },
+    ],
+  },
 ];
 
 async function seed() {
