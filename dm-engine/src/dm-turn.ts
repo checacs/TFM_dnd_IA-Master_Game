@@ -31,19 +31,25 @@ function protocolNudge(
     placedParticipantIds: Set<string>,
 ): string | null {
   // exploredMap se mide por intento de llamada (describe_map/get_battle_maps no
-  // generan evento, son de solo lectura) — appliedMap/placedParticipant se miden
+  // generan evento, son de solo lectura) — resolvedMap/placedParticipant se miden
   // por evento realmente generado, no por el mero intento: si set_battle_map
-  // falló (tool con error), no cuenta como "mapa aplicado" y no debe disparar
+  // falló (tool con error), no cuenta como "mapa resuelto" y no debe disparar
   // el siguiente aviso (colocar participantes) sobre un mapa que nunca se fijó.
+  // resolvedMap acepta TANTO aplicar un mapa nuevo COMO limpiarlo explícitamente
+  // (clear_battle_map, cuando no hay ninguno del catálogo que encaje) — las dos
+  // son resoluciones válidas de "ya decidiste qué hacer con el mapa", solo la
+  // colocación de participantes exige que haya un mapa real de por medio.
   const exploredMap = calledTools.has('get_battle_maps') || calledTools.has('describe_map');
-  const appliedMap = events.some((e) => e.type === 'mapa_aplicado');
+  const mapApplied = events.some((e) => e.type === 'mapa_aplicado');
+  const mapResolved = mapApplied || events.some((e) => e.type === 'mapa_limpiado');
   const placedParticipant = events.some((e) => e.type === 'participante_colocado');
 
-  if (exploredMap && !appliedMap) {
-    return 'Aún no has llamado a set_battle_map. Antes de narrar, aplica el mapa que elegiste con ' +
-        'set_battle_map (gameId y mapId) y coloca a los participantes con place_participant.';
+  if (exploredMap && !mapResolved) {
+    return 'Aún no has resuelto el mapa. Si encontraste uno que encaje, aplícalo con set_battle_map ' +
+        '(gameId y mapId) y coloca a los participantes con place_participant; si ninguno encaja, llama a ' +
+        'clear_battle_map para no dejar en pantalla el mapa de la escena anterior.';
   }
-  if (appliedMap && !placedParticipant) {
+  if (mapApplied && !placedParticipant) {
     return 'Has aplicado un mapa con set_battle_map pero no has colocado a ningún participante. Llama a ' +
         'place_participant para cada jugador (y enemigo si hay combate) antes de narrar.';
   }

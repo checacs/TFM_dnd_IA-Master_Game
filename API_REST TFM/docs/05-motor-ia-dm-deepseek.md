@@ -107,6 +107,8 @@ El `dm-engine` intercepta cada `tool_call`/resultado del bucle y lo traduce a un
 | `start_combat` | `combate_iniciado` | Pinta el punto de combate en el tablero (ya no hay "orden de turnos" que pintar — ver más abajo) |
 | `resolve_attack` | `ataque_resuelto` | Actualiza HP en el panel de enemigos/jugador y muestra la tirada |
 | `roll_dice` | `tirada_realizada` | Muestra el resultado en el panel de dados |
+| `set_battle_map` | `mapa_aplicado` | BoardPanel pinta la imagen del mapa aplicado (al arrancar la partida o cuando la escena cambia de localización) |
+| `clear_battle_map` | `mapa_limpiado` | BoardPanel vuelve a la cuadrícula plana de fallback — usado cuando la escena cambia de localización y ningún mapa del catálogo encaja todavía |
 | `advance_to_player_round` | `ronda_reabierta` | ui-web/móvil reflejan que `roundPhase` volvió a "jugadores" y el candado de turno está libre |
 | `get_enemy_catalog` | *(sin evento)* | Solo contexto interno para el LLM, la UI no reacciona |
 | `get_game_state` | *(sin evento)* | Igual, es una consulta de fundamentación |

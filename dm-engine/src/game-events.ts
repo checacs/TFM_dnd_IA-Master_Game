@@ -4,6 +4,7 @@ export type GameEventType =
   | 'tirada_realizada'
   | 'xp_otorgada'
   | 'mapa_aplicado'
+  | 'mapa_limpiado'
   | 'participante_colocado'
   | 'ronda_reabierta';
 
@@ -24,6 +25,7 @@ const TOOL_TO_EVENT_TYPE: Partial<Record<string, GameEventType>> = {
   roll_dice: 'tirada_realizada',
   grant_xp: 'xp_otorgada',
   set_battle_map: 'mapa_aplicado',
+  clear_battle_map: 'mapa_limpiado',
   place_participant: 'participante_colocado',
   advance_to_player_round: 'ronda_reabierta',
 };

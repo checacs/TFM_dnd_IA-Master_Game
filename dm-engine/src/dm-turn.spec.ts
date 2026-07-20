@@ -173,6 +173,34 @@ describe('runDmTurn', () => {
     expect(lastMessage.content).toMatch(/set_battle_map/);
   });
 
+  it('si explora mapas y no encuentra ninguno que encaje, llamar a clear_battle_map resuelve el turno sin avisos', async () => {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: 'call-1', type: 'function' as const, function: { name: 'get_battle_maps', arguments: '{"tags":["almacen"]}' } }],
+        },
+      },
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: 'call-2', type: 'function' as const, function: { name: 'clear_battle_map', arguments: '{"gameId":"g1"}' } }],
+        },
+      },
+      { message: { role: 'assistant', content: 'Salís de la taberna y entráis en un almacén en penumbra.' } },
+    ]);
+    const toolCaller = new FakeToolCaller([], { get_battle_maps: [], clear_battle_map: { cleared: true } });
+
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+    expect(toolCaller.calls.map((c) => c.name)).toEqual(['get_battle_maps', 'clear_battle_map']);
+    expect(result.events).toEqual([{ type: 'mapa_limpiado', payload: { cleared: true } }]);
+    expect(result.narrative).toBe('Salís de la taberna y entráis en un almacén en penumbra.');
+    expect(chatClient.receivedCalls).toHaveLength(3); // sin ronda de corrección extra
+  });
+
   it('si aplica un mapa pero no coloca a ningún participante, se le pide colocar participantes antes de narrar', async () => {
     const chatClient = new FakeChatClient([
       {

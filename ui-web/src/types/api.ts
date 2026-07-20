@@ -15,6 +15,7 @@ export type GameEventType =
   | 'tirada_realizada'
   | 'xp_otorgada'
   | 'mapa_aplicado'
+  | 'mapa_limpiado'
   | 'participante_colocado'
   | 'ronda_reabierta';
 

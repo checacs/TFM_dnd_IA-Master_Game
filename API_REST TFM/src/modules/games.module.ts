@@ -7,6 +7,7 @@ import { ResolveAttackUseCase } from '../application/use-cases/resolve-attack.us
 import { ResolvePlayerAttackUseCase } from '../application/use-cases/resolve-player-attack.use-case';
 import { StartCombatUseCase } from '../application/use-cases/start-combat.use-case';
 import { SetBattleMapUseCase } from '../application/use-cases/set-battle-map.use-case';
+import { ClearBattleMapUseCase } from '../application/use-cases/clear-battle-map.use-case';
 import { DescribeMapUseCase } from '../application/use-cases/describe-map.use-case';
 import { GetGameStateUseCase } from '../application/use-cases/get-game-state.use-case';
 import { GrantXpUseCase } from '../application/use-cases/grant-xp.use-case';
@@ -53,6 +54,7 @@ if (!DM_ENGINE_URL) {
     ResolvePlayerAttackUseCase,
     StartCombatUseCase,
     SetBattleMapUseCase,
+    ClearBattleMapUseCase,
     DescribeMapUseCase,
     GetGameStateUseCase,
     GrantXpUseCase,

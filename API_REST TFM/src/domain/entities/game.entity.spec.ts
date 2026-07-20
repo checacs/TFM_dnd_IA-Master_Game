@@ -122,6 +122,32 @@ describe('Game', () => {
     });
   });
 
+  describe('clearBattleMap', () => {
+    it('quita la imagen y las zonas, volviendo a la cuadrícula plana por defecto', () => {
+      const game = buildGame();
+      game.setBattleMap({
+        rows: 10,
+        cols: 14,
+        imageUrl: '/maps/taberna-jabali.png',
+        zones: [{ name: 'Sala', cells: [{ rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 2 }] }],
+      });
+
+      game.clearBattleMap();
+
+      expect(game.toSnapshot().board).toEqual({ rows: 8, cols: 8, imageUrl: null, combatPoint: null, zones: [] });
+    });
+
+    it('resetea el punto de combate anterior', () => {
+      const game = buildGame();
+      game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna-jabali.png' });
+      game.setCombatPoint({ row: 3, col: 5 });
+
+      game.clearBattleMap();
+
+      expect(game.toSnapshot().board.combatPoint).toBeNull();
+    });
+  });
+
   describe('board', () => {
     it('empieza con un tablero 8x8 por defecto y sin punto de combate', () => {
       const game = buildGame();

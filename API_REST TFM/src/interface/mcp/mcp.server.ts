@@ -74,11 +74,25 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   server.tool(
     'set_battle_map',
     'Aplica un mapa de combate del catalogo al tablero de la partida SIN iniciar combate. ' +
-      'Usalo al empezar la partida para ambientar la escena antes de que aparezcan enemigos.',
+      'Usalo al empezar la partida para ambientar la escena antes de que aparezcan enemigos, y de nuevo ' +
+      'CADA VEZ que la narracion cambie de localizacion (los personajes salen de una sala/escenario y ' +
+      'entran en otro) si encuentras en get_battle_maps un mapId que encaje con el sitio nuevo.',
     { gameId: z.string(), mapId: z.string() },
     async ({ gameId, mapId }) => {
       await tools.setBattleMapTool(gameId, mapId);
       return { content: [{ type: 'text', text: JSON.stringify({ applied: true }) }] };
+    },
+  );
+
+  server.tool(
+    'clear_battle_map',
+    'Quita el mapa de combate actual del tablero (vuelve a una cuadricula plana sin imagen). Usalo ' +
+      'cuando la narracion cambie de localizacion y NINGUN mapa de get_battle_maps encaje con el sitio ' +
+      'nuevo: nunca dejes en pantalla la imagen de una escena anterior que ya no corresponde a lo narrado.',
+    { gameId: z.string() },
+    async ({ gameId }) => {
+      await tools.clearBattleMapTool(gameId);
+      return { content: [{ type: 'text', text: JSON.stringify({ cleared: true }) }] };
     },
   );
 

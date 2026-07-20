@@ -3,6 +3,7 @@ import { RollDiceUseCase } from '../../application/use-cases/roll-dice.use-case'
 import { ResolveAttackUseCase, ResolveAttackInput } from '../../application/use-cases/resolve-attack.use-case';
 import { StartCombatUseCase, StartCombatInput } from '../../application/use-cases/start-combat.use-case';
 import { SetBattleMapUseCase } from '../../application/use-cases/set-battle-map.use-case';
+import { ClearBattleMapUseCase } from '../../application/use-cases/clear-battle-map.use-case';
 import { DescribeMapUseCase } from '../../application/use-cases/describe-map.use-case';
 import { SearchEnemiesUseCase } from '../../application/use-cases/search-enemies.use-case';
 import { SearchMapsUseCase } from '../../application/use-cases/search-maps.use-case';
@@ -36,6 +37,7 @@ export class GameMcpTools {
     private readonly resolveAttack: ResolveAttackUseCase,
     private readonly startCombat: StartCombatUseCase,
     private readonly setBattleMap: SetBattleMapUseCase,
+    private readonly clearBattleMap: ClearBattleMapUseCase,
     private readonly describeMap: DescribeMapUseCase,
     private readonly searchEnemies: SearchEnemiesUseCase,
     private readonly searchMaps: SearchMapsUseCase,
@@ -66,6 +68,10 @@ export class GameMcpTools {
 
   setBattleMapTool(gameId: string, mapId: string) {
     return this.setBattleMap.execute({ gameId, mapId });
+  }
+
+  clearBattleMapTool(gameId: string) {
+    return this.clearBattleMap.execute({ gameId });
   }
 
   describeMapTool(mapId: string) {

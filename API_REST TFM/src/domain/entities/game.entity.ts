@@ -162,6 +162,23 @@ export class Game {
     };
   }
 
+  /**
+   * Quita el mapa aplicado y vuelve a la cuadrícula plana por defecto (mismo
+   * estado que al crear la partida). Para cuando la narración cambia de
+   * localización y no hay ningún mapa del catálogo que encaje todavía — sin
+   * esto, la UI se queda mostrando la imagen de la escena anterior aunque ya
+   * no tenga nada que ver con lo que se está narrando.
+   */
+  clearBattleMap(): void {
+    this.props.board = {
+      rows: DEFAULT_BOARD_SIZE,
+      cols: DEFAULT_BOARD_SIZE,
+      imageUrl: null,
+      combatPoint: null,
+      zones: [],
+    };
+  }
+
   appendNarrativeEntry(entry: NarrativeEntry): void {
     this.props.narrativeLog.push(entry);
   }
