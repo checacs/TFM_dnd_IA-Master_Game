@@ -38,7 +38,12 @@ export function LoginScreen() {
       resizeMode="cover"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // En Android, `behavior=undefined` deja el KeyboardAvoidingView sin hacer
+        // nada -- el teclado tapa los campos de usuario/contraseña en vez de
+        // desplazarlos. 'height' encoge este contenedor cuando aparece el
+        // teclado, empujando la tarjeta de login por encima igual que hace
+        // 'padding' en iOS (mismo fix que CharacterSheetScreen).
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.center}
       >
         <View style={styles.card}>
