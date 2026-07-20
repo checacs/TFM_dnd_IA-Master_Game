@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c369c069-81be-4ff9-aced-bf1f1afd93b7" name="Changes" comment="vercel.json" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;checacs&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/checacs/TFM_IA_MASTER.git",
+    "accountId": "d0b61d9c-cb0a-4ee0-bc94-ebbb21ce6e6f"
+  }
+}]]></component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0603710205578027" />
+      <entry key="MS500" value="1.570381857934212" />
+      <entry key="S2" value="1.8690433204285117" />
+      <entry key="S5" value="1.9454021167507438" />
+      <entry key="S10" value="1.9723179093026846" />
+      <entry key="S30" value="1.9906861581012825" />
+      <entry key="S60" value="1.9953321848012764" />
+      <entry key="M2" value="1.9976633631841783" />
+      <entry key="M5" value="2.0003585753209174" />
+      <entry key="M10" value="2.206689143395092" />
+      <entry key="M15" value="3.171281766745696" />
+      <entry key="M30" value="8.770660919861118" />
+      <entry key="H1" value="18.411587948006787" />
+      <entry key="H2" value="27.65843100866408" />
+      <entry key="H4" value="35.469354428672496" />
+      <entry key="D1" value="63.594722746715654" />
+      <entry key="W1" value="78.75974359343535" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.0385489005072766" />
+      <entry key="MS500" value="1.5638643854878014" />
+      <entry key="S2" value="1.867101047152566" />
+      <entry key="S5" value="1.9445932149734302" />
+      <entry key="S10" value="1.9719078199626023" />
+      <entry key="S30" value="1.990548179033541" />
+      <entry key="S60" value="1.9952630330556829" />
+      <entry key="M2" value="1.9976287466143055" />
+      <entry key="M5" value="2.000343341684552" />
+      <entry key="M10" value="2.206590579724769" />
+      <entry key="M15" value="3.170963363662404" />
+      <entry key="M30" value="8.769849707586188" />
+      <entry key="H1" value="18.41066698091604" />
+      <entry key="H2" value="27.65773651610552" />
+      <entry key="H4" value="35.468927202869" />
+      <entry key="D1" value="63.5946364041905" />
+      <entry key="W1" value="78.75973072924951" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 5
+}</component>
+  <component name="ProjectId" id="3GXriCey5GgwPNg9iyRMr5vwwLn" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/Carlos/Desktop/Cursos IA/Master Desarrollo IA/Proyectos finales/TFM/ui-web&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;org.jetbrains.plugins.github.ui.GithubSettingsConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;C:\\Users\\Carlos\\Desktop\\Cursos IA\\Master Desarrollo IA\\Proyectos finales\\TFM\\ui-web\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-WS-261.25134.101" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c369c069-81be-4ff9-aced-bf1f1afd93b7" name="Changes" comment="" />
+      <created>1762105241015</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1762105241015</updated>
+      <workItem from="1784128880934" duration="9303000" />
+      <workItem from="1784142133306" duration="15090000" />
+      <workItem from="1784278169717" duration="5918000" />
+      <workItem from="1784539422835" duration="2041000" />
+    </task>
+    <task id="LOCAL-00001" summary="author">
+      <option name="closed" value="true" />
+      <created>1784206707278</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1784206707278</updated>
+    </task>
+    <task id="LOCAL-00002" summary="add .env">
+      <option name="closed" value="true" />
+      <created>1784207346069</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1784207346069</updated>
+    </task>
+    <task id="LOCAL-00003" summary="add .env">
+      <option name="closed" value="true" />
+      <created>1784211030980</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1784211030980</updated>
+    </task>
+    <task id="LOCAL-00004" summary="updated">
+      <option name="closed" value="true" />
+      <created>1784211194846</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1784211194846</updated>
+    </task>
+    <task id="LOCAL-00005" summary="updated">
+      <option name="closed" value="true" />
+      <created>1784219102950</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1784219102950</updated>
+    </task>
+    <task id="LOCAL-00006" summary="updated">
+      <option name="closed" value="true" />
+      <created>1784219221215</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1784219221215</updated>
+    </task>
+    <task id="LOCAL-00007" summary="updated">
+      <option name="closed" value="true" />
+      <created>1784278185779</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1784278185779</updated>
+    </task>
+    <task id="LOCAL-00008" summary="updated">
+      <option name="closed" value="true" />
+      <created>1784486635115</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1784486635115</updated>
+    </task>
+    <task id="LOCAL-00009" summary="vercel.json">
+      <option name="closed" value="true" />
+      <created>1784491925852</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1784491925852</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="author" />
+    <MESSAGE value="add .env" />
+    <MESSAGE value="updated" />
+    <MESSAGE value="vercel.json" />
+    <option name="LAST_COMMIT_MESSAGE" value="vercel.json" />
+  </component>
+</project>

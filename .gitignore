@@ -1,7 +1,7 @@
 /tmp
 /out-tsc
 
-/node_modules
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -12,3 +12,24 @@ yarn-error.log*
 .AGENTS.md
 DND-IA-Master-TFM.pptx
 DOCUMENTACION-TFM.md
+
+# Restos de los antiguos repos .git anidados de cada subproyecto (API_REST TFM,
+# dm-engine, ui-web, mobile-app) al convertir esto en un monorepo con un unico
+# .git en la raiz. No se pudieron borrar del todo por un bug de permisos del
+# sandbox (unlink bloqueado en el punto de montaje FUSE, rename si funciona) --
+# son seguros de eliminar manualmente desde el explorador de archivos.
+_GIT_ANTIGUO_BORRAR_MANUALMENTE/
+
+# Build artifacts de los distintos subproyectos
+dist/
+build/
+.expo/
+coverage/
+*.tsbuildinfo
+
+# Carpetas de node_modules residuales de instalaciones interrumpidas en el
+# sandbox (mismo bug de permisos FUSE) -- seguras de borrar manualmente.
+node_modules_broken*/
+node_modules_stale_staging/
+stale2/
+.stale_sweep/

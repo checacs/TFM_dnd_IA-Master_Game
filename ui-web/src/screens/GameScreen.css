@@ -1,0 +1,602 @@
+.game-screen {
+  /* Antes era min-height: 100vh -- con contenido que no cabía (chat + mapa
+     apilados en tablet/móvil) la página entera crecía más que la pantalla y
+     Chrome hacía scroll de TODO. Fijando la altura exacta (100dvh tiene en
+     cuenta la barra de direcciones de Chrome en Android) y overflow:hidden,
+     la página nunca crece -- son los paneles de dentro (.chat-messages) los
+     que hacen scroll interno. */
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: url('/fondo_aventura.jpg') center center / cover no-repeat fixed;
+  padding: 1rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.game-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  /* Que no se encoja y le robe alto a .game-body dentro del contenedor de
+     altura fija -- el nombre de la partida siempre debe verse entero. */
+  flex: 0 0 auto;
+}
+
+/* Logo pequeño + "La aventura: <nombre>" -- a diferencia del resto de
+   pantallas (login/tus partidas/sala de espera), aquí el logo va pequeño y
+   en la esquina izquierda, no centrado ni grande (ver .brand-logo). */
+.game-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.game-logo-small {
+  flex: 0 0 auto;
+  height: 44px;
+  width: auto;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5));
+}
+
+.game-top-bar h2 {
+  /* Suelto sobre el fondo de aventura, el nombre de la partida se leía mal --
+     se le da la misma caja papiro que al resto de paneles para que resalte. */
+  color: var(--color-ink);
+  margin: 0;
+  padding: 0.5rem 1.25rem;
+  font-size: 1.4rem;
+  background: rgba(255, 250, 235, 0.85);
+  border: 2px solid var(--color-ink);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Selector reforzado (button.game-top-bar .exit-btn) + !important: .btn-ghost
+   (width:100%, colores claros de fondo oscuro) seguía ganando el empate de
+   especificidad con una única clase — con esto no hay ambigüedad posible. */
+.game-top-bar button.exit-btn {
+  width: auto !important;
+  flex: 0 0 auto !important;
+  padding: 0.45rem 1.1rem !important;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-ink) !important;
+  background: rgba(255, 250, 235, 0.85) !important;
+  color: var(--color-ink) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.game-top-bar button.exit-btn:hover {
+  background: rgba(255, 250, 235, 1) !important;
+}
+
+.game-body {
+  display: flex;
+  flex-direction: row;
+  gap: 1.25rem;
+  flex: 1;
+  /* min-height:0 es imprescindible en un contenedor flex de altura fija para
+     que los hijos puedan encogerse y delegar el scroll hacia dentro en vez
+     de desbordar hacia fuera (que es lo que forzaba el scroll de toda la
+     página). */
+  min-height: 0;
+  align-items: stretch;
+}
+
+.game-left {
+  flex: 1 1 42%;
+  min-width: 320px;
+  min-height: 0;
+  display: flex;
+}
+
+.game-right {
+  flex: 1 1 58%;
+  min-width: 360px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* Red de seguridad: si el mapa+roster no cupieran en el alto disponible,
+     que haga scroll esta columna y no la página entera. */
+  overflow-y: auto;
+}
+
+.section-title {
+  margin: 0 0 0.6rem 0;
+  color: var(--color-ink);
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+/* Panel base compartido: papiro translucido con borde de tinta redondeado */
+.chat-panel,
+.board-panel,
+.enemy-panel {
+  border: 2.5px solid var(--color-ink);
+  border-radius: 40px;
+  background: rgba(255, 250, 235, 0.55);
+  backdrop-filter: blur(2px);
+  padding: 1.25rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* Antes: min-height:720px fijo -- eso es lo que hacía que la caja creciera
+     más que la pantalla disponible y arrastrara a toda la página a hacer
+     scroll. Ahora ocupa el 100% del alto que le da .game-left (que a su vez
+     está acotado por .game-body/.game-screen) y es .chat-messages quien
+     hace scroll por dentro. */
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-panel-title {
+  flex: 0 0 auto;
+  text-align: center;
+  margin: 0 0 0.75rem 0;
+  color: var(--color-ink);
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-messages {
+  flex: 1;
+  /* min-height:0 en un hijo flex es lo que permite que overflow-y:auto
+     funcione en vez de que el contenido empuje la altura del padre (y de
+     ahí, la de toda la página) hacia arriba. */
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding-right: 0.25rem;
+}
+
+.chat-message {
+  max-width: 92%;
+  padding: 0.85rem 1.1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 1px 3px rgba(59, 43, 26, 0.12);
+}
+
+.chat-message.user {
+  background: rgba(201, 162, 39, 0.18);
+  align-self: flex-end;
+}
+
+.chat-message.assistant {
+  background: rgba(255, 255, 255, 0.7);
+  align-self: flex-start;
+}
+
+.chat-message.pending {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.chat-message-role {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(59, 43, 26, 0.15);
+}
+
+.chat-speak-btn {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-ink-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.chat-speak-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chat-speak-error {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 0;
+}
+
+.chat-message p {
+  margin: 0 0 0.65rem;
+  color: var(--color-ink);
+  line-height: 1.65;
+}
+
+.chat-message p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message strong {
+  color: #7a4a12;
+  font-weight: 700;
+}
+
+.chat-input-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.chat-input-row button {
+  /* Mismo problema que .exit-btn: .btn-gold trae width:100% de index.css y,
+     en este flex row, se come casi todo el espacio dejando el input diminuto. */
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.chat-input-row input {
+  flex: 1;
+  border-radius: 20px;
+  border: 2px solid var(--color-ink-soft);
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.board-panel {
+  width: 100%;
+}
+
+/* Dos columnas: la lista de jugadores/enemigos a la izquierda (ancho fijo) y
+   el mapa a la derecha ocupando el resto — el mapa se queda pequeño si se le
+   pone un max-height bajo, así que aquí se deja crecer con el ancho de su
+   columna (ver .board-map-wrapper). */
+.board-panel-body {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.board-players-column {
+  flex: 0 0 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.board-player-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.board-player-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--color-ink-soft);
+}
+
+.board-player-card.enemy {
+  border-color: var(--color-danger);
+  background: rgba(178, 34, 34, 0.08);
+}
+
+.board-player-name {
+  font-weight: 700;
+  color: var(--color-ink);
+  font-size: 0.9rem;
+}
+
+.board-player-class {
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+  text-transform: capitalize;
+}
+
+.board-player-hp {
+  font-size: 0.78rem;
+  color: var(--color-ink-soft);
+}
+
+.board-player-conditions {
+  font-size: 0.72rem;
+  color: var(--color-danger);
+}
+
+.board-map-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* .board-map-outer fija una altura EXPLÍCITA (no max-height) para que el hijo
+   pueda resolver height:100% contra ella. El wrapper interior fija su alto a
+   esa altura y deja que el ancho se calcule solo a partir de aspect-ratio
+   (cols/rows) — así el mapa se dimensiona igual que un object-fit:contain
+   (nunca se recorta ni se deforma) en vez de forzar width:100% + max-height,
+   que con tableros muy altos (más filas que columnas) recortaba la imagen y
+   desalineaba los marcadores respecto a la cuadrícula real. */
+.board-map-outer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  /* Con el panel de tiradas y la ficha de personaje eliminados, hay más alto
+     libre debajo — se aprovecha para que el mapa crezca un poco más. */
+  height: min(88vh, 820px);
+}
+
+.board-map-wrapper {
+  position: relative;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  border: 3px solid var(--color-ink-soft);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+}
+
+.board-map-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.board-map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.board-map-marker.player {
+  background: var(--color-success);
+}
+
+.board-map-marker.enemy {
+  background: var(--color-danger);
+}
+
+.board-grid {
+  display: grid;
+  gap: 2px;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.board-cell {
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--color-ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.board-cell.player {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.board-cell.enemy {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.player {
+  background: var(--color-success);
+}
+
+.legend-dot.enemy {
+  background: var(--color-danger);
+}
+
+.enemy-panel {
+  width: 100%;
+}
+
+/* La caja de combate ahora vive pegada al roster, en la columna estrecha de
+   190px (ver BoardPanel/belowRoster) — el radio de 40px y el padding de
+   .chat-panel/.board-panel/.enemy-panel están pensados para cajas anchas y
+   aquí quedaban desproporcionados. También se apila cada fila enemigo+botón
+   en vertical en vez de en fila, que no cabía. */
+.board-players-column .enemy-panel {
+  border-radius: 16px;
+  padding: 0.75rem 0.85rem;
+}
+
+.board-players-column .enemy-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.board-players-column .attack-btn {
+  width: 100% !important;
+  text-align: center;
+}
+
+.enemy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.enemy-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+}
+
+.enemy-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.enemy-name {
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.enemy-hp {
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+}
+
+.enemy-conditions {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}
+
+.attack-btn {
+  /* Mismo problema que .exit-btn: .btn-ghost trae width:100% de index.css. */
+  width: auto;
+  flex: 0 0 auto;
+}
+
+/* Retratos de los enemigos del catálogo (dnd5eapi.co) -- justo debajo de la
+   lista de Combate, en la misma columna estrecha (izquierda del mapa), para
+   que el jugador vea a qué se enfrenta sin tener que abrir nada. Solo se
+   pintan los que sí tienen imagen (ver EnemyPanel.tsx). */
+.enemy-portraits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px dashed var(--color-ink-soft);
+}
+
+.enemy-portrait-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+}
+
+.enemy-portrait-image {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 2px solid var(--color-ink);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.enemy-portrait-name {
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--color-ink-soft);
+  text-align: center;
+  line-height: 1.1;
+}
+
+.turn-hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .game-body {
+    flex-direction: column;
+    /* En columna hace falta que el contenedor tenga scroll propio (tablero +
+       chat apilados normalmente no caben en el alto de una tablet), pero
+       SOLO aquí, no en toda la página -- .game-screen sigue con overflow
+       hidden y altura fija. */
+    overflow-y: auto;
+  }
+
+  .game-left,
+  .game-right {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .game-left {
+    /* Alto fijo generoso para el chat en vez de min-height:0 heredado del
+       modo fila -- en columna no hay un padre con altura repartida entre
+       ambas mitades, así que le damos al chat una altura propia y es su
+       .chat-messages quien scrollea dentro de ella. El resto (mapa/roster)
+       queda debajo y el scroll de .game-body se encarga de alcanzarlo. */
+    flex: 0 0 auto;
+    height: 70vh;
+    height: 70dvh;
+  }
+
+  .game-right {
+    flex: 0 0 auto;
+    overflow-y: visible;
+  }
+}
