@@ -20,13 +20,13 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-dnd5e-dm-ia.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api-rest-ia-master.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-dnd5e-dm-ia.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api-rest-ia-master.onrender.com"
       }
     }
   },
