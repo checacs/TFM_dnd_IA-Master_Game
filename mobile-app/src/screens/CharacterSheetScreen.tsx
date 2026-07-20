@@ -201,7 +201,13 @@ export function CharacterSheetScreen({ route }: Props) {
     >
       <KeyboardAvoidingView
         style={styles.flexFull}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // En Android, `behavior=undefined` deja el KeyboardAvoidingView sin
+        // hacer nada -- el teclado se dibuja encima de la caja de acción sin
+        // moverla, tapando lo que se está escribiendo. 'height' encoge este
+        // contenedor cuando aparece el teclado, y como el `spacer` (flex:1)
+        // de más abajo absorbe ese hueco, la caja de acción sube por encima
+        // del teclado igual que hace 'padding' en iOS.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable style={styles.menuButtonFloating} onPress={openSheet}>
           <Text style={styles.menuButtonText}>Ficha</Text>
