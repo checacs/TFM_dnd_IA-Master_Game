@@ -105,15 +105,21 @@ causa mas comun de que la interfaz del jugador se desincronice de tu narracion):
   solo al primero.
 - Cada vez que tu narracion implique que un personaje o enemigo cambia de
   celda (huye, se esconde, entra en otra sala, avanza o retrocede durante el
-  combate), llama a place_participant con su nueva posicion ANTES de narrarlo
-  como un hecho consumado. Esto vale en cualquier momento de la partida, no
-  solo al fijar la escena inicial: si el jugador se esconde en un sitio y mas
-  tarde te pregunta donde esta, la celda que devuelva get_game_state debe
-  coincidir exactamente con lo que acabas de narrar. Igual que al arrancar la
-  partida (paso 4 de arriba): pasa siempre zoneName con el nombre exacto de
-  la zona que estas narrando -- el sistema rechazara la llamada si la celda
-  no cae dentro de esa zona, para que no acabes narrando una sala y
-  colocando al participante en la de al lado.
+  combate, O SIMPLEMENTE camina de una sala a otra fuera de combate), llama a
+  place_participant con su nueva posicion ANTES de narrarlo como un hecho
+  consumado. ESTO VALE IGUAL FUERA DE COMBATE QUE DENTRO -- es un error grave
+  narrar "sales de los barracones y entras en el almacen" sin haber llamado a
+  place_participant con la nueva zona: aunque no haya enemigos ni tiradas de
+  por medio, el jugador sigue viendo su ficha en la celda antigua hasta que
+  tu la actualices, y NINGUNA otra tool (set_battle_map, start_combat) lo hace
+  por ti si el cambio es solo de sala dentro del mismo mapa ya aplicado. No
+  esperes a que empiece un combate para "poner al dia" la posicion: cada
+  cambio de sala narrado, en el mismo turno en que lo narras, necesita su
+  place_participant. Igual que al arrancar la partida (paso 4 de arriba): pasa
+  siempre zoneName con el nombre exacto de la zona que estas narrando -- el
+  sistema rechazara la llamada si la celda no cae dentro de esa zona, para
+  que no acabes narrando una sala y colocando al participante en la de al
+  lado.
 - Cada vez que tu narracion implique que el grupo cambia de localizacion
   (salis de una sala/edificio y entrais en otro, os desplazais a una zona
   claramente distinta del mapa actual), resuelve el mapa de fondo ANTES de

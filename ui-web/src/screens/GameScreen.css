@@ -524,41 +524,44 @@
   flex: 0 0 auto;
 }
 
-/* Retratos de los enemigos del catálogo (dnd5eapi.co) -- justo debajo de la
-   lista de Combate, en la misma columna estrecha (izquierda del mapa), para
-   que el jugador vea a qué se enfrenta sin tener que abrir nada. Solo se
-   pintan los que sí tienen imagen (ver EnemyPanel.tsx). */
-.enemy-portraits {
+/* Retratos de los enemigos del catálogo (dnd5eapi.co) -- a todo el ancho del
+   board-panel, debajo de las dos columnas (roster + mapa), para que quepan
+   mucho más grandes (~320px, antes 72px en la columna estrecha) y se pueda
+   distinguir de un vistazo qué tipo de enemigo es. Solo se pintan los que sí
+   tienen imagen (ver BoardPanel.tsx). */
+.enemy-portraits-wide {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
   border-top: 1.5px dashed var(--color-ink-soft);
 }
 
-.enemy-portrait-card {
+.enemy-portrait-card-wide {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 72px;
+  width: 320px;
 }
 
-.enemy-portrait-image {
-  width: 72px;
-  height: 72px;
+.enemy-portrait-image-wide {
+  width: 320px;
+  height: 320px;
   object-fit: cover;
-  border-radius: 16px;
-  border: 2px solid var(--color-ink);
+  border-radius: 20px;
+  border: 3px solid var(--color-ink);
   background: rgba(255, 255, 255, 0.4);
 }
 
-.enemy-portrait-name {
-  margin-top: 0.3rem;
-  font-size: 0.7rem;
-  color: var(--color-ink-soft);
+.enemy-portrait-name-wide {
+  margin-top: 0.4rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-ink);
   text-align: center;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .turn-hint {
@@ -598,5 +601,18 @@
   .game-right {
     flex: 0 0 auto;
     overflow-y: visible;
+  }
+
+  /* En pantallas estrechas, 320px de retrato no cabe -- se reduce para que
+     quepa al menos uno por fila sin desbordar ni forzar scroll horizontal. */
+  .enemy-portrait-card-wide {
+    width: 45vw;
+    max-width: 220px;
+  }
+
+  .enemy-portrait-image-wide {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
   }
 }

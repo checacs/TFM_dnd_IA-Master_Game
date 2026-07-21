@@ -14,9 +14,6 @@ interface EnemyPanelProps {
  */
 export function EnemyPanel({ enemies, roundPhase, turnClaim, players }: EnemyPanelProps) {
   const turnPlayer = turnClaim ? players.find((p) => p.characterId === turnClaim) : undefined;
-  // Solo se muestran los que sí tienen imagen en el catálogo (no todo el SRD
-  // trae arte oficial) -- mejor omitir un enemigo que mostrar un hueco roto.
-  const enemiesWithImage = enemies.filter((e) => e.imageUrl);
 
   return (
     <div className="enemy-panel">
@@ -41,16 +38,6 @@ export function EnemyPanel({ enemies, roundPhase, turnClaim, players }: EnemyPan
           </div>
         ))}
       </div>
-      {enemiesWithImage.length > 0 && (
-        <div className="enemy-portraits">
-          {enemiesWithImage.map((enemy) => (
-            <div key={enemy.instanceId} className="enemy-portrait-card" title={enemy.name}>
-              <img src={enemy.imageUrl!} alt={enemy.name} className="enemy-portrait-image" />
-              <span className="enemy-portrait-name">{enemy.name}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

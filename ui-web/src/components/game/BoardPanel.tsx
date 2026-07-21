@@ -34,6 +34,13 @@ function cellToPercent(position: BoardPosition, board: Board) {
 }
 
 export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }: BoardPanelProps) {
+  // Solo se muestran los que sí tienen imagen en el catálogo (no todo el SRD
+  // trae arte oficial) -- mejor omitir un enemigo que mostrar un hueco roto.
+  // Se pintan aquí (a todo el ancho del panel) y no en la columna estrecha de
+  // 190px del roster, porque ahí la imagen se quedaba demasiado pequeña para
+  // distinguir de qué tipo de enemigo se trata.
+  const enemiesWithImage = enemies.filter((e) => e.imageUrl);
+
   const positionedMarkers = useMemo(() => {
     const result: PositionedMarker[] = [];
     players.forEach((p) => {
@@ -114,6 +121,16 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
           )}
         </div>
       </div>
+      {enemiesWithImage.length > 0 && (
+        <div className="enemy-portraits-wide">
+          {enemiesWithImage.map((enemy) => (
+            <div key={enemy.instanceId} className="enemy-portrait-card-wide" title={enemy.name}>
+              <img src={enemy.imageUrl!} alt={enemy.name} className="enemy-portrait-image-wide" />
+              <span className="enemy-portrait-name-wide">{enemy.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
