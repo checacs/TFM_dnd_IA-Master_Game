@@ -453,4 +453,142 @@ describe('runDmTurn', () => {
         expect(chatClient.receivedCalls).toHaveLength(3); // sin ronda de corrección extra
       },
   );
+
+  it(
+      'si resuelve un ataque contra un enemigo y llama a grant_xp como si lo hubiera matado, pero get_game_state ' +
+      'dice que ese enemigo sigue con HP real > 0, se avisa antes de aceptar la narrativa de victoria -- caso real ' +
+      'detectado en partida: un Brown Bear con 34 HP recibió solo 9 de daño acumulado (25 HP reales restantes) y ' +
+      'el DM narró su muerte y otorgó 200 XP como si el combate hubiera terminado',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                { id: 'c1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"bear-1","attackerModifier":0,"targetArmorClass":11,"damageDice":"1d4","playerD20":11}' } },
+                { id: 'c2', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":200}' } },
+              ],
+            },
+          },
+          { message: { role: 'assistant', content: 'Has vencido al oso. El cadáver yace a tus pies.' } },
+          { message: { role: 'assistant', content: 'El oso sigue en pie, malherido, y ataca de nuevo.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], {
+          resolve_attack: { hit: true, attackRoll: 11, damage: 4 },
+          grant_xp: { levelUp: false },
+          get_game_state: {
+            activeEncounter: { enemies: [{ instanceId: 'bear-1', name: 'Brown Bear', currentHp: 25 }] },
+          },
+        });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('El oso sigue en pie, malherido, y ataca de nuevo.');
+        expect(toolCaller.calls.map((c) => c.name)).toEqual(['resolve_attack', 'grant_xp', 'get_game_state']);
+        const correctionCall = chatClient.receivedCalls[1];
+        const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+        expect(lastMessage.content).toMatch(/Brown Bear/);
+        expect(lastMessage.content).toMatch(/25/);
+      },
+  );
+
+  it(
+      'si resuelve un ataque que SÍ deja al enemigo con currentHp real en 0 y llama a grant_xp, no se dispara ningún aviso',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              // Se incluye advance_to_player_round en la misma respuesta para que el
+              // único aviso posible en juego sea el de victoria prematura bajo prueba
+              // -- si no, el aviso (no relacionado) de "resolviste ataques pero no
+              // reabriste la ronda" dispararía igualmente una ronda de corrección y
+              // contaminaría la aserción de "sin ronda de corrección extra".
+              tool_calls: [
+                { id: 'c1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"goblin-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } },
+                { id: 'c2', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":50}' } },
+                { id: 'c3', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+              ],
+            },
+          },
+          { message: { role: 'assistant', content: 'El goblin cae muerto. Has ganado 50 XP.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], {
+          resolve_attack: { hit: true, damage: 7 },
+          grant_xp: { levelUp: false },
+          advance_to_player_round: { advanced: true },
+          get_game_state: {
+            activeEncounter: { enemies: [{ instanceId: 'goblin-1', name: 'Goblin', currentHp: 0 }] },
+          },
+        });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('El goblin cae muerto. Has ganado 50 XP.');
+        // 2 llamadas SIN corrección: la que trae los tool_calls (ya dada) + la que
+        // trae la narrativa final tras procesarlos. Una corrección real añadiría una 3ª.
+        expect(chatClient.receivedCalls).toHaveLength(2);
+      },
+  );
+
+  it(
+      'en un combate con varios enemigos, si mata a uno (HP real 0) y otro enemigo distinto sigue vivo pero NO fue ' +
+      'atacado este turno, no se dispara ningún aviso (evita falsos positivos sobre un enemigo que sigue en pie ' +
+      'legítimamente)',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                { id: 'c1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"goblin-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } },
+                { id: 'c2', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":50}' } },
+                { id: 'c3', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+              ],
+            },
+          },
+          { message: { role: 'assistant', content: 'El goblin cae muerto, pero su compañero sigue en pie.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], {
+          resolve_attack: { hit: true, damage: 7 },
+          grant_xp: { levelUp: false },
+          advance_to_player_round: { advanced: true },
+          get_game_state: {
+            activeEncounter: {
+              enemies: [
+                { instanceId: 'goblin-1', name: 'Goblin', currentHp: 0 },
+                { instanceId: 'goblin-2', name: 'Goblin', currentHp: 7 },
+              ],
+            },
+          },
+        });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('El goblin cae muerto, pero su compañero sigue en pie.');
+        expect(chatClient.receivedCalls).toHaveLength(1); // sin ronda de corrección extra
+      },
+  );
+
+  it('si se llama a grant_xp sin haber resuelto ningún ataque este turno (ej. XP por completar una misión), no se comprueba nada ni se llama a get_game_state', async () => {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":100}' } }],
+        },
+      },
+      { message: { role: 'assistant', content: 'Habéis completado la misión. Ganáis 100 XP.' } },
+    ]);
+    const toolCaller = new FakeToolCaller([], { grant_xp: { levelUp: false } });
+
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+    expect(result.narrative).toBe('Habéis completado la misión. Ganáis 100 XP.');
+    expect(toolCaller.calls.map((c) => c.name)).toEqual(['grant_xp']); // sin get_game_state
+  });
 });

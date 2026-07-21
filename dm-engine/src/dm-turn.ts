@@ -126,6 +126,65 @@ function protocolNudge(
   return null;
 }
 
+/**
+ * Se comprobó en partida real un bug grave: el DM resolvía un ataque contra un
+ * Brown Bear (34 HP reales en el catálogo) que solo le dejaba, tras dos turnos,
+ * 9 puntos de daño acumulados (25 HP reales restantes) -- y aun así narraba su
+ * muerte ("el cadáver del oso yace a tus pies") y llamaba a grant_xp como si el
+ * combate hubiera terminado. La causa: nada obligaba al modelo a comprobar el
+ * HP REAL antes de declarar una victoria, solo su propia impresión narrativa de
+ * "llevamos varios golpes, ya debe estar muerto".
+ *
+ * Este chequeo es un hecho verificable, no una opinión textual (a diferencia de
+ * narrativeSuggestsLocationChange): si este turno se llamó a grant_xp Y a
+ * resolve_attack contra algún enemigo, se relee el estado real de la partida
+ * (get_game_state) y se comprueba el currentHp real de justo esos enemigos
+ * atacados. Si alguno de ellos SIGUE con currentHp > 0, la victoria era
+ * prematura -- se avisa con su HP real para que el modelo corrija la
+ * narración antes de aceptarla. Solo mira a los enemigos atacados EN ESTE
+ * turno (no a cualquier otro enemigo vivo del encuentro) para no generar
+ * falsos positivos en combates con varios enemigos donde uno cae y otros
+ * siguen en pie legítimamente sin que eso sea un error.
+ */
+async function checkPrematureVictoryNudge(
+    toolCaller: ToolCaller,
+    gameId: string,
+    calledTools: Set<string>,
+    attackedEnemyIds: Set<string>,
+): Promise<string | null> {
+  if (!calledTools.has('grant_xp') || attackedEnemyIds.size === 0) {
+    return null;
+  }
+
+  let state: unknown;
+  try {
+    state = await toolCaller.callTool('get_game_state', { gameId });
+  } catch {
+    // Si ni siquiera se puede comprobar el estado real, no bloqueamos el
+    // turno por un chequeo que no se pudo hacer -- se deja pasar.
+    return null;
+  }
+
+  const enemies =
+      (state as { activeEncounter?: { enemies?: Array<{ instanceId?: unknown; name?: unknown; currentHp?: unknown }> } } | null)
+          ?.activeEncounter?.enemies ?? [];
+
+  const stillAlive = enemies.filter(
+      (e) => typeof e.instanceId === 'string' && attackedEnemyIds.has(e.instanceId) &&
+          typeof e.currentHp === 'number' && e.currentHp > 0,
+  );
+
+  if (stillAlive.length === 0) {
+    return null;
+  }
+
+  const list = stillAlive.map((e) => `${String(e.name)} (${String(e.currentHp)} HP reales)`).join(', ');
+  return `Has llamado a grant_xp como si el combate hubiera terminado, pero get_game_state dice que ` +
+      `sigue vivo: ${list}. NO narres su muerte ni que el combate ha acabado -- corrige tu narración para que ` +
+      `el combate continúe con ese enemigo todavía en pie, con su HP real, y sigue resolviendo turnos de combate ` +
+      'normalmente (nunca declares una victoria por impresión narrativa: solo cuando su currentHp real llegue a 0).';
+}
+
 export async function runDmTurn(
     chatClient: ChatClient,
     toolCaller: ToolCaller,
@@ -142,6 +201,7 @@ export async function runDmTurn(
   const calledTools = new Set<string>();
   const placedParticipantIds = new Set<string>();
   const combatEnemyIds = new Set<string>();
+  const attackedEnemyIds = new Set<string>();
   const systemPrompt = buildDmSystemPrompt(gameId);
   const withSystem = (): ChatMessage[] => [{ role: 'system', content: systemPrompt }, ...messages];
 
@@ -190,6 +250,9 @@ export async function runDmTurn(
           if (call.function.name === 'place_participant' && typeof args['participantId'] === 'string') {
             placedParticipantIds.add(args['participantId'] as string);
           }
+          if (call.function.name === 'resolve_attack' && typeof args['targetId'] === 'string') {
+            attackedEnemyIds.add(args['targetId'] as string);
+          }
           if (call.function.name === 'start_combat') {
             const enemies = (result as { enemies?: Array<{ instanceId?: unknown }> } | null)?.enemies ?? [];
             for (const enemy of enemies) {
@@ -208,7 +271,13 @@ export async function runDmTurn(
     }
 
     if (!correctionUsed) {
-      const nudge = protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
+      // Se prioriza este chequeo (un hecho verificable contra el HP real)
+      // sobre protocolNudge (heurísticos de texto) -- una victoria prematura
+      // es más grave que un aviso de protocolo de mapa/colocación.
+      const prematureVictoryNudge = await checkPrematureVictoryNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
+      const nudge =
+          prematureVictoryNudge ??
+          protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
       if (nudge) {
         correctionUsed = true;
         console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);
