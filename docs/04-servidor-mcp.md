@@ -2,7 +2,7 @@
 
 **Estado:** v2.1 — actualizado para reflejar la implementación real (el diseño original era del paso 4; desde entonces se añadieron mapas de combate, el catálogo de hechizos, el modelo de rondas, posicionamiento en el tablero, objetos/condiciones, cierre de combate y lanzamiento real de hechizos)
 **Se apoya en:** `03-arquitectura-clean-api-nestjs.md`
-**Tools reales:** 22 (fueron creciendo desde las 6 originales; las dos últimas, `end_combat` y `cast_spell`, se añadieron para cerrar el combate de verdad tras derrotar a todos los enemigos y para que un hechizo narrado consuma una ranura y aplique daño real, respectivamente — ver `09.` más abajo)
+**Tools reales:** 23 (fueron creciendo desde las 6 originales; las dos últimas, `end_combat` y `cast_spell`, se añadieron para cerrar el combate de verdad tras derrotar a todos los enemigos y para que un hechizo narrado consuma una ranura y aplique daño real, respectivamente — ver `09.` más abajo)
 
 ---
 
@@ -244,7 +244,7 @@ Nota para quien conecte un cliente MCP a este servidor: si una tool falla (ej. `
 
 ## 9. Definición de terminado
 
-- Las 22 tools están registradas y responden a `tools/list` (verificado con el inspector oficial de MCP: `npx @modelcontextprotocol/inspector`, transporte "Streamable HTTP", conectado a `http://localhost:3000/mcp`).
+- Las 23 tools están registradas y responden a `tools/list` (verificado con el inspector oficial de MCP: `npx @modelcontextprotocol/inspector`, transporte "Streamable HTTP", conectado a `http://localhost:3000/mcp`).
 - `interface/mcp/` no contiene reglas de negocio.
 - Confirmado en vivo (no solo en teoría): una partida real, con Mongo real, respondiendo a `tools/list` y a llamadas de tool individuales.
 
