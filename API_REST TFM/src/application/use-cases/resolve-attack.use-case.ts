@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DiceRoller, DICE_ROLLER } from '../../domain/ports/dice-roller.port';
 import { GameRepository, GAME_REPOSITORY } from '../../domain/ports/game.repository.port';
+import { Game } from '../../domain/entities/game.entity';
 import { DomainError } from '../../domain/errors/domain-error';
 
 export interface ResolveAttackInput {
@@ -42,9 +43,46 @@ export class ResolveAttackUseCase {
 
     if (hit) {
       game.applyDamageToParticipant(input.targetId, damage);
-      await this.games.save(game);
     }
 
+    // Se comprobó que el jugador veía en la narración del DM el resultado de
+    // un ataque (impacta/falla, cuánto daño) sin ningún respaldo mecánico
+    // visible en el chat -- a diferencia del botón "Tirar Dados" del jugador
+    // (PlayerRollUseCase), que sí deja constancia de su tirada. Aquí se hace
+    // lo mismo con la tirada que resuelve el sistema, para que el jugador
+    // pueda comprobar de dónde sale el "1d8+3" que el DM menciona en su
+    // narración, tanto si impacta como si falla.
+    game.appendNarrativeEntry({
+      role: 'assistant',
+      content: this.describeRoll(game, input, attackRoll, hit, damage),
+    });
+    await this.games.save(game);
+
     return { hit, attackRoll, damage };
+  }
+
+  private describeRoll(
+      game: Game,
+      input: ResolveAttackInput,
+      attackRoll: number,
+      hit: boolean,
+      damage: number,
+  ): string {
+    const snapshot = game.toSnapshot();
+    const targetName =
+        snapshot.players.find((p) => p.characterId === input.targetId)?.name ??
+        snapshot.activeEncounter?.enemies.find((e) => e.instanceId === input.targetId)?.name ??
+        input.targetId;
+
+    const modifierText = input.attackerModifier >= 0 ? `+${input.attackerModifier}` : `${input.attackerModifier}`;
+    const header =
+        `🎲 Ataque contra ${targetName} (1d20${modifierText}): **${attackRoll}** vs CA ${input.targetArmorClass} → ` +
+        (hit ? '¡IMPACTA!' : 'falla');
+
+    if (!hit) {
+      return header;
+    }
+
+    return `${header} — Daño (${input.damageDice}): **${damage}**`;
   }
 }

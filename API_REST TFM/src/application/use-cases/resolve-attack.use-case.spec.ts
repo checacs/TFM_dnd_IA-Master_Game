@@ -66,6 +66,20 @@ describe('ResolveAttackUseCase', () => {
     const saved = await repo.findById(game.id);
     const enemy = saved?.toSnapshot().activeEncounter?.enemies.find((e) => e.instanceId === 'enc-1-goblin-a');
     expect(enemy?.currentHp).toBe(2); // 7 - 5
+
+    // Se comprobó que el jugador no veía en el chat de dónde salía el daño
+    // que el DM narraba -- a diferencia de PlayerRollUseCase (que sí publica
+    // la tirada del jugador), ResolveAttackUseCase no dejaba ningún rastro en
+    // narrativeLog. Ahora sí: mismo formato con emoji de dado, rol 'assistant'
+    // (la tirada la resuelve el sistema/DM, no la pulsó el jugador).
+    const log = saved!.toSnapshot().narrativeLog;
+    expect(log).toHaveLength(1);
+    expect(log[0].role).toBe('assistant');
+    expect(log[0].content).toContain('Goblin explorador');
+    expect(log[0].content).toContain('15');
+    expect(log[0].content).toContain('17');
+    expect(log[0].content).toContain('1d6+2');
+    expect(log[0].content).toContain('5');
   });
 
   it('falla cuando la tirada no alcanza la CA y no modifica el HP del objetivo', async () => {
@@ -87,6 +101,16 @@ describe('ResolveAttackUseCase', () => {
     const saved = await repo.findById(game.id);
     const enemy = saved?.toSnapshot().activeEncounter?.enemies.find((e) => e.instanceId === 'enc-1-goblin-a');
     expect(enemy?.currentHp).toBe(7); // sin cambios
+
+    // También en un fallo debe quedar rastro en el chat (para que el jugador
+    // vea que sí hubo una tirada, aunque no acertara) -- antes, al fallar,
+    // ni siquiera se guardaba la partida (no hacía falta persistir HP), así
+    // que el registro de la tirada tampoco se guardaba nunca.
+    const log = saved!.toSnapshot().narrativeLog;
+    expect(log).toHaveLength(1);
+    expect(log[0].content).toContain('5');
+    expect(log[0].content).toContain('17');
+    expect(log[0].content.toLowerCase()).toContain('falla');
   });
 
   it('lanza DomainError si la partida no existe', async () => {
