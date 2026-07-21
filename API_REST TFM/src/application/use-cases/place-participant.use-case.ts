@@ -7,6 +7,8 @@ export interface PlaceParticipantInput {
   participantId: string;
   row: number;
   col: number;
+  /** Nombre exacto de la zona de describe_map en la que se narra este posicionamiento — ver Game.placeParticipant. */
+  zoneName?: string;
 }
 
 /**
@@ -25,7 +27,7 @@ export class PlaceParticipantUseCase {
       throw new DomainError('Partida no encontrada');
     }
 
-    game.placeParticipant(input.participantId, { row: input.row, col: input.col });
+    game.placeParticipant(input.participantId, { row: input.row, col: input.col }, input.zoneName);
     await this.games.save(game);
   }
 }

@@ -195,10 +195,21 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
     'Coloca a un jugador o enemigo en una celda (row, col) del tablero actual. Úsalo al describir dónde ' +
       'está cada uno en la escena (tras set_battle_map o start_combat) o cuando la narración implique que ' +
       'alguien se mueve. Si el mapa tiene zonas catalogadas, la celda debe caer dentro de alguna sala real ' +
-      'del mapa (consulta describe_map): nunca coloques a nadie fuera de la estructura dibujada.',
-    { gameId: z.string(), participantId: z.string(), row: z.number().int(), col: z.number().int() },
-    async ({ gameId, participantId, row, col }) => {
-      await tools.placeParticipantTool(gameId, participantId, row, col);
+      'del mapa (consulta describe_map): nunca coloques a nadie fuera de la estructura dibujada. PASA ' +
+      'SIEMPRE zoneName con el nombre EXACTO de la zona de describe_map en la que estás narrando a este ' +
+      'participante (ej. si narras "junto al Viejo Roble Resonante", zoneName debe ser "Viejo Roble ' +
+      'Resonante"): el sistema rechazará la llamada con un error si la celda no cae dentro de esa zona ' +
+      'exacta, para detectar si te has confundido de sala vecina (zonas distintas a veces comparten el ' +
+      'mismo rango de filas o columnas). Si aún no hay una zona concreta que nombrar, omite zoneName.',
+    {
+      gameId: z.string(),
+      participantId: z.string(),
+      row: z.number().int(),
+      col: z.number().int(),
+      zoneName: z.string().optional(),
+    },
+    async ({ gameId, participantId, row, col, zoneName }) => {
+      await tools.placeParticipantTool(gameId, participantId, row, col, zoneName);
       return { content: [{ type: 'text', text: JSON.stringify({ placed: true }) }] };
     },
   );

@@ -1,6 +1,6 @@
 import { DomainError } from '../errors/domain-error';
 import { CharacterClass } from './character.entity';
-import { MapZone, isCellInsideZones } from './battle-map.entity';
+import { MapZone, findZoneByName, isCellInsideZone, isCellInsideZones } from './battle-map.entity';
 
 export type GameStatus = 'configuracion' | 'en_curso' | 'pausada' | 'finalizada';
 
@@ -366,14 +366,31 @@ export class Game {
    * El DM-IA coloca a un jugador o enemigo en una celda del tablero. Valida límites del tablero
    * siempre; si el mapa aplicado tiene zonas catalogadas (board.zones), valida además que la celda
    * caiga dentro de alguna — si no tiene zonas catalogadas todavía, no se restringe (ver isCellInsideZones).
+   *
+   * Si se indica zoneName (el DM-IA debería pasarlo siempre que coloque a alguien en una sala con
+   * nombre), la validación es más estricta: la celda tiene que caer DENTRO de esa zona exacta, no de
+   * cualquier zona del mapa. Esto existe porque se detectó en partida real que el DM-IA narraba una
+   * zona ("junto al Viejo Roble Resonante") y llamaba a place_participant con una celda de la zona
+   * vecina ("Coto de Caza de los Trasgos") — ambas válidas para isCellInsideZones (están en el mapa),
+   * pero inconsistentes con lo narrado. Sin zoneName se mantiene el comportamiento antiguo.
    */
-  placeParticipant(participantId: string, position: BoardPosition): void {
+  placeParticipant(participantId: string, position: BoardPosition, zoneName?: string): void {
     const participant = this.findParticipant(participantId);
     const { rows, cols, zones } = this.props.board;
     if (position.row < 0 || position.row >= rows || position.col < 0 || position.col >= cols) {
       throw new DomainError('La posición cae fuera del tablero');
     }
-    if (!isCellInsideZones(zones, position.row, position.col)) {
+    if (zoneName) {
+      const zone = findZoneByName(zones, zoneName);
+      if (!zone) {
+        throw new DomainError(`No existe ninguna zona llamada "${zoneName}" en el mapa actual`);
+      }
+      if (!isCellInsideZone(zone, position.row, position.col)) {
+        throw new DomainError(
+          `La celda (${position.row}, ${position.col}) no está dentro de la zona "${zoneName}"`,
+        );
+      }
+    } else if (!isCellInsideZones(zones, position.row, position.col)) {
       throw new DomainError('La posición cae fuera de las zonas válidas del mapa');
     }
     participant.position = position;

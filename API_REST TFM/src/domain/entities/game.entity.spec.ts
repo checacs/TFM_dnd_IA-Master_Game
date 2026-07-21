@@ -352,6 +352,50 @@ describe('Game', () => {
 
       expect(game.toSnapshot().players[0].position).toEqual({ row: 1, col: 1 });
     });
+
+    describe('con zoneName (validacion de zona exacta)', () => {
+      function buildGameWithTwoZones() {
+        const game = buildGame();
+        game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        // Mismo caso real detectado en partida: dos zonas vecinas que comparten el
+        // rango de filas y solo difieren en columnas -- faciles de confundir.
+        game.setBattleMap({
+          rows: 34,
+          cols: 18,
+          imageUrl: '/maps/ruinas-bosque.png',
+          zones: [
+            { name: 'Coto de Caza de los Trasgos', cells: [{ rowStart: 20, rowEnd: 28, colStart: 0, colEnd: 9 }] },
+            { name: 'Viejo Roble Resonante', cells: [{ rowStart: 20, rowEnd: 28, colStart: 9, colEnd: 17 }] },
+          ],
+        });
+        return game;
+      }
+
+      it('acepta la posicion si cae dentro de la zona nombrada', () => {
+        const game = buildGameWithTwoZones();
+        game.placeParticipant('char-1', { row: 24, col: 12 }, 'Viejo Roble Resonante');
+        expect(game.toSnapshot().players[0].position).toEqual({ row: 24, col: 12 });
+      });
+
+      it('lanza DomainError si la posicion cae en OTRA zona (el bug real: narrar una zona y colocar en la vecina)', () => {
+        const game = buildGameWithTwoZones();
+        expect(() =>
+          game.placeParticipant('char-1', { row: 24, col: 3 }, 'Viejo Roble Resonante'),
+        ).toThrow(DomainError);
+      });
+
+      it('lanza DomainError si la zona nombrada no existe en el mapa actual', () => {
+        const game = buildGameWithTwoZones();
+        expect(() =>
+          game.placeParticipant('char-1', { row: 24, col: 12 }, 'Zona que no existe'),
+        ).toThrow(DomainError);
+      });
+
+      it('sin zoneName, mantiene el comportamiento anterior (acepta cualquier zona)', () => {
+        const game = buildGameWithTwoZones();
+        expect(() => game.placeParticipant('char-1', { row: 24, col: 3 })).not.toThrow();
+      });
+    });
   });
 
   describe('startEncounter — nuevo modelo de rondas', () => {

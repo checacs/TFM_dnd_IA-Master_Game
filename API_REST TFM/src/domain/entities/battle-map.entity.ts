@@ -35,9 +35,23 @@ export function isCellInsideZones(zones: MapZone[], row: number, col: number): b
   if (zones.length === 0) {
     return true;
   }
-  return zones.some((zone) =>
-    zone.cells.some((c) => row >= c.rowStart && row <= c.rowEnd && col >= c.colStart && col <= c.colEnd),
-  );
+  return zones.some((zone) => isCellInsideZone(zone, row, col));
+}
+
+/** Busca una zona por nombre exacto, ignorando mayusculas/minusculas y espacios sobrantes. */
+export function findZoneByName(zones: MapZone[], zoneName: string): MapZone | undefined {
+  const normalized = zoneName.trim().toLowerCase();
+  return zones.find((zone) => zone.name.trim().toLowerCase() === normalized);
+}
+
+/**
+ * A diferencia de isCellInsideZones (que acepta la celda si cae en CUALQUIER zona), esto valida
+ * una zona concreta -- necesario porque zonas vecinas comparten a veces el mismo rango de filas o
+ * columnas y solo difieren en el otro eje, así que "está dentro de alguna zona" no basta para
+ * detectar que el DM-IA narró una sala pero coloco al participante en la de al lado.
+ */
+export function isCellInsideZone(zone: MapZone, row: number, col: number): boolean {
+  return zone.cells.some((c) => row >= c.rowStart && row <= c.rowEnd && col >= c.colStart && col <= c.colEnd);
 }
 
 /**

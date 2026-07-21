@@ -52,4 +52,32 @@ describe('PlaceParticipantUseCase', () => {
       useCase.execute({ gameId: game.id, participantId: 'char-1', row: 9, col: 0 }),
     ).rejects.toThrow();
   });
+
+  it('con zoneName, propaga el DomainError si la celda cae en otra zona (mismatch narración/celda)', async () => {
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 9 });
+    game.setBattleMap({
+      rows: 34,
+      cols: 18,
+      imageUrl: '/maps/ruinas-bosque.png',
+      zones: [
+        { name: 'Coto de Caza de los Trasgos', cells: [{ rowStart: 20, rowEnd: 28, colStart: 0, colEnd: 9 }] },
+        { name: 'Viejo Roble Resonante', cells: [{ rowStart: 20, rowEnd: 28, colStart: 9, colEnd: 17 }] },
+      ],
+    });
+    const games = new FakeGameRepository();
+    games.seed(game);
+
+    const useCase = new PlaceParticipantUseCase(games);
+
+    await expect(
+      useCase.execute({
+        gameId: game.id,
+        participantId: 'char-1',
+        row: 24,
+        col: 3,
+        zoneName: 'Viejo Roble Resonante',
+      }),
+    ).rejects.toThrow();
+  });
 });

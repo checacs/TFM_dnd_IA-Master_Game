@@ -118,8 +118,8 @@ export class GameMcpTools {
     return this.removeCondition.execute({ gameId, participantId, conditionIndex });
   }
 
-  placeParticipantTool(gameId: string, participantId: string, row: number, col: number) {
-    return this.placeParticipant.execute({ gameId, participantId, row, col });
+  placeParticipantTool(gameId: string, participantId: string, row: number, col: number, zoneName?: string) {
+    return this.placeParticipant.execute({ gameId, participantId, row, col, zoneName });
   }
 
   advanceToPlayerRoundTool(gameId: string) {

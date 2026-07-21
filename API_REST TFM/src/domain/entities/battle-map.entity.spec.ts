@@ -1,4 +1,4 @@
-import { BattleMap, isCellInsideZones } from './battle-map.entity';
+import { BattleMap, findZoneByName, isCellInsideZone, isCellInsideZones } from './battle-map.entity';
 
 function buildMap(overrides: Partial<Parameters<typeof BattleMap.create>[0]> = {}) {
   return BattleMap.create({
@@ -78,6 +78,44 @@ describe('BattleMap', () => {
     it('devuelve false si la celda cae fuera de todas las zonas', () => {
       const zones = [{ name: 'Sala', cells: [{ rowStart: 2, rowEnd: 5, colStart: 1, colEnd: 3 }] }];
       expect(isCellInsideZones(zones, 0, 0)).toBe(false);
+    });
+  });
+
+  describe('findZoneByName', () => {
+    const zones = [
+      { name: 'Coto de Caza de los Trasgos', cells: [{ rowStart: 20, rowEnd: 28, colStart: 0, colEnd: 9 }] },
+      { name: 'Viejo Roble Resonante', cells: [{ rowStart: 20, rowEnd: 28, colStart: 9, colEnd: 17 }] },
+    ];
+
+    it('encuentra la zona por nombre exacto', () => {
+      expect(findZoneByName(zones, 'Viejo Roble Resonante')).toBe(zones[1]);
+    });
+
+    it('ignora mayusculas/minusculas y espacios sobrantes', () => {
+      expect(findZoneByName(zones, '  viejo roble resonante  ')).toBe(zones[1]);
+    });
+
+    it('devuelve undefined si ninguna zona coincide', () => {
+      expect(findZoneByName(zones, 'Zona inventada')).toBeUndefined();
+    });
+  });
+
+  describe('isCellInsideZone', () => {
+    const zone = { name: 'Viejo Roble Resonante', cells: [{ rowStart: 20, rowEnd: 28, colStart: 9, colEnd: 17 }] };
+
+    it('devuelve true si la celda cae dentro de la zona dada', () => {
+      expect(isCellInsideZone(zone, 24, 12)).toBe(true);
+    });
+
+    it('devuelve true en los bordes exactos', () => {
+      expect(isCellInsideZone(zone, 20, 9)).toBe(true);
+      expect(isCellInsideZone(zone, 28, 17)).toBe(true);
+    });
+
+    it('devuelve false si la celda cae en el rango de otra zona (mismo rango de filas, columnas distintas)', () => {
+      // Este es exactamente el bug real detectado: "Coto de Caza de los Trasgos" (cols 0-9)
+      // y "Viejo Roble Resonante" (cols 9-17) comparten filas 20-28 y son faciles de confundir.
+      expect(isCellInsideZone(zone, 24, 3)).toBe(false);
     });
   });
 });
