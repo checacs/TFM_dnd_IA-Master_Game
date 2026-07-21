@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { DeepSeekChatClient } from './deepseek-chat-client';
 import { McpToolCaller } from './mcp-tool-caller';
-import { runDmTurn } from './dm-turn';
+import { runDmTurn, NoMutationYetError } from './dm-turn';
 import { ChatMessage } from './ports';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -35,6 +35,14 @@ app.post('/turn', async (req, res) => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error procesando el turno del DM:', error);
+    if (error instanceof NoMutationYetError) {
+      // 503 (distinto del 500 genérico): le dice a HttpDmEngineClient (lado
+      // API) que este fallo ocurrió ANTES de llamar a ninguna tool -- nada se
+      // mutó todavía, así que reintentar automáticamente es seguro. Ver el
+      // comentario de NoMutationYetError en dm-turn.ts.
+      res.status(503).json({ error: 'dm-engine: fallo antes de mutar nada, reintentable', retryable: true });
+      return;
+    }
     res.status(500).json({ error: 'Error interno procesando el turno' });
   }
 });

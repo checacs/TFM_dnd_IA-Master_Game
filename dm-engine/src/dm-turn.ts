@@ -1,6 +1,23 @@
-import { ChatClient, ChatMessage, ToolCaller, ToolDefinition } from './ports';
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, ToolDefinition } from './ports';
 import { toGameEvent, GameEvent } from './game-events';
 import { buildDmSystemPrompt } from './dm-system-prompt';
+
+/**
+ * Se detectó en partida real que un fallo transitorio de DeepSeek (rate-limit,
+ * blip de red -- DeepSeekChatClient usa maxRetries: 0 a propósito, ver su
+ * comentario) durante la PRIMERA llamada de un turno -- antes de que se
+ * llamara a ninguna tool -- se convertía en un 500 genérico indistinguible de
+ * "dm-engine ya mutó la partida antes de fallar". HttpDmEngineClient (lado
+ * API) nunca reintenta un 500 por diseño, precisamente para no arriesgarse a
+ * duplicar una mutación real -- pero si NINGUNA tool llegó a llamarse todavía,
+ * no hay nada que duplicar, y negarse a reintentar solo obliga al jugador a
+ * reescribir su mensaje a mano. Esta clase marca justo ese caso seguro.
+ */
+export class NoMutationYetError extends Error {
+  constructor(public readonly cause: Error) {
+    super(cause.message);
+  }
+}
 
 /**
  * Límite máximo de vueltas del bucle de tool-calling. Sin esto, un fallo del
@@ -36,6 +53,54 @@ function narrativeSuggestsLocationChange(text: string): boolean {
   const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
   const hasEntry = LOCATION_ENTRY_CUES.some((p) => p.test(text));
   return hasExit && hasEntry;
+}
+
+/**
+ * Se detectó en partida real un fallo mucho más grave que los de mapa: el
+ * jugador escribió "Atacar" y, en los turnos siguientes ("Ataco yo primero",
+ * "Lanza misil magico"), el DM narró un combate ENTERO -- tres goblins
+ * atacados, uno muerto por misiles mágicos, otro rematado por el guerrero,
+ * el tercero también abatido -- sin haber llamado NUNCA a start_combat,
+ * resolve_attack ni cast_spell. Como no existía ningún activeEncounter, el
+ * móvil nunca pudo mostrar "Mi turno"/"Tirar Dados" ni el tablero pintar a
+ * los enemigos: el DM resolvió todo el combate como texto libre, ignorando
+ * por completo el proceso de dos turnos con dados reales de la sección
+ * "Reglas de combate y movimiento EN CURSO". checkCombatStateNudge no lo
+ * detecta porque exige que se haya llamado a grant_xp -- aquí no se llamó a
+ * NINGUNA tool en absoluto. Este chequeo cubre justo ese hueco: si la
+ * narración da por muerto/derrotado a alguien pero no hubo ninguna tool de
+ * combate real este turno, se fuerza la corrección.
+ */
+const ENEMY_DEFEAT_CUES = [
+  /\bcae\b[^.]{0,40}\b(muert[oa]|inerte|sin vida)\b/i,
+  /\bqueda\s+inerte\b/i,
+  /\bse derrumba\b[^.]{0,40}\b(sin vida|inerte|muert[oa])\b/i,
+  /\bfallece\b/i,
+  /\bmuere\b/i,
+  /\b(lo|la|le)\s+(remata|abate)\b/i,
+];
+
+function narrativeSuggestsEnemyDefeated(text: string): boolean {
+  return ENEMY_DEFEAT_CUES.some((p) => p.test(text));
+}
+
+/** Tools que, si se llamó a alguna, indican que este turno SÍ tocó el sistema de combate real. */
+const COMBAT_MECHANIC_TOOLS = ['start_combat', 'resolve_attack', 'cast_spell', 'grant_xp', 'end_combat'];
+
+function combatWithoutToolsNudge(calledTools: Set<string>, narrativeText: string): string | null {
+  const usedCombatTools = COMBAT_MECHANIC_TOOLS.some((t) => calledTools.has(t));
+  if (usedCombatTools || !narrativeSuggestsEnemyDefeated(narrativeText)) {
+    return null;
+  }
+  return 'Tu narración de este turno da por muerto o derrotado a alguien, pero no has llamado a start_combat, ' +
+      'resolve_attack ni cast_spell en NINGÚN momento de este turno -- eso significa que ningún ataque se ha ' +
+      'resuelto de verdad, ninguna tirada real ha ocurrido, y ningún combate se ha registrado en el sistema (el ' +
+      'móvil no puede mostrar "Mi turno"/"Tirar Dados" ni el tablero pintar a los enemigos si nunca llamaste a ' +
+      'start_combat). Corrige tu narración: si esto es el inicio de una pelea, llama primero a start_combat con ' +
+      'los enemigos reales de get_enemy_catalog; si un jugador ataca, sigue el proceso de DOS TURNOS (invita a ' +
+      '"Tirar Dados" primero, no resuelvas nada hasta leer su tirada real en el chat) y llama a resolve_attack o ' +
+      'cast_spell para aplicar el resultado real antes de narrar impactos, heridas o muertes. Nunca resuelvas un ' +
+      'combate completo solo con texto libre, por muy claro que parezca el desenlace.';
 }
 
 /**
@@ -223,6 +288,29 @@ async function checkCombatStateNudge(
   return null;
 }
 
+/**
+ * Envuelve chatClient.createCompletion para distinguir, si falla, si ya se
+ * había llamado a alguna tool en este turno (mutación posiblemente ya
+ * aplicada -- no reintentar a ciegas) o si todavía no se había llamado a
+ * ninguna (nada que duplicar -- seguro marcarlo como reintentable).
+ */
+async function completeOrThrow(
+    chatClient: ChatClient,
+    messages: ChatMessage[],
+    tools: ToolDefinition[],
+    calledTools: Set<string>,
+): Promise<ChatCompletionResult> {
+  try {
+    return await chatClient.createCompletion({ messages, tools });
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (calledTools.size === 0) {
+      throw new NoMutationYetError(err);
+    }
+    throw err;
+  }
+}
+
 export async function runDmTurn(
     chatClient: ChatClient,
     toolCaller: ToolCaller,
@@ -245,7 +333,7 @@ export async function runDmTurn(
 
   let iterations = 0;
   let correctionUsed = false;
-  let response = await chatClient.createCompletion({ messages: withSystem(), tools });
+  let response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
 
   for (;;) {
     if (response.message.tool_calls?.length) {
@@ -304,16 +392,21 @@ export async function runDmTurn(
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
       }
 
-      response = await chatClient.createCompletion({ messages: withSystem(), tools });
+      response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
       continue;
     }
 
     if (!correctionUsed) {
-      // Se prioriza este chequeo (un hecho verificable contra el HP real)
-      // sobre protocolNudge (heurísticos de texto) -- una victoria prematura
-      // es más grave que un aviso de protocolo de mapa/colocación.
-      const combatStateNudge = await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
+      // Orden de prioridad: 1) combate resuelto sin NINGUNA tool (el fallo más
+      // grave, cero mecánica real de por medio); 2) checkCombatStateNudge (un
+      // hecho verificable contra el HP real vía get_game_state); 3) protocolNudge
+      // (heurísticos de texto sobre mapas/colocación, el más leve de los tres).
+      const noToolsNudge = combatWithoutToolsNudge(calledTools, response.message.content ?? '');
+      const combatStateNudge = noToolsNudge
+          ? null
+          : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
+          noToolsNudge ??
           combatStateNudge ??
           protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
       if (nudge) {
@@ -321,7 +414,7 @@ export async function runDmTurn(
         console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);
         messages.push(response.message);
         messages.push({ role: 'user', content: nudge });
-        response = await chatClient.createCompletion({ messages: withSystem(), tools });
+        response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
         continue;
       }
     }

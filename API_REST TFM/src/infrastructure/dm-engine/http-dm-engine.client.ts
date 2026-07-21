@@ -91,6 +91,18 @@ export class HttpDmEngineClient implements DmEngineClient {
     }
 
     if (!response.ok) {
+      // 503 es la señal explícita de dm-engine (ver NoMutationYetError en su
+      // dm-turn.ts) de que el fallo ocurrió ANTES de llamar a ninguna tool en
+      // este turno -- nada se mutó todavía, así que SÍ es seguro reintentar.
+      // Se detectó en partida real que un fallo transitorio de DeepSeek en la
+      // primera llamada del turno (DeepSeekChatClient usa maxRetries: 0 a
+      // propósito) se convertía antes en un 500 indistinguible de "ya mutó
+      // algo", y por diseño nunca se reintentaba -- el jugador tenía que
+      // reescribir su acción a mano. Cualquier OTRO estado (incluido un 500
+      // genérico) sigue sin reintentarse, exactamente como antes.
+      if (response.status === 503) {
+        throw new StartupFailure(new Error(`dm-engine señaló un fallo reintentable (503) antes de mutar estado`));
+      }
       throw new Error(`dm-engine respondió con estado ${response.status}`);
     }
 

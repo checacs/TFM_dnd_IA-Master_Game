@@ -1,0 +1,56 @@
+/* eslint-disable */
+// Verificación manual (Jest roto en este sandbox) de que HttpDmEngineClient
+// reintenta ante un 503 de dm-engine (señal explícita de NoMutationYetError:
+// el fallo ocurrió ANTES de llamar a ninguna tool, así que es seguro
+// reintentar), y que un 500 normal sigue SIN reintentarse (comportamiento
+// preexistente, no debe romperse).
+import { HttpDmEngineClient } from './src/infrastructure/dm-engine/http-dm-engine.client';
+
+async function main() {
+  const originalFetch = global.fetch;
+
+  // 1) 503 -> reintenta y tiene éxito en el segundo intento.
+  {
+    let calls = 0;
+    (global as any).fetch = async () => {
+      calls++;
+      if (calls === 1) return { ok: false, status: 503 } as Response;
+      return { ok: true, json: async () => ({ narrative: 'Ya despierto', events: [] }) } as Response;
+    };
+
+    const client = new HttpDmEngineClient('http://dm-engine.local');
+    const result = await client.sendTurn('game-1', [{ role: 'user', content: 'hola' }]);
+    if (JSON.stringify(result) !== JSON.stringify({ narrative: 'Ya despierto', events: [] })) {
+      throw new Error(`FALLO 1: resultado inesperado: ${JSON.stringify(result)}`);
+    }
+    if (calls !== 2) throw new Error(`FALLO 1: se esperaban 2 llamadas, hubo ${calls}`);
+    console.log('OK 1/2: 503 -> SÍ reintenta y funciona al segundo intento.');
+  }
+
+  // 2) 500 normal -> NO reintenta (comportamiento preexistente intacto).
+  {
+    let calls = 0;
+    (global as any).fetch = async () => {
+      calls++;
+      return { ok: false, status: 500 } as Response;
+    };
+
+    const client = new HttpDmEngineClient('http://dm-engine.local');
+    try {
+      await client.sendTurn('game-1', [{ role: 'user', content: 'hola' }]);
+      throw new Error('FALLO 2: debería haber lanzado');
+    } catch (err) {
+      if (!(err instanceof Error) || !err.message.includes('estado 500')) throw new Error(`FALLO 2: error inesperado: ${err}`);
+    }
+    if (calls !== 1) throw new Error(`FALLO 2: NO debería reintentar un 500 (hubo ${calls} llamadas)`);
+    console.log('OK 2/2: 500 normal -> sigue SIN reintentar (comportamiento preexistente intacto).');
+  }
+
+  (global as any).fetch = originalFetch;
+  console.log('\n✅ TODO OK: retry ante 503 verificado, 500 sigue sin reintentarse.');
+}
+
+main().catch((err) => {
+  console.error('❌ ERROR:', err);
+  process.exit(1);
+});

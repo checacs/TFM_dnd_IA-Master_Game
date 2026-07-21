@@ -104,4 +104,25 @@ describe('HttpDmEngineClient', () => {
     await expect(client.sendTurn('game-1', [{ role: 'user', content: 'hola' }])).rejects.toThrow(/estado 500/);
     expect(calls).toBe(1); // ni un solo reintento
   });
+
+  it('SÍ reintenta si dm-engine responde 503 (NoMutationYetError: falló antes de llamar a ninguna tool, seguro reintentar)', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    let calls = 0;
+    global.fetch = jest.fn(async () => {
+      calls++;
+      if (calls === 1) {
+        return { ok: false, status: 503 } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ narrative: 'Ya despierto', events: [] }),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const client = new HttpDmEngineClient('http://dm-engine.local');
+    const result = await client.sendTurn('game-1', [{ role: 'user', content: 'hola' }]);
+
+    expect(result).toEqual({ narrative: 'Ya despierto', events: [] });
+    expect(calls).toBe(2);
+  });
 });

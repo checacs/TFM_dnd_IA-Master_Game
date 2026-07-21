@@ -1,5 +1,5 @@
 import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './ports';
-import { runDmTurn } from './dm-turn';
+import { runDmTurn, NoMutationYetError } from './dm-turn';
 
 class FakeChatClient implements ChatClient {
   private i = 0;
@@ -10,6 +10,23 @@ class FakeChatClient implements ChatClient {
     const response = this.responses[this.i];
     this.i = Math.min(this.i + 1, this.responses.length - 1);
     return response;
+  }
+}
+
+/**
+ * Simula fallos de chatClient.createCompletion en pasos concretos -- para
+ * probar que runDmTurn distingue un fallo ANTES de llamar a cualquier tool
+ * (NoMutationYetError, seguro reintentar) de un fallo DESPUÉS de que alguna
+ * tool ya se ejecutó (error normal, nada garantiza que sea seguro reintentar).
+ */
+class ThrowingChatClient implements ChatClient {
+  private i = 0;
+  constructor(private readonly steps: (ChatCompletionResult | Error)[]) {}
+  async createCompletion(): Promise<ChatCompletionResult> {
+    const step = this.steps[Math.min(this.i, this.steps.length - 1)];
+    this.i += 1;
+    if (step instanceof Error) throw step;
+    return step;
   }
 }
 
@@ -640,5 +657,96 @@ describe('runDmTurn', () => {
 
     expect(result.narrative).toBe('Habéis completado la misión. Ganáis 100 XP.');
     expect(toolCaller.calls.map((c) => c.name)).toEqual(['grant_xp']); // sin get_game_state
+  });
+
+  describe('NoMutationYetError -- distinguir fallos de DeepSeek según si ya se llamó a alguna tool', () => {
+    it('si la PRIMERA llamada a createCompletion falla (antes de cualquier tool), lanza NoMutationYetError', async () => {
+      const chatClient = new ThrowingChatClient([new Error('DeepSeek: 429 rate limited')]);
+      const toolCaller = new FakeToolCaller();
+
+      await expect(
+        runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Atacar' }], 'g1'),
+      ).rejects.toBeInstanceOf(NoMutationYetError);
+      expect(toolCaller.calls).toHaveLength(0);
+    });
+
+    it('si createCompletion falla DESPUÉS de haber llamado a alguna tool, lanza el error tal cual (no NoMutationYetError)', async () => {
+      const chatClient = new ThrowingChatClient([
+        {
+          message: {
+            role: 'assistant', content: null,
+            tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'roll_dice', arguments: '{"notation":"1d20"}' } }],
+          },
+        },
+        new Error('DeepSeek: 500 fallo transitorio'),
+      ]);
+      const toolCaller = new FakeToolCaller([], { roll_dice: { result: 14 } });
+
+      await expect(
+        runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Tiro para percibir' }], 'g1'),
+      ).rejects.toThrow('DeepSeek: 500 fallo transitorio');
+      // Confirma que NO es un NoMutationYetError (ya se había llamado a roll_dice):
+      try {
+        await runDmTurn(
+          new ThrowingChatClient([
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'roll_dice', arguments: '{"notation":"1d20"}' } }],
+              },
+            },
+            new Error('DeepSeek: 500 fallo transitorio'),
+          ]),
+          new FakeToolCaller([], { roll_dice: { result: 14 } }),
+          [{ role: 'user', content: 'Tiro para percibir' }],
+          'g1',
+        );
+        throw new Error('debería haber lanzado');
+      } catch (err) {
+        expect(err).not.toBeInstanceOf(NoMutationYetError);
+      }
+    });
+  });
+
+  describe('combate resuelto por texto libre sin NINGUNA tool real (bug real: "Atacar" -> 3 goblins muertos sin start_combat/resolve_attack/cast_spell)', () => {
+    it('si la narrativa da por muerto a alguien pero no se llamó a ninguna tool de combate, se corrige', async () => {
+      const chatClient = new FakeChatClient([
+        { message: { role: 'assistant', content: 'Lanzas un misil mágico. El goblin cae muerto al instante.' } },
+        { message: { role: 'assistant', content: '¡Tira los dados! (corregido: sin resolve_attack todavía)' } },
+      ]);
+      const toolCaller = new FakeToolCaller();
+
+      const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Lanzo misil magico' }], 'g1');
+
+      expect(result.narrative).toBe('¡Tira los dados! (corregido: sin resolve_attack todavía)');
+      expect(chatClient.receivedCalls).toHaveLength(2);
+      const correctionMessages = chatClient.receivedCalls[1].messages;
+      const correctionMessage = correctionMessages[correctionMessages.length - 1];
+      expect(correctionMessage?.content).toMatch(/start_combat|resolve_attack|cast_spell/);
+    });
+
+    it('si SÍ se llamó a una tool de combate real (start_combat) y se colocó a su enemigo, no se corrige aunque la narrativa mencione una muerte', async () => {
+      const chatClient = new FakeChatClient([
+        {
+          message: {
+            role: 'assistant', content: null,
+            tool_calls: [
+              { id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["enemy-1"]}' } },
+              { id: 'c2', type: 'function' as const, function: { name: 'place_participant', arguments: '{"gameId":"g1","participantId":"enc-1-a","row":0,"col":0}' } },
+            ],
+          },
+        },
+        { message: { role: 'assistant', content: 'El combate empieza. Un goblin cae muerto en la primera embestida.' } },
+      ]);
+      const toolCaller = new FakeToolCaller([], {
+        start_combat: { enemies: [{ instanceId: 'enc-1-a' }] },
+        place_participant: { placed: true },
+      });
+
+      const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Ataco' }], 'g1');
+
+      expect(result.narrative).toBe('El combate empieza. Un goblin cae muerto en la primera embestida.');
+      expect(chatClient.receivedCalls).toHaveLength(2); // 1 con el tool_call + 1 con la narrativa final, SIN corrección
+    });
   });
 });
