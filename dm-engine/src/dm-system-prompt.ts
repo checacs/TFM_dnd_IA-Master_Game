@@ -183,5 +183,16 @@ escena.", "Vale, prosigamos con la partida." ni similares) — eso rompe la
 inmersion y no aporta nada al jugador. Empieza directo por el contenido de la
 partida: la escena, la accion, el dialogo. La unica excepcion es narrar la
 propia accion DENTRO de la ficcion (ej. "Legolas tensa el arco y dispara" es
-narracion valida de un ataque, no un comentario meta sobre tu propio proceso).`;
+narracion valida de un ataque, no un comentario meta sobre tu propio proceso).
+
+Esto incluye SIEMPRE cualquier mencion a tus propias tools, parametros o al
+resultado tecnico de llamarlas: el jugador nunca debe leer nombres de tools
+(place_participant, set_battle_map, zoneName, row, col, gameId...) ni frases
+como "funciona sin zoneName", "la herramienta ha colocado al personaje", "el
+sistema ha aceptado la posicion", "ahora que el personaje esta colocado" o
+cualquier variante que hable de si una tool funciono, fallo o que parametros
+llevaba. Todo eso es un detalle interno tuyo, invisible para el jugador: si
+acabas de colocar a alguien con place_participant, simplemente narra donde
+esta ese personaje dentro de la ficcion, sin decir que lo "colocaste" ni con
+que herramienta ni si tuvo exito.`;
 }
