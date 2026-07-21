@@ -15,6 +15,30 @@ export interface DmTurnResult {
 }
 
 /**
+ * Frases tipicas de "salir de un sitio" / "entrar, bajar, cruzar a otro" en
+ * castellano. Se exige que aparezcan LAS DOS clases (una de salida Y una de
+ * entrada/transito) para reducir falsos positivos: un simple "entras en la
+ * sala del fondo" dentro de la misma mazmorra no debería disparar esto (ese
+ * caso ya lo cubre la regla de place_participant), pero "sales de la taberna...
+ * bajas... " sí es una transición de localización real. No es infalible (es
+ * un heurístico de texto, no un análisis semántico), pero es un empujón
+ * adicional barato para el caso que se detectó en partida real: el DM narraba
+ * salir de una taberna y entrar en una cripta sin tocar ninguna tool de mapa,
+ * y el tablero se quedaba con la imagen de la taberna.
+ */
+const LOCATION_EXIT_CUES = [/\bsales? de\b/i, /\babandonas\b/i, /\bdejas atr[aá]s\b/i, /\bte alejas de\b/i];
+const LOCATION_ENTRY_CUES = [
+  /\bentr[aá]is?\b/i, /\bdesciend[ea]s?\b/i, /\bacced[ea]s?\b/i, /\bte adentras\b/i,
+  /\bcruzas\b/i, /\bllega[sn]?\b/i, /\bbaj[ao]s?\b/i, /\bsub[ei]s?\b/i,
+];
+
+function narrativeSuggestsLocationChange(text: string): boolean {
+  const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
+  const hasEntry = LOCATION_ENTRY_CUES.some((p) => p.test(text));
+  return hasExit && hasEntry;
+}
+
+/**
  * El system prompt (dm-system-prompt.ts) le pide al modelo un protocolo de pasos
  * (describe_map -> set_battle_map -> place_participant) pero es solo texto: nada
  * en el código obligaba a cumplirlo. Se comprobó en producción que DeepSeek puede
@@ -29,7 +53,26 @@ function protocolNudge(
     events: GameEvent[],
     combatEnemyIds: Set<string>,
     placedParticipantIds: Set<string>,
+    narrativeText: string,
 ): string | null {
+  // Se comprobó en partida real que el DM narraba salir de una localización
+  // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
+  // ni siquiera get_battle_maps/describe_map, así que el aviso de "aún no has
+  // resuelto el mapa" (más abajo) no llegaba a dispararse porque ESE requiere
+  // haber explorado el mapa primero. Este chequeo cubre justo el hueco previo:
+  // "no tocaste el sistema de mapas para nada, pese a que tu propio texto
+  // suena a que cambiaste de sitio".
+  const touchedMapSystem =
+      calledTools.has('get_battle_maps') || calledTools.has('describe_map') ||
+      calledTools.has('set_battle_map') || calledTools.has('clear_battle_map') ||
+      calledTools.has('start_combat');
+  if (!touchedMapSystem && narrativeSuggestsLocationChange(narrativeText)) {
+    return 'Tu narración de este turno suena a que el grupo ha cambiado de localización (salís de un sitio y ' +
+        'entráis/bajáis/llegáis a otro), pero no has llamado a ninguna tool de mapa en este turno. Antes de dar ' +
+        'la escena por buena: llama a get_battle_maps con etiquetas del sitio nuevo -- si hay un mapId que ' +
+        'encaje, aplícalo con set_battle_map y coloca a los participantes con place_participant; si ninguno ' +
+        'encaja, llama a clear_battle_map para no dejar en pantalla el mapa de la escena anterior.';
+  }
   // exploredMap se mide por intento de llamada (describe_map/get_battle_maps no
   // generan evento, son de solo lectura) — resolvedMap/placedParticipant se miden
   // por evento realmente generado, no por el mero intento: si set_battle_map
@@ -165,7 +208,7 @@ export async function runDmTurn(
     }
 
     if (!correctionUsed) {
-      const nudge = protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds);
+      const nudge = protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
       if (nudge) {
         correctionUsed = true;
         console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);

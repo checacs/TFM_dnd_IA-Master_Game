@@ -394,4 +394,63 @@ describe('runDmTurn', () => {
     expect(result.narrative).toBe('Miras alrededor, todo en calma.');
     expect(chatClient.receivedCalls).toHaveLength(1);
   });
+
+  it(
+      'si la narración suena a que el grupo cambió de localización (sale de un sitio y entra/baja a otro) ' +
+      'pero no se llamó a NINGUNA tool de mapa, se avisa antes de aceptar la narrativa -- caso real detectado ' +
+      'en partida: el DM narró salir de una taberna y bajar a una cripta sin tocar get_battle_maps/' +
+      'set_battle_map/clear_battle_map, y el tablero se quedó con la imagen de la taberna',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content:
+                'Sales de la taberna al aire frío de la noche. Bajas con cuidado, contando los peldaños: doce, ' +
+                'quince, veinte. El pasillo se abre a una sala cuadrada.',
+            },
+          },
+          { message: { role: 'assistant', content: 'Tras revisar el mapa de la cripta, continúa la escena.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], { get_battle_maps: [], clear_battle_map: { cleared: true } });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('Tras revisar el mapa de la cripta, continúa la escena.');
+        expect(chatClient.receivedCalls).toHaveLength(2);
+        const correctionCall = chatClient.receivedCalls[1];
+        const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+        expect(lastMessage.content).toMatch(/tool de mapa/);
+      },
+  );
+
+  it(
+      'si la narración menciona salir/entrar pero el DM SÍ resolvió el mapa en ese mismo turno, no se ' +
+      'dispara el aviso de cambio de localización (evita falsos positivos sobre trabajo ya hecho)',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'get_battle_maps', arguments: '{"tags":["cripta"]}' } }],
+            },
+          },
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'clear_battle_map', arguments: '{"gameId":"g1"}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'Sales de la taberna y desciendes a la cripta oscura.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], { get_battle_maps: [], clear_battle_map: { cleared: true } });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('Sales de la taberna y desciendes a la cripta oscura.');
+        expect(chatClient.receivedCalls).toHaveLength(3); // sin ronda de corrección extra
+      },
+  );
 });

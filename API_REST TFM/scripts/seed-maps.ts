@@ -131,7 +131,7 @@ const maps = [
     name: 'Fortaleza con mazmorras (planta completa)',
     description: 'Planta completa de una fortaleza con mazmorras: sala de tortura, barracones, almacén, ' +
         'celdas de la prisión, armería, sala central, escalera al patio de armas y escaleras que bajan a las criptas.',
-    tags: ['interior', 'castillo', 'prision', 'mazmorra', 'multisala'],
+    tags: ['interior', 'castillo', 'prision', 'mazmorra', 'multisala', 'cripta', 'tumba'],
     rows: 30,
     cols: 19,
     imageUrl: '/maps/battleMap9-CriptaDeLosEcos.png',
