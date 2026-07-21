@@ -5,11 +5,19 @@ import { CharacterRepository, CHARACTER_REPOSITORY } from '../../domain/ports/ch
 import { SpellRepository, SPELL_REPOSITORY } from '../../domain/ports/spell.repository.port';
 import { EnemyRepository, ENEMY_REPOSITORY } from '../../domain/ports/enemy.repository.port';
 import { AttributeKey, CharacterClass } from '../../domain/entities/character.entity';
+import { Game } from '../../domain/entities/game.entity';
 import { DomainError } from '../../domain/errors/domain-error';
 
 export interface CastSpellInput {
   gameId: string;
-  requestingUserId: string;
+  /**
+   * Solo se exige por la ruta REST (el jugador lanza su propio hechizo desde
+   * el móvil): ahí sí hay que comprobar que el personaje es suyo. La tool MCP
+   * cast_spell la invoca el DM-IA directamente y omite este campo -- igual
+   * que end_player_turn o grant_item, no hay "usuario que pide la acción" que
+   * comprobar cuando es el DM quien decide.
+   */
+  requestingUserId?: string;
   casterCharacterId: string;
   spellId: string;
   /** instanceId del enemigo en el combate activo — solo necesario si el hechizo hace daño. */
@@ -63,7 +71,7 @@ export class CastSpellUseCase {
     if (!character) {
       throw new DomainError('Personaje no encontrado');
     }
-    if (character.toSnapshot().ownerId !== input.requestingUserId) {
+    if (input.requestingUserId && character.toSnapshot().ownerId !== input.requestingUserId) {
       throw new DomainError('No puedes lanzar conjuros con un personaje que no es tuyo');
     }
     if (!character.knowsSpell(input.spellId)) {
@@ -86,8 +94,15 @@ export class CastSpellUseCase {
     character.consumeSpellSlot(slotLevel);
     await this.characters.save(character);
 
+    const casterName = character.toSnapshot().name;
+
     if (!spellSnapshot.damageType) {
       // Hechizo utilitario (ej. Mage Armor) — consume ranura, sin efecto mecánico de daño.
+      // Se deja rastro en el chat igual que con resolve_attack: antes esto no
+      // aparecía en narrativeLog, así que el jugador no veía ninguna
+      // confirmación de que el hechizo se había lanzado de verdad.
+      game.appendNarrativeEntry({ role: 'assistant', content: `✨ **${casterName}** lanza **${spellSnapshot.name}**.` });
+      await this.games.save(game);
       return { spellName: spellSnapshot.name, damageDealt: 0, targetSavedThrow: null };
     }
 
@@ -111,10 +126,11 @@ export class CastSpellUseCase {
 
     let damage = 0;
     let targetSavedThrow: boolean | null = null;
+    let dc: number | null = null;
 
     if (spellSnapshot.savingThrowAbility) {
       const casterAbility = SPELLCASTING_ABILITY_BY_CLASS[character.toSnapshot().class];
-      const dc = 8 + (casterAbility ? character.attributeModifier(casterAbility) : 0);
+      dc = 8 + (casterAbility ? character.attributeModifier(casterAbility) : 0);
       const saveRoll = this.diceRoller.rollD20() + enemy.attributeModifier(spellSnapshot.savingThrowAbility as AttributeKey);
       targetSavedThrow = saveRoll >= dc;
 
@@ -127,8 +143,38 @@ export class CastSpellUseCase {
     }
 
     game.applyDamageToParticipant(input.targetId, damage);
+    game.appendNarrativeEntry({
+      role: 'assistant',
+      content: this.describeSpellDamage(game, casterName, spellSnapshot.name, input.targetId, dc, targetSavedThrow, damage),
+    });
     await this.games.save(game);
 
     return { spellName: spellSnapshot.name, damageDealt: damage, targetSavedThrow };
+  }
+
+  private describeSpellDamage(
+      game: Game,
+      casterName: string,
+      spellName: string,
+      targetId: string,
+      dc: number | null,
+      targetSavedThrow: boolean | null,
+      damage: number,
+  ): string {
+    const snapshot = game.toSnapshot();
+    const targetName =
+        snapshot.players.find((p) => p.characterId === targetId)?.name ??
+        snapshot.activeEncounter?.enemies.find((e) => e.instanceId === targetId)?.name ??
+        targetId;
+
+    const header = `✨ **${casterName}** lanza **${spellName}** contra **${targetName}**`;
+
+    if (dc === null) {
+      // Sin tirada de salvación: impacto automático (simplificación del MVP).
+      return `${header} — Daño: **${damage}**`;
+    }
+
+    const saveText = targetSavedThrow ? `salva (CD ${dc})` : `falla la salvación (CD ${dc})`;
+    return `${header}, ${saveText} — Daño: **${damage}**`;
   }
 }

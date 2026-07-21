@@ -73,9 +73,23 @@ describe('Character', () => {
       expect(snapshot.unassignedSkillPoints).toBe(0);
     });
 
-    it('las clases conjuradoras empiezan sin conjuros elegidos aún, pero con 2 slots de nivel 1 disponibles', () => {
+    it('un mago empieza con 2 conjuros conocidos (docs/01, tabla de progresión nivel 1) y 2 slots de nivel 1', () => {
+      // Antes esto era [] -- se detectó en partida real que un jugador de mago
+      // entraba en su primer combate sin ningún hechizo ni cómo lanzarlo, pese
+      // a que la spec dice "2 conjuros conocidos" para un conjurador de nivel 1.
+      const mago = Character.createNew({ ownerId: 'user-1', gameId: 'game-1', name: 'Elyndra', class: 'mago' });
+      expect(mago.toSnapshot().spells).toEqual({
+        known: ['magic-missile', 'mage-armor'],
+        slots: { level1: { max: 2, used: 0 }, level2: { max: 0, used: 0 } },
+      });
+    });
+
+    it('un clérigo empieza con sus propios 2 conjuros conocidos (distintos a los del mago)', () => {
       const clerigo = Character.createNew({ ownerId: 'user-1', gameId: 'game-1', name: 'Bram', class: 'clerigo' });
-      expect(clerigo.toSnapshot().spells).toEqual({ known: [], slots: { level1: { max: 2, used: 0 }, level2: { max: 0, used: 0 } } });
+      expect(clerigo.toSnapshot().spells).toEqual({
+        known: ['guiding-bolt', 'bless'],
+        slots: { level1: { max: 2, used: 0 }, level2: { max: 0, used: 0 } },
+      });
     });
 
     it('las clases no conjuradoras no tienen conjuros', () => {

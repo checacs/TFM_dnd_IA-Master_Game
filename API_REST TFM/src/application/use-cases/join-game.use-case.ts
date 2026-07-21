@@ -4,7 +4,7 @@ import { CharacterRepository, CHARACTER_REPOSITORY } from '../../domain/ports/ch
 import { EquipmentRepository, EQUIPMENT_REPOSITORY } from '../../domain/ports/equipment.repository.port';
 import { Character, CharacterClass } from '../../domain/entities/character.entity';
 import { DomainError } from '../../domain/errors/domain-error';
-import { STARTING_WEAPON_BY_CLASS } from '../starting-equipment';
+import { STARTING_WEAPON_BY_CLASS, STARTING_FOCUS_BY_CLASS } from '../starting-equipment';
 
 export interface JoinGameInput {
   gameId: string;
@@ -45,6 +45,7 @@ export class JoinGameUseCase {
     });
 
     await this.grantStartingWeapon(character, input.characterClass);
+    await this.grantStartingFocus(character, input.characterClass);
 
     // game.addPlayer valida hueco disponible, partida no iniciada y usuario no
     // repetido — si lanza, no se ha persistido nada todavía.
@@ -76,5 +77,26 @@ export class JoinGameUseCase {
     }
     character.addToInventory({ equipmentId: weapon.id, name: weapon.toSnapshot().name });
     character.equipWeapon(weapon.id);
+  }
+
+  /**
+   * Añade el foco de lanzamiento inicial (foco arcano/símbolo sagrado) a las
+   * clases conjuradoras -- se detectó en partida real que un mago solo tenía
+   * la daga inicial y ningún objeto que justificara sus hechizos. No se
+   * "equipa" como arma (no hay concepto de foco equipado en el dominio):
+   * basta con que esté en el inventario para que el jugador y el DM lo vean.
+   * Igual que con el arma, si no existe todavía en el catálogo, no lanza --
+   * el personaje se crea igual y el foco puede añadirse a mano más tarde.
+   */
+  private async grantStartingFocus(character: Character, characterClass: CharacterClass): Promise<void> {
+    const focusId = STARTING_FOCUS_BY_CLASS[characterClass];
+    if (!focusId) {
+      return;
+    }
+    const focus = await this.equipment.findById(focusId);
+    if (!focus) {
+      return;
+    }
+    character.addToInventory({ equipmentId: focus.id, name: focus.toSnapshot().name });
   }
 }

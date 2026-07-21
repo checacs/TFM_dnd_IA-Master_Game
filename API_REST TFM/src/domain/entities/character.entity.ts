@@ -39,6 +39,21 @@ export type CreateCharacterInput = Omit<
 const SPELLCASTER_CLASSES: CharacterClass[] = ['mago', 'clerigo'];
 
 /**
+ * Conjuros conocidos de nivel 1 al crear el personaje (docs/01, tabla de
+ * progresión: nivel 1 = "2 conjuros conocidos"). Antes esto se dejaba
+ * siempre vacío ([]) -- se detectó en partida real que un mago entraba en
+ * combate sin ningún hechizo ni forma de lanzarlo. IDs reales del catálogo
+ * dnd5eapi (ver cast-spell.use-case.ts): un hechizo de ataque automático (sin
+ * tirada de salvación, encaja con la simplificación de "impacto automático"
+ * del motor) y uno utilitario, para que el jugador tenga tanto una opción de
+ * combate como una de utilidad desde el primer momento.
+ */
+const STARTING_SPELLS_BY_CLASS: Partial<Record<CharacterClass, string[]>> = {
+  mago: ['magic-missile', 'mage-armor'],
+  clerigo: ['guiding-bolt', 'bless'],
+};
+
+/**
  * Matriz de atributos iniciales por clase. No estaba definida en
  * docs/01-especificacion-funcional.md — se fija aquí, de forma simplificada
  * (sin point-buy ni tirada de creación), para que unirse a una partida
@@ -91,7 +106,7 @@ export class Character {
       level: input.level ?? 1,
       xp: input.xp ?? 0,
       spellcaster,
-      spells: input.spells ?? (spellcaster ? { known: [], slots: startingSpellSlots() } : null),
+      spells: input.spells ?? (spellcaster ? { known: STARTING_SPELLS_BY_CLASS[input.class] ?? [], slots: startingSpellSlots() } : null),
       inventory: input.inventory ?? [],
       equippedWeaponId: input.equippedWeaponId ?? null,
     });

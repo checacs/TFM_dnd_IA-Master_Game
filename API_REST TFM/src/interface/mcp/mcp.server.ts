@@ -309,4 +309,32 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       return { content: [{ type: 'text', text: JSON.stringify({ combatEnded: true }) }] };
     },
   );
+
+  server.tool(
+    'cast_spell',
+    'Lanza de verdad un hechizo que el personaje CONOCE, consumiendo una ranura real de su nivel y, si el ' +
+      'hechizo hace daño, aplicándolo sobre el objetivo (con tirada de salvación real si el hechizo la pide). ' +
+      'Llama a esta tool SIEMPRE que tu narración implique que un personaje lanza un conjuro concreto -- nunca ' +
+      'te limites a narrar su efecto: sin esta llamada, el hechizo se queda solo en tu texto, no consume ' +
+      'ranura ni aplica ningún daño real, y el jugador ve un resultado narrado que no corresponde a ningún ' +
+      'cambio en su ficha ni en el HP del objetivo (el mismo error ya detectado con ataques y objetos no ' +
+      'aplicados). Antes de narrar que un personaje lanza un hechizo, comprueba con get_character_sheet qué ' +
+      'hechizos conoce (spells.known) y cuántas ranuras le quedan (spells.slots) -- nunca asumas que conoce ' +
+      'uno solo porque es de su clase, y nunca inventes su efecto o daño: consúltalo primero con ' +
+      'get_spell_catalog. Pasa targetId (el instanceId del enemigo en el combate activo, ver get_game_state) ' +
+      'solo si el hechizo hace daño a un objetivo -- omítelo para hechizos utilitarios sin objetivo (ej. Mage ' +
+      'Armor). Si la tool devuelve error (ranura agotada, hechizo desconocido, nivel fuera de alcance), NO ' +
+      'narres igualmente que el hechizo funcionó: corrige la narración para reflejar que falló o que el ' +
+      'personaje no puede lanzarlo todavía.',
+    {
+      gameId: z.string(),
+      casterCharacterId: z.string(),
+      spellId: z.string(),
+      targetId: z.string().optional()
+          .describe('instanceId del enemigo objetivo (get_game_state) -- solo si el hechizo hace daño.'),
+    },
+    async ({ gameId, casterCharacterId, spellId, targetId }) => ({
+      content: [{ type: 'text', text: JSON.stringify(await tools.castSpellTool(gameId, casterCharacterId, spellId, targetId)) }],
+    }),
+  );
 }

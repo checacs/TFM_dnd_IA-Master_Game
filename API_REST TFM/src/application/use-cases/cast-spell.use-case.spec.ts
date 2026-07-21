@@ -211,6 +211,75 @@ describe('CastSpellUseCase', () => {
     expect(result.targetSavedThrow).toBeNull();
   });
 
+  describe('rastro en el chat (narrativeLog)', () => {
+    // Se detectó que CastSpellUseCase no dejaba ningún mensaje en el chat --
+    // a diferencia de ResolveAttackUseCase, el jugador no veía confirmación
+    // de que su hechizo se había lanzado de verdad, con qué daño o si el
+    // objetivo había salvado.
+    it('un hechizo sin salvación deja un mensaje con el nombre del lanzador, el hechizo y el daño', async () => {
+      const { game, games } = buildGameWithGoblin();
+      const characters = new FakeCharacterRepository();
+      characters.seed(buildMago());
+      const spells = new FakeSpellRepository([buildRayOfFrost()]);
+      const enemies = new FakeEnemyRepository([buildGoblin()]);
+      const useCase = new CastSpellUseCase(new FakeDiceRoller([6]), games, characters, spells, enemies);
+
+      await useCase.execute({
+        gameId: game.id, requestingUserId: 'user-1', casterCharacterId: 'char-1',
+        spellId: 'ray-of-frost', targetId: 'enc-1-goblin-a',
+      });
+
+      const saved = await games.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log).toHaveLength(1);
+      expect(log[0].role).toBe('assistant');
+      expect(log[0].content).toContain('**Elyndra**');
+      expect(log[0].content).toContain('**Ray of Frost**');
+      expect(log[0].content).toContain('**Goblin explorador**');
+      expect(log[0].content).toContain('6');
+    });
+
+    it('un hechizo con salvación deja constancia de si el objetivo salvó o falló, y la CD usada', async () => {
+      const { game, games } = buildGameWithGoblin();
+      const characters = new FakeCharacterRepository();
+      characters.seed(buildMago());
+      const spells = new FakeSpellRepository([buildBurningHands()]);
+      const enemies = new FakeEnemyRepository([buildGoblin()]);
+      const diceRoller = new FakeDiceRoller([5, 14]); // salvación 5 (falla, DC 11), daño 14
+      const useCase = new CastSpellUseCase(diceRoller, games, characters, spells, enemies);
+
+      await useCase.execute({
+        gameId: game.id, requestingUserId: 'user-1', casterCharacterId: 'char-1',
+        spellId: 'burning-hands', targetId: 'enc-1-goblin-a',
+      });
+
+      const saved = await games.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log[0].content.toLowerCase()).toContain('falla la salvación');
+      expect(log[0].content).toContain('CD 11');
+      expect(log[0].content).toContain('14');
+    });
+
+    it('un hechizo utilitario sin objetivo también deja un mensaje en el chat (sin daño)', async () => {
+      const { game, games } = buildGameWithGoblin();
+      const characters = new FakeCharacterRepository();
+      characters.seed(buildMago());
+      const spells = new FakeSpellRepository([buildMageArmor()]);
+      const enemies = new FakeEnemyRepository([]);
+      const useCase = new CastSpellUseCase(new FakeDiceRoller([]), games, characters, spells, enemies);
+
+      await useCase.execute({
+        gameId: game.id, requestingUserId: 'user-1', casterCharacterId: 'char-1', spellId: 'mage-armor',
+      });
+
+      const saved = await games.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log).toHaveLength(1);
+      expect(log[0].content).toContain('**Elyndra**');
+      expect(log[0].content).toContain('**Mage Armor**');
+    });
+  });
+
   it('lanza DomainError si el personaje no conoce el hechizo', async () => {
     const { game, games } = buildGameWithGoblin();
     const characters = new FakeCharacterRepository();
@@ -267,5 +336,30 @@ describe('CastSpellUseCase', () => {
     await expect(
       useCase.execute({ gameId: game.id, requestingUserId: 'otro-user', casterCharacterId: 'char-1', spellId: 'ray-of-frost', targetId: 'enc-1-goblin-a' }),
     ).rejects.toThrow();
+  });
+
+  describe('invocación del DM-IA vía MCP (sin requestingUserId)', () => {
+    // La tool MCP cast_spell la invoca el propio DM-IA, no el jugador desde
+    // REST -- igual que end_player_turn o grant_item, no hay "usuario que
+    // hace la petición" que comprobar contra el dueño del personaje. A
+    // diferencia de esos dos casos de uso (que nunca tuvieron ese campo),
+    // CastSpellUseCase ya existía para el endpoint REST del jugador
+    // (POST /games/:id/cast-spell) con su comprobación de propiedad, así que
+    // aquí requestingUserId se vuelve opcional: si no se manda (ruta MCP), se
+    // omite la comprobación; si se manda (ruta REST), se sigue exigiendo.
+    it('sin requestingUserId, lanza el hechizo sin comprobar el dueño del personaje', async () => {
+      const { game, games } = buildGameWithGoblin();
+      const characters = new FakeCharacterRepository();
+      characters.seed(buildMago()); // ownerId real: 'user-1'
+      const spells = new FakeSpellRepository([buildRayOfFrost()]);
+      const enemies = new FakeEnemyRepository([buildGoblin()]);
+      const useCase = new CastSpellUseCase(new FakeDiceRoller([6]), games, characters, spells, enemies);
+
+      const result = await useCase.execute({
+        gameId: game.id, casterCharacterId: 'char-1', spellId: 'ray-of-frost', targetId: 'enc-1-goblin-a',
+      });
+
+      expect(result.damageDealt).toBe(6);
+    });
   });
 });

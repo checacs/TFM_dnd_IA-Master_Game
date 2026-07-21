@@ -18,3 +18,16 @@ export const STARTING_WEAPON_BY_CLASS: Record<CharacterClass, string> = {
   mago: 'dagger',
   clerigo: 'mace',
 };
+
+/**
+ * Foco de lanzamiento inicial para las clases conjuradoras (mago/clérigo) --
+ * se detectó en partida real que un mago solo tenía la daga inicial y ningún
+ * objeto arcano, pese a tener hechizos que lanzar. Índices verificados contra
+ * dnd5eapi.co: "wand" está en /equipment-categories/arcane-foci, "amulet" en
+ * /equipment-categories/holy-symbols. Las clases no conjuradoras no tienen
+ * entrada aquí (no necesitan foco).
+ */
+export const STARTING_FOCUS_BY_CLASS: Partial<Record<CharacterClass, string>> = {
+  mago: 'wand',
+  clerigo: 'amulet',
+};

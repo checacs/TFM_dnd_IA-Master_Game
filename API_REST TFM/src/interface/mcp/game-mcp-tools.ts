@@ -21,6 +21,7 @@ import { EndPlayerTurnUseCase } from '../../application/use-cases/end-player-tur
 import { EndCombatUseCase } from '../../application/use-cases/end-combat.use-case';
 import { GetCharacterUseCase } from '../../application/use-cases/get-character.use-case';
 import { GrantItemUseCase } from '../../application/use-cases/grant-item.use-case';
+import { CastSpellUseCase } from '../../application/use-cases/cast-spell.use-case';
 import { EnemySearchCriteria } from '../../domain/ports/enemy.repository.port';
 import { MapSearchCriteria } from '../../domain/ports/map.repository.port';
 import { SpellSearchCriteria } from '../../domain/ports/spell.repository.port';
@@ -58,6 +59,7 @@ export class GameMcpTools {
     private readonly endCombat: EndCombatUseCase,
     private readonly getCharacter: GetCharacterUseCase,
     private readonly grantItem: GrantItemUseCase,
+    private readonly castSpell: CastSpellUseCase,
   ) {}
 
   rollDiceTool(notation: string) {
@@ -146,5 +148,10 @@ export class GameMcpTools {
 
   grantItemTool(characterId: string, equipmentId: string) {
     return this.grantItem.execute({ characterId, equipmentId });
+  }
+
+  castSpellTool(gameId: string, casterCharacterId: string, spellId: string, targetId?: string) {
+    // Sin requestingUserId: la invoca el DM-IA, no el jugador (ver CastSpellInput).
+    return this.castSpell.execute({ gameId, casterCharacterId, spellId, targetId });
   }
 }

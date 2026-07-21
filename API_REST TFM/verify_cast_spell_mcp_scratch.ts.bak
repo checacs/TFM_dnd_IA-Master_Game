@@ -1,0 +1,134 @@
+/* eslint-disable */
+// Verificación manual (Jest roto en este sandbox) de que CastSpellUseCase
+// acepta la ruta MCP (sin requestingUserId) sin comprobar el dueño del
+// personaje, mientras que la ruta REST (con requestingUserId) sigue exigiendo
+// que el personaje pertenezca a ese usuario. También reproduce el flujo real
+// que seguirá game-mcp-tools.ts al invocar la tool cast_spell del DM-IA.
+import { DiceRoller } from './src/domain/ports/dice-roller.port';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { CharacterRepository } from './src/domain/ports/character.repository.port';
+import { SpellRepository, SpellSearchCriteria } from './src/domain/ports/spell.repository.port';
+import { EnemyRepository, EnemySearchCriteria } from './src/domain/ports/enemy.repository.port';
+import { Game } from './src/domain/entities/game.entity';
+import { Character } from './src/domain/entities/character.entity';
+import { Spell } from './src/domain/entities/spell.entity';
+import { Enemy } from './src/domain/entities/enemy.entity';
+import { CastSpellUseCase } from './src/application/use-cases/cast-spell.use-case';
+
+class FakeDiceRoller implements DiceRoller {
+  private i = 0;
+  constructor(private readonly fixedValues: number[]) {}
+  rollD20(): number { return this.fixedValues[this.i++]; }
+  roll(): number { return this.fixedValues[this.i++]; }
+}
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void { this.games.set(game.id, game); }
+  async findById(id: string): Promise<Game | null> { return this.games.get(id) ?? null; }
+  async findByUserId(_userId: string): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.games.set(game.id, game); }
+}
+
+class FakeCharacterRepository implements CharacterRepository {
+  private readonly characters = new Map<string, Character>();
+  seed(character: Character): void { this.characters.set(character.id, character); }
+  async findById(id: string): Promise<Character | null> { return this.characters.get(id) ?? null; }
+  async save(character: Character): Promise<void> { this.characters.set(character.id, character); }
+}
+
+class FakeSpellRepository implements SpellRepository {
+  constructor(private readonly spells: Spell[] = []) {}
+  async findById(id: string): Promise<Spell | null> { return this.spells.find((s) => s.id === id) ?? null; }
+  async search(_c: SpellSearchCriteria): Promise<Spell[]> { return this.spells; }
+}
+
+class FakeEnemyRepository implements EnemyRepository {
+  constructor(private readonly enemies: Enemy[] = []) {}
+  async findById(id: string): Promise<Enemy | null> { return this.enemies.find((e) => e.id === id) ?? null; }
+  async search(_c: EnemySearchCriteria): Promise<Enemy[]> { return this.enemies; }
+}
+
+function buildGoblin() {
+  return Enemy.create(
+    {
+      name: 'Goblin explorador', description: '', tags: [], challengeRating: 0.25,
+      attributes: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 },
+      hp: 7, ac: 15, attacks: [], resistances: [],
+    },
+    'enemy-1',
+  );
+}
+
+function buildGameWithGoblin() {
+  const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+  game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 9 });
+  game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 14 });
+  game.launch('host-1');
+  game.startEncounter({
+    enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
+  });
+  const games = new FakeGameRepository();
+  games.seed(game);
+  return { game, games };
+}
+
+function buildMago() {
+  return Character.create({
+    ownerId: 'user-1', gameId: 'game-1', name: 'Elyndra', class: 'mago',
+    attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 },
+    hp: { current: 9, max: 9 }, ac: 12, unassignedSkillPoints: 0,
+    spellcaster: true,
+    spells: { known: ['ray-of-frost'], slots: { level1: { max: 2, used: 0 }, level2: { max: 0, used: 0 } } },
+  }, 'char-1');
+}
+
+function buildRayOfFrost() {
+  return Spell.create({
+    name: 'Ray of Frost', level: 1, school: 'Evocation', castingTime: '1 action', range: '60 feet',
+    duration: 'Instantaneous', concentration: false, ritual: false, components: ['V', 'S'], material: null,
+    description: '...', classes: ['wizard'], damageType: 'cold', damageAtSlotLevel: { '1': '1d8' },
+    savingThrowAbility: null, savingThrowSuccess: null, areaOfEffectType: null, areaOfEffectSize: null,
+  }, 'ray-of-frost');
+}
+
+async function main() {
+  // 1) Ruta MCP (sin requestingUserId): igual que hará game-mcp-tools.castSpellTool.
+  {
+    const { game, games } = buildGameWithGoblin();
+    const characters = new FakeCharacterRepository();
+    characters.seed(buildMago());
+    const spells = new FakeSpellRepository([buildRayOfFrost()]);
+    const enemies = new FakeEnemyRepository([buildGoblin()]);
+    const useCase = new CastSpellUseCase(new FakeDiceRoller([6]), games, characters, spells, enemies);
+
+    const result = await useCase.execute({ gameId: game.id, casterCharacterId: 'char-1', spellId: 'ray-of-frost', targetId: 'enc-1-goblin-a' });
+    if (result.damageDealt !== 6) throw new Error(`FALLO 1: daño inesperado ${result.damageDealt}`);
+    console.log('OK 1/2: ruta MCP (sin requestingUserId) lanza el hechizo y aplica daño real.');
+  }
+
+  // 2) Ruta REST (con requestingUserId de otro usuario) sigue bloqueando -- no se ha roto la comprobación existente.
+  {
+    const { game, games } = buildGameWithGoblin();
+    const characters = new FakeCharacterRepository();
+    characters.seed(buildMago());
+    const spells = new FakeSpellRepository([buildRayOfFrost()]);
+    const enemies = new FakeEnemyRepository([buildGoblin()]);
+    const useCase = new CastSpellUseCase(new FakeDiceRoller([]), games, characters, spells, enemies);
+
+    try {
+      await useCase.execute({ gameId: game.id, requestingUserId: 'otro-user', casterCharacterId: 'char-1', spellId: 'ray-of-frost', targetId: 'enc-1-goblin-a' });
+      throw new Error('FALLO 2: debería haber lanzado DomainError');
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('FALLO')) throw err;
+      console.log('OK 2/2: ruta REST con requestingUserId de otro usuario sigue bloqueada.');
+    }
+  }
+
+  console.log('\n✅ TODO OK: cast_spell vía MCP (sin requestingUserId) verificado, ruta REST intacta.');
+}
+
+main().catch((err) => {
+  console.error('❌ ERROR:', err);
+  process.exit(1);
+});
