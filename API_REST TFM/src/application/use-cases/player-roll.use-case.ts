@@ -47,7 +47,9 @@ export class PlayerRollUseCase {
 
     game.appendNarrativeEntry({
       role: 'user',
-      content: `🎲 ${player.name} tira ${notation}: **${result}**`,
+      // El nombre en negrita (**Nombre**) para distinguir de un vistazo quién
+      // tiró qué -- ui-web/ChatPanel ya sabe parsear **negrita** Markdown.
+      content: `🎲 **${player.name}** tira ${notation}: **${result}**`,
     });
     await this.games.save(game);
 

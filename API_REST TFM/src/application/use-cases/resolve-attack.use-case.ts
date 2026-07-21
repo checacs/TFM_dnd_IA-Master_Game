@@ -76,7 +76,7 @@ export class ResolveAttackUseCase {
 
     const modifierText = input.attackerModifier >= 0 ? `+${input.attackerModifier}` : `${input.attackerModifier}`;
     const header =
-        `🎲 Ataque contra ${targetName} (1d20${modifierText}): **${attackRoll}** vs CA ${input.targetArmorClass} → ` +
+        `🎲 Ataque contra **${targetName}** (1d20${modifierText}): **${attackRoll}** vs CA ${input.targetArmorClass} → ` +
         (hit ? '¡IMPACTA!' : 'falla');
 
     if (!hit) {

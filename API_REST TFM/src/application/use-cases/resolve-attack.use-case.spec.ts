@@ -75,7 +75,9 @@ describe('ResolveAttackUseCase', () => {
     const log = saved!.toSnapshot().narrativeLog;
     expect(log).toHaveLength(1);
     expect(log[0].role).toBe('assistant');
-    expect(log[0].content).toContain('Goblin explorador');
+    // Nombre en negrita Markdown, igual que en PlayerRollUseCase, para
+    // distinguirlo del resto del mensaje.
+    expect(log[0].content).toContain('**Goblin explorador**');
     expect(log[0].content).toContain('15');
     expect(log[0].content).toContain('17');
     expect(log[0].content).toContain('1d6+2');

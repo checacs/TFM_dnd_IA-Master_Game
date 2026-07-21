@@ -55,7 +55,10 @@ describe('PlayerRollUseCase', () => {
     const log = saved!.toSnapshot().narrativeLog;
     expect(log).toHaveLength(1);
     expect(log[0].role).toBe('user');
-    expect(log[0].content).toContain('Elyndra');
+    // El nombre va en negrita Markdown (**Nombre**) para distinguirlo del
+    // resto del mensaje en el chat -- se comprobó que con varios jugadores
+    // escribiendo era difícil distinguir de un vistazo quién tiró qué.
+    expect(log[0].content).toContain('**Elyndra**');
     expect(log[0].content).toContain('1d20');
     expect(log[0].content).toContain('17');
   });
