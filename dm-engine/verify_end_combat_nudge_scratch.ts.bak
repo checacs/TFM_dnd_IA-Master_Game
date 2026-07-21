@@ -1,0 +1,151 @@
+/* eslint-disable */
+// Verificación manual (Jest roto en este sandbox) del nuevo chequeo "combate
+// no cerrado" en dm-turn.ts, reproduciendo el bug real reportado: tras ganar
+// un combate (Brown Bear a 0 HP real), el DM narraba la victoria pero nunca
+// cerraba el combate -- el panel "Combate" y el marcador del oso derrotado se
+// quedaban en el tablero para siempre.
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(
+    private readonly tools: McpToolInfo[] = [],
+    private readonly results: Record<string, unknown> = {},
+  ) {}
+  async listTools(): Promise<McpToolInfo[]> { return this.tools; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  // 1) El bug real: mata al oso (0 HP real), narra victoria, pero NO llama a
+  // end_combat -- debe forzarse la corrección antes de aceptar la narrativa.
+  {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [
+            { id: 'c1', type: 'function', function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"bear-1","attackerModifier":0,"targetArmorClass":11,"damageDice":"1d4","playerD20":19}' } },
+            { id: 'c2', type: 'function', function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":200}' } },
+            { id: 'c3', type: 'function', function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+          ],
+        },
+      },
+      { message: { role: 'assistant', content: 'El oso cae muerto. Has ganado 200 XP.' } },
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [{ id: 'c4', type: 'function', function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } }],
+        },
+      },
+      { message: { role: 'assistant', content: 'El combate ha terminado. El cadáver del oso yace a tus pies.' } },
+    ]);
+    const toolCaller = new FakeToolCaller([], {
+      resolve_attack: { hit: true, damage: 25 },
+      grant_xp: { levelUp: false },
+      advance_to_player_round: { advanced: true },
+      end_combat: { combatEnded: true },
+      get_game_state: { activeEncounter: { enemies: [{ instanceId: 'bear-1', name: 'Brown Bear', currentHp: 0 }] } },
+    });
+
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+    if (result.narrative !== 'El combate ha terminado. El cadáver del oso yace a tus pies.') {
+      throw new Error(`FALLO 1: narrativa inesperada: ${result.narrative}`);
+    }
+    const calledNames = toolCaller.calls.map((c) => c.name).join(',');
+    if (calledNames !== 'resolve_attack,grant_xp,advance_to_player_round,get_game_state,end_combat') {
+      throw new Error(`FALLO 1: secuencia de llamadas inesperada: ${calledNames}`);
+    }
+    console.log('OK 1/3: combate no cerrado tras derrotar al Brown Bear (0 HP real) detectado y corregido.');
+  }
+
+  // 2) Todo correcto en el mismo turno (mata + grant_xp + end_combat) -- sin aviso.
+  {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [
+            { id: 'c1', type: 'function', function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"goblin-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } },
+            { id: 'c2', type: 'function', function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":50}' } },
+            { id: 'c3', type: 'function', function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+            { id: 'c4', type: 'function', function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
+          ],
+        },
+      },
+      { message: { role: 'assistant', content: 'El goblin cae muerto. Has ganado 50 XP.' } },
+    ]);
+    const toolCaller = new FakeToolCaller([], {
+      resolve_attack: { hit: true, damage: 7 },
+      grant_xp: { levelUp: false },
+      advance_to_player_round: { advanced: true },
+      end_combat: { combatEnded: true },
+      get_game_state: { activeEncounter: { enemies: [{ instanceId: 'goblin-1', name: 'Goblin', currentHp: 0 }] } },
+    });
+
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+    if (result.narrative !== 'El goblin cae muerto. Has ganado 50 XP.') throw new Error('FALLO 2: se corrigió sin necesidad');
+    if (chatClient.receivedCalls.length !== 2) throw new Error(`FALLO 2: hubo una ronda de corrección extra (${chatClient.receivedCalls.length})`);
+    console.log('OK 2/3: end_combat ya llamado en el mismo turno -> sin aviso.');
+  }
+
+  // 3) Varios enemigos, uno vivo -- NO se debe pedir cerrar el combate (no todos derrotados).
+  {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [
+            { id: 'c1', type: 'function', function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"goblin-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } },
+            { id: 'c2', type: 'function', function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":50}' } },
+            { id: 'c3', type: 'function', function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+          ],
+        },
+      },
+      { message: { role: 'assistant', content: 'El goblin cae muerto, pero su compañero sigue en pie.' } },
+    ]);
+    const toolCaller = new FakeToolCaller([], {
+      resolve_attack: { hit: true, damage: 7 },
+      grant_xp: { levelUp: false },
+      advance_to_player_round: { advanced: true },
+      get_game_state: {
+        activeEncounter: {
+          enemies: [
+            { instanceId: 'goblin-1', name: 'Goblin', currentHp: 0 },
+            { instanceId: 'goblin-2', name: 'Goblin', currentHp: 7 },
+          ],
+        },
+      },
+    });
+
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+    if (result.narrative !== 'El goblin cae muerto, pero su compañero sigue en pie.') {
+      throw new Error('FALLO 3: no debería haberse corregido la narrativa');
+    }
+    if (chatClient.receivedCalls.length !== 2) throw new Error(`FALLO 3: hubo una ronda de corrección extra (${chatClient.receivedCalls.length})`);
+    console.log('OK 3/3: un enemigo vivo en el mismo combate -> no se pide cerrar el combate.');
+  }
+
+  console.log('\n✅ TODO OK: chequeo de "combate no cerrado" verificado.');
+}
+
+main().catch((err) => {
+  console.error('❌ ERROR:', err);
+  process.exit(1);
+});

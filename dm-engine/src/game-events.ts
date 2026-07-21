@@ -8,7 +8,8 @@ export type GameEventType =
   | 'participante_colocado'
   | 'ronda_reabierta'
   | 'turno_jugador_cerrado'
-  | 'objeto_concedido';
+  | 'objeto_concedido'
+  | 'combate_terminado';
 
 export interface GameEvent {
   type: GameEventType;
@@ -32,6 +33,7 @@ const TOOL_TO_EVENT_TYPE: Partial<Record<string, GameEventType>> = {
   advance_to_player_round: 'ronda_reabierta',
   end_player_turn: 'turno_jugador_cerrado',
   grant_item: 'objeto_concedido',
+  end_combat: 'combate_terminado',
 };
 
 export function toGameEvent(toolName: string, toolResult: unknown): GameEvent | null {

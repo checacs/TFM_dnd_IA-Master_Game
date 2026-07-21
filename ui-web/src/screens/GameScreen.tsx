@@ -66,6 +66,17 @@ export function GameScreen() {
 
   const mapImageUrl = game.board.imageUrl ? assetUrl(game.board.imageUrl) : null;
 
+  // Salvaguarda defensiva: se detectó en partida real que un combate quedaba
+  // "fantasma" -- todos los enemigos ya a 0 HP (derrotados) pero el panel de
+  // Combate y su marcador seguían mostrándose en el tablero indefinidamente,
+  // porque nada en el backend cerraba activeEncounter tras la victoria. Hasta
+  // que el DM-IA cierre el combate de verdad (end_combat), esta pantalla deja
+  // de mostrar la caja de Combate y los marcadores de enemigos en cuanto no
+  // queda ninguno con vida -- así una partida ya "atascada" se arregla sola
+  // sin esperar a que el DM llame a ninguna tool nueva.
+  const aliveEnemies = game.activeEncounter?.enemies.filter((e) => e.currentHp > 0) ?? [];
+  const showCombat = !!game.activeEncounter && aliveEnemies.length > 0;
+
   return (
     <div className="game-screen">
       <div className="game-top-bar">
@@ -87,14 +98,14 @@ export function GameScreen() {
           <BoardPanel
             board={game.board}
             players={game.players}
-            enemies={game.activeEncounter?.enemies ?? []}
+            enemies={showCombat ? game.activeEncounter!.enemies : []}
             mapImageUrl={mapImageUrl}
             belowRoster={
-              game.activeEncounter && (
+              showCombat && (
                 <EnemyPanel
-                  enemies={game.activeEncounter.enemies}
-                  roundPhase={game.activeEncounter.roundPhase}
-                  turnClaim={game.activeEncounter.turnClaim}
+                  enemies={game.activeEncounter!.enemies}
+                  roundPhase={game.activeEncounter!.roundPhase}
+                  turnClaim={game.activeEncounter!.turnClaim}
                   players={game.players}
                 />
               )

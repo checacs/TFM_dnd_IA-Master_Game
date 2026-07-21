@@ -28,6 +28,7 @@ import { ClaimTurnUseCase } from '../application/use-cases/claim-turn.use-case';
 import { SendPlayerActionUseCase } from '../application/use-cases/send-player-action.use-case';
 import { AdvanceRoundUseCase } from '../application/use-cases/advance-round.use-case';
 import { EndPlayerTurnUseCase } from '../application/use-cases/end-player-turn.use-case';
+import { EndCombatUseCase } from '../application/use-cases/end-combat.use-case';
 import { AssignCaptainUseCase } from '../application/use-cases/assign-captain.use-case';
 import { GetCharacterUseCase } from '../application/use-cases/get-character.use-case';
 import { GrantItemUseCase } from '../application/use-cases/grant-item.use-case';
@@ -79,6 +80,7 @@ if (!DM_ENGINE_URL) {
     SendPlayerActionUseCase,
     AdvanceRoundUseCase,
     EndPlayerTurnUseCase,
+    EndCombatUseCase,
     AssignCaptainUseCase,
     GetCharacterUseCase,
     GrantItemUseCase,

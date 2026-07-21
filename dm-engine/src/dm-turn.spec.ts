@@ -494,22 +494,22 @@ describe('runDmTurn', () => {
   );
 
   it(
-      'si resuelve un ataque que SÍ deja al enemigo con currentHp real en 0 y llama a grant_xp, no se dispara ningún aviso',
+      'si resuelve un ataque que SÍ deja al enemigo con currentHp real en 0, llama a grant_xp Y a end_combat, ' +
+      'no se dispara ningún aviso',
       async () => {
         const chatClient = new FakeChatClient([
           {
             message: {
               role: 'assistant',
               content: null,
-              // Se incluye advance_to_player_round en la misma respuesta para que el
-              // único aviso posible en juego sea el de victoria prematura bajo prueba
-              // -- si no, el aviso (no relacionado) de "resolviste ataques pero no
-              // reabriste la ronda" dispararía igualmente una ronda de corrección y
-              // contaminaría la aserción de "sin ronda de corrección extra".
+              // Se incluyen advance_to_player_round y end_combat en la misma respuesta
+              // para que no se dispare ningún otro aviso (ni el de "ronda no reabierta"
+              // ni el nuevo de "combate no cerrado") aparte del que está bajo prueba.
               tool_calls: [
                 { id: 'c1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"goblin-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } },
                 { id: 'c2', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":50}' } },
                 { id: 'c3', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+                { id: 'c4', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
               ],
             },
           },
@@ -519,6 +519,7 @@ describe('runDmTurn', () => {
           resolve_attack: { hit: true, damage: 7 },
           grant_xp: { levelUp: false },
           advance_to_player_round: { advanced: true },
+          end_combat: { combatEnded: true },
           get_game_state: {
             activeEncounter: { enemies: [{ instanceId: 'goblin-1', name: 'Goblin', currentHp: 0 }] },
           },
@@ -535,8 +536,8 @@ describe('runDmTurn', () => {
 
   it(
       'en un combate con varios enemigos, si mata a uno (HP real 0) y otro enemigo distinto sigue vivo pero NO fue ' +
-      'atacado este turno, no se dispara ningún aviso (evita falsos positivos sobre un enemigo que sigue en pie ' +
-      'legítimamente)',
+      'atacado este turno, no se dispara ningún aviso de victoria prematura (evita falsos positivos sobre un ' +
+      'enemigo que sigue en pie legítimamente) -- tampoco se pide cerrar el combate porque no TODOS están derrotados',
       async () => {
         const chatClient = new FakeChatClient([
           {
@@ -569,7 +570,56 @@ describe('runDmTurn', () => {
         const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
         expect(result.narrative).toBe('El goblin cae muerto, pero su compañero sigue en pie.');
-        expect(chatClient.receivedCalls).toHaveLength(1); // sin ronda de corrección extra
+        expect(chatClient.receivedCalls).toHaveLength(2); // sin ronda de corrección extra
+      },
+  );
+
+  it(
+      'si TODOS los enemigos del combate están a 0 HP real pero no se llamó a end_combat, se avisa antes de ' +
+      'aceptar la narrativa -- caso real detectado en partida: el panel "Combate" y el marcador del Brown Bear ' +
+      'derrotado se quedaban en el tablero indefinidamente, varias escenas después de acabar el combate',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                { id: 'c1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"bear-1","attackerModifier":0,"targetArmorClass":11,"damageDice":"1d4","playerD20":19}' } },
+                { id: 'c2', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":200}' } },
+                { id: 'c3', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } },
+              ],
+            },
+          },
+          { message: { role: 'assistant', content: 'El oso cae muerto. Has ganado 200 XP.' } },
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'c4', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'El combate ha terminado. El cadáver del oso yace a tus pies.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], {
+          resolve_attack: { hit: true, damage: 25 },
+          grant_xp: { levelUp: false },
+          advance_to_player_round: { advanced: true },
+          end_combat: { combatEnded: true },
+          get_game_state: {
+            activeEncounter: { enemies: [{ instanceId: 'bear-1', name: 'Brown Bear', currentHp: 0 }] },
+          },
+        });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('El combate ha terminado. El cadáver del oso yace a tus pies.');
+        expect(toolCaller.calls.map((c) => c.name)).toEqual([
+          'resolve_attack', 'grant_xp', 'advance_to_player_round', 'get_game_state', 'end_combat',
+        ]);
+        const correctionCall = chatClient.receivedCalls[1];
+        const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+        expect(lastMessage.content).toMatch(/end_combat/);
       },
   );
 

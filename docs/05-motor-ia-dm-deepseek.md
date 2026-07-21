@@ -109,10 +109,14 @@ El `dm-engine` intercepta cada `tool_call`/resultado del bucle y lo traduce a un
 | `roll_dice` | `tirada_realizada` | Muestra el resultado en el panel de dados |
 | `set_battle_map` | `mapa_aplicado` | BoardPanel pinta la imagen del mapa aplicado (al arrancar la partida o cuando la escena cambia de localización) |
 | `clear_battle_map` | `mapa_limpiado` | BoardPanel vuelve a la cuadrícula plana de fallback — usado cuando la escena cambia de localización y ningún mapa del catálogo encaja todavía |
+| `place_participant` | `participante_colocado` | BoardPanel actualiza la celda del marcador de ese jugador o enemigo |
 | `advance_to_player_round` | `ronda_reabierta` | ui-web/móvil reflejan que `roundPhase` volvió a "jugadores" y el candado de turno está libre |
+| `end_player_turn` | `turno_jugador_cerrado` | Libera el candado de turno de ese jugador para que otro pueda reclamarlo |
+| `end_combat` | `combate_terminado` | BoardPanel deja de pintar el panel de "Combate" y los marcadores de enemigos (incluidos los ya derrotados) — sin este evento se quedan mostrándose aunque la partida siga con otra escena |
 | `get_enemy_catalog` | *(sin evento)* | Solo contexto interno para el LLM, la UI no reacciona |
 | `get_game_state` | *(sin evento)* | Igual, es una consulta de fundamentación |
 | `grant_xp` | `xp_otorgada` | Notifica en la app móvil si el personaje puede subir de nivel |
+| `grant_item` | `objeto_concedido` | Actualiza el inventario visible en la ficha de personaje |
 
 ## 5. Quién dispara `runDmTurn`
 

@@ -317,6 +317,23 @@ export class Game {
     encounter.actedThisRound = [];
   }
 
+  /**
+   * Cierra el combate activo (tool MCP end_combat) -- se comprobó en partida
+   * real que, al no existir NINGÚN método para esto, un combate ya ganado
+   * (todos los enemigos a 0 HP) se quedaba anclado para siempre en la
+   * partida: el panel "Combate" y el marcador del enemigo derrotado seguían
+   * mostrándose en el tablero indefinidamente, incluso varias escenas después
+   * de que el jugador siguiera su camino. Antes incluso startEncounter()
+   * lanzaba error si ya había un combate activo, así que ni un combate nuevo
+   * lo purgaba -- era un callejón sin salida real. El DM-IA debe llamar a
+   * esto cuando el combate termina de verdad (todos los enemigos derrotados,
+   * el grupo huye, o se negocia una tregua), no solo narrarlo.
+   */
+  endEncounter(): void {
+    this.requireActiveEncounter();
+    this.props.activeEncounter = null;
+  }
+
   private requireActiveEncounter(): ActiveEncounter {
     if (!this.props.activeEncounter) {
       throw new DomainError('No hay combate activo');

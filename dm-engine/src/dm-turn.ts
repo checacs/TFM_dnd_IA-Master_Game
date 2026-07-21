@@ -146,7 +146,31 @@ function protocolNudge(
  * falsos positivos en combates con varios enemigos donde uno cae y otros
  * siguen en pie legítimamente sin que eso sea un error.
  */
-async function checkPrematureVictoryNudge(
+type EncounterEnemyState = { instanceId?: unknown; name?: unknown; currentHp?: unknown };
+
+/**
+ * Se comprobó en partida real un bug grave: el DM resolvía un ataque contra un
+ * Brown Bear (34 HP reales en el catálogo) que solo le dejaba, tras dos turnos,
+ * 9 puntos de daño acumulados (25 HP reales restantes) -- y aun así narraba su
+ * muerte ("el cadáver del oso yace a tus pies") y llamaba a grant_xp como si el
+ * combate hubiera terminado. La causa: nada obligaba al modelo a comprobar el
+ * HP REAL antes de declarar una victoria, solo su propia impresión narrativa de
+ * "llevamos varios golpes, ya debe estar muerto".
+ *
+ * Un segundo bug relacionado, detectado en la MISMA partida: incluso cuando el
+ * combate SÍ había terminado de verdad (enemigo a 0 HP real), no existía
+ * ninguna tool para cerrarlo -- el panel "Combate" y el marcador del enemigo
+ * derrotado se quedaban en el tablero para siempre, varias escenas después.
+ * Ahora que existe end_combat (ver EndCombatUseCase), este chequeo también
+ * empuja a llamarla en cuanto el combate esté realmente resuelto.
+ *
+ * Ambos chequeos comparten UNA sola llamada a get_game_state (un hecho
+ * verificable, no una opinión textual como narrativeSuggestsLocationChange):
+ * solo se dispara si este turno se llamó a grant_xp Y se atacó a algún
+ * enemigo (resolve_attack) -- grant_xp es la señal de que el DM cree que el
+ * combate (o parte de él) ha terminado.
+ */
+async function checkCombatStateNudge(
     toolCaller: ToolCaller,
     gameId: string,
     calledTools: Set<string>,
@@ -165,24 +189,38 @@ async function checkPrematureVictoryNudge(
     return null;
   }
 
-  const enemies =
-      (state as { activeEncounter?: { enemies?: Array<{ instanceId?: unknown; name?: unknown; currentHp?: unknown }> } } | null)
-          ?.activeEncounter?.enemies ?? [];
+  const activeEncounter =
+      (state as { activeEncounter?: { enemies?: EncounterEnemyState[] } } | null)?.activeEncounter ?? null;
+  const enemies = activeEncounter?.enemies ?? [];
 
+  // 1) Victoria prematura: solo mira a los enemigos atacados EN ESTE turno (no
+  // a cualquier otro enemigo vivo del encuentro) para no generar falsos
+  // positivos en combates con varios enemigos donde uno cae y otros siguen en
+  // pie legítimamente sin que eso sea un error.
   const stillAlive = enemies.filter(
       (e) => typeof e.instanceId === 'string' && attackedEnemyIds.has(e.instanceId) &&
           typeof e.currentHp === 'number' && e.currentHp > 0,
   );
-
-  if (stillAlive.length === 0) {
-    return null;
+  if (stillAlive.length > 0) {
+    const list = stillAlive.map((e) => `${String(e.name)} (${String(e.currentHp)} HP reales)`).join(', ');
+    return `Has llamado a grant_xp como si el combate hubiera terminado, pero get_game_state dice que ` +
+        `sigue vivo: ${list}. NO narres su muerte ni que el combate ha acabado -- corrige tu narración para que ` +
+        `el combate continúe con ese enemigo todavía en pie, con su HP real, y sigue resolviendo turnos de combate ` +
+        'normalmente (nunca declares una victoria por impresión narrativa: solo cuando su currentHp real llegue a 0).';
   }
 
-  const list = stillAlive.map((e) => `${String(e.name)} (${String(e.currentHp)} HP reales)`).join(', ');
-  return `Has llamado a grant_xp como si el combate hubiera terminado, pero get_game_state dice que ` +
-      `sigue vivo: ${list}. NO narres su muerte ni que el combate ha acabado -- corrige tu narración para que ` +
-      `el combate continúe con ese enemigo todavía en pie, con su HP real, y sigue resolviendo turnos de combate ` +
-      'normalmente (nunca declares una victoria por impresión narrativa: solo cuando su currentHp real llegue a 0).';
+  // 2) Combate realmente terminado (todos los enemigos del encuentro a 0 HP
+  // real) pero end_combat no se ha llamado todavía -- sin esto, el combate se
+  // queda "fantasma" en el tablero para siempre.
+  const allDefeated = enemies.length > 0 && enemies.every((e) => typeof e.currentHp === 'number' && e.currentHp <= 0);
+  if (activeEncounter && allDefeated && !calledTools.has('end_combat')) {
+    return 'Todos los enemigos de este combate ya están a 0 HP real (según get_game_state), pero no has ' +
+        'llamado a end_combat. Llámala ahora para cerrar el combate de verdad -- si no, el panel de "Combate" y ' +
+        'los marcadores de los enemigos derrotados se quedan mostrándose en el tablero del jugador para siempre, ' +
+        'aunque sigas narrando otras escenas.';
+  }
+
+  return null;
 }
 
 export async function runDmTurn(
@@ -274,9 +312,9 @@ export async function runDmTurn(
       // Se prioriza este chequeo (un hecho verificable contra el HP real)
       // sobre protocolNudge (heurísticos de texto) -- una victoria prematura
       // es más grave que un aviso de protocolo de mapa/colocación.
-      const prematureVictoryNudge = await checkPrematureVictoryNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
+      const combatStateNudge = await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
-          prematureVictoryNudge ??
+          combatStateNudge ??
           protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
       if (nudge) {
         correctionUsed = true;

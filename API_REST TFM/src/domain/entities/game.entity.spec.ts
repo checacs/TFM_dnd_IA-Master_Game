@@ -575,6 +575,48 @@ describe('Game', () => {
     });
   });
 
+  describe('endEncounter', () => {
+    // Se detectó en partida real que, al no existir ningún método para esto,
+    // un combate ya ganado (enemigo a 0 HP) se quedaba anclado para siempre:
+    // el panel "Combate" y el marcador del enemigo derrotado seguían
+    // mostrándose en el tablero varias escenas después.
+    it('lanza DomainError sin combate activo', () => {
+      const game = buildGame();
+      expect(() => game.endEncounter()).toThrow(DomainError);
+    });
+
+    it('pone activeEncounter a null, cerrando el combate de verdad', () => {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.launch('host-1');
+      game.startEncounter({
+        enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 0, ac: 15 }],
+      });
+
+      game.endEncounter();
+
+      expect(game.toSnapshot().activeEncounter).toBeNull();
+    });
+
+    it('tras cerrar el combate, se puede iniciar uno nuevo sin que startEncounter lance error', () => {
+      // Antes de este método, startEncounter lanzaba "Ya hay un combate activo"
+      // para siempre una vez arrancado el primero -- ni un combate nuevo podía
+      // sobrescribir el anterior.
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.launch('host-1');
+      game.startEncounter({
+        enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 0, ac: 15 }],
+      });
+      game.endEncounter();
+
+      expect(() => game.startEncounter({
+        enemies: [{ instanceId: 'enc-2-lobo-a', enemyRefId: 'enemy-2', name: 'Lobo', currentHp: 11, ac: 13 }],
+      })).not.toThrow();
+      expect(game.toSnapshot().activeEncounter?.enemies[0].name).toBe('Lobo');
+    });
+  });
+
   describe('capitán', () => {
     it('no hay capitán hasta que se lanza la partida o se asigna explícitamente', () => {
       const game = buildGame();

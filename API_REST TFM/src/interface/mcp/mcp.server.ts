@@ -291,4 +291,22 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       return { content: [{ type: 'text', text: JSON.stringify({ turnEnded: true }) }] };
     },
   );
+
+  server.tool(
+    'end_combat',
+    'Cierra POR COMPLETO el combate activo -- distinto de end_player_turn (que solo cierra el turno de UN ' +
+      'jugador dentro de una ronda). Llámala cuando el combate haya terminado de verdad: TODOS los enemigos ' +
+      'con currentHp real en 0 (compruébalo con get_game_state, nunca por impresión narrativa -- ver la regla ' +
+      'de victoria prematura), o el grupo ha huido con éxito, o se ha negociado una tregua/rendición. Sin ' +
+      'llamar a esta tool, el panel de "Combate" y los marcadores de los enemigos (incluido uno ya derrotado) ' +
+      'se quedan mostrándose en el tablero del jugador para siempre, aunque la partida siga adelante con otra ' +
+      'escena -- rompe la inmersión y confunde al jugador. Llámala justo después de otorgar la XP con ' +
+      'grant_xp (si aplica) y antes de seguir narrando la escena siguiente. Después de cerrar el combate, ya ' +
+      'no hace falta llamar a advance_to_player_round ni end_player_turn para esa ronda.',
+    { gameId: z.string() },
+    async ({ gameId }) => {
+      await tools.endCombatTool(gameId);
+      return { content: [{ type: 'text', text: JSON.stringify({ combatEnded: true }) }] };
+    },
+  );
 }
