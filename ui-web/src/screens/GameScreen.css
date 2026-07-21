@@ -474,7 +474,22 @@
 .board-players-column .enemy-item {
   flex-direction: column;
   align-items: stretch;
+  justify-content: flex-start;
   gap: 0.4rem;
+}
+
+/* Retrato del enemigo (catálogo dnd5eapi.co), a la izquierda de la pantalla
+   porque esta caja vive en la columna estrecha del roster (190px), no debajo
+   del tablero a todo el ancho -- se probó así primero pero obligaba a hacer
+   scroll para verlo. Ocupa el ancho completo disponible de la columna
+   (~160px reales tras el padding de .enemy-panel) en vez de fijar 320px. */
+.enemy-item-portrait {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2.5px solid var(--color-ink);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .board-players-column .attack-btn {
@@ -524,46 +539,6 @@
   flex: 0 0 auto;
 }
 
-/* Retratos de los enemigos del catálogo (dnd5eapi.co) -- a todo el ancho del
-   board-panel, debajo de las dos columnas (roster + mapa), para que quepan
-   mucho más grandes (~320px, antes 72px en la columna estrecha) y se pueda
-   distinguir de un vistazo qué tipo de enemigo es. Solo se pintan los que sí
-   tienen imagen (ver BoardPanel.tsx). */
-.enemy-portraits-wide {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 1.25rem;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1.5px dashed var(--color-ink-soft);
-}
-
-.enemy-portrait-card-wide {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 320px;
-}
-
-.enemy-portrait-image-wide {
-  width: 320px;
-  height: 320px;
-  object-fit: cover;
-  border-radius: 20px;
-  border: 3px solid var(--color-ink);
-  background: rgba(255, 255, 255, 0.4);
-}
-
-.enemy-portrait-name-wide {
-  margin-top: 0.4rem;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-ink);
-  text-align: center;
-  line-height: 1.2;
-}
-
 .turn-hint {
   margin: 0.5rem 0 0 0;
   font-size: 0.85rem;
@@ -601,18 +576,5 @@
   .game-right {
     flex: 0 0 auto;
     overflow-y: visible;
-  }
-
-  /* En pantallas estrechas, 320px de retrato no cabe -- se reduce para que
-     quepa al menos uno por fila sin desbordar ni forzar scroll horizontal. */
-  .enemy-portrait-card-wide {
-    width: 45vw;
-    max-width: 220px;
-  }
-
-  .enemy-portrait-image-wide {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1 / 1;
   }
 }

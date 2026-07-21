@@ -28,6 +28,14 @@ export function EnemyPanel({ enemies, roundPhase, turnClaim, players }: EnemyPan
       <div className="enemy-list">
         {enemies.map((enemy) => (
           <div key={enemy.instanceId} className="enemy-item">
+            {/* Retrato a la izquierda (esta caja vive en la columna estrecha
+                del roster, ver BoardPanel/belowRoster) -- se pinta solo si el
+                enemigo tiene imagen en el catálogo. Se dimensiona al ancho de
+                esta columna estrecha (no a 320px como se probó antes) para
+                que no haga falta hacer scroll para verlo. */}
+            {enemy.imageUrl && (
+              <img src={enemy.imageUrl} alt={enemy.name} className="enemy-item-portrait" />
+            )}
             <div className="enemy-item-info">
               <span className="enemy-name">{enemy.name}</span>
               <span className="enemy-hp">HP {enemy.currentHp}</span>
