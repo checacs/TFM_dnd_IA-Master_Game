@@ -243,8 +243,13 @@ export function CharacterSheetScreen({ route }: Props) {
               <Text style={styles.turnButtonText}>{claimTurn.isPending ? 'Reclamando...' : 'Mi turno'}</Text>
             </Pressable>
             <Pressable
-              style={[styles.diceButton, playerRoll.isPending && styles.buttonDisabled]}
-              disabled={playerRoll.isPending}
+              // Antes se podía pulsar "Tirar Dados" en cualquier momento, incluso
+              // fuera de tu turno o ya habiendo actuado esta ronda -- se gatea
+              // igual que el campo de acción (canAct: en combate solo en tu
+              // turno, fuera de combate solo el capitán) para que no se pueda
+              // tirar cuando no toca.
+              style={[styles.diceButton, (!canAct || playerRoll.isPending) && styles.buttonDisabled]}
+              disabled={!canAct || playerRoll.isPending}
               onPress={handleRoll}
             >
               <Image source={require('../../assets/boton-roll.jpg')} style={styles.diceButtonImage} resizeMode="cover" />
