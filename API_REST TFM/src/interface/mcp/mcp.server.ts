@@ -177,6 +177,23 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   );
 
   server.tool(
+    'grant_item',
+    'Añade al inventario REAL de un personaje un objeto del catálogo de equipo (get_equipment_catalog). ' +
+      'Llama a esta tool SIEMPRE que tu narración implique que un jugador encuentra, recibe, saquea o compra ' +
+      'un arma, armadura u objeto de aventurero concreto (ej. "recoges la daga del cofre", "el tabernero te ' +
+      'entrega una cuerda") — nunca lo des por hecho solo con narrarlo: si no llamas a esta tool, el objeto ' +
+      'nunca aparece en la ficha del jugador aunque tu texto diga que lo tiene. Primero busca el objeto real ' +
+      'con get_equipment_catalog (nunca inventes un objeto que no exista ahí) y usa su id como equipmentId; ' +
+      'puedes narrarlo con un nombre más evocador (ej. "una daga de factura élfica") aunque el objeto base del ' +
+      'catálogo sea genérico (ej. "Dagger"), igual que ya haces con los enemigos reflavored sobre catálogo real.',
+    { characterId: z.string(), equipmentId: z.string() },
+    async ({ characterId, equipmentId }) => {
+      await tools.grantItemTool(characterId, equipmentId);
+      return { content: [{ type: 'text', text: JSON.stringify({ granted: true }) }] };
+    },
+  );
+
+  server.tool(
     'apply_condition',
     'Aplica una condición (ej. "frightened", "blinded") a un jugador o enemigo del combate activo. ' +
       'Tiene efecto mecánico real: puede dar ventaja/desventaja en los ataques posteriores. ' +

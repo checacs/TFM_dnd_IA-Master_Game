@@ -19,6 +19,7 @@ import { PlaceParticipantUseCase } from '../../application/use-cases/place-parti
 import { AdvanceRoundUseCase } from '../../application/use-cases/advance-round.use-case';
 import { EndPlayerTurnUseCase } from '../../application/use-cases/end-player-turn.use-case';
 import { GetCharacterUseCase } from '../../application/use-cases/get-character.use-case';
+import { GrantItemUseCase } from '../../application/use-cases/grant-item.use-case';
 import { EnemySearchCriteria } from '../../domain/ports/enemy.repository.port';
 import { MapSearchCriteria } from '../../domain/ports/map.repository.port';
 import { SpellSearchCriteria } from '../../domain/ports/spell.repository.port';
@@ -54,6 +55,7 @@ export class GameMcpTools {
     private readonly advanceRound: AdvanceRoundUseCase,
     private readonly endPlayerTurn: EndPlayerTurnUseCase,
     private readonly getCharacter: GetCharacterUseCase,
+    private readonly grantItem: GrantItemUseCase,
   ) {}
 
   rollDiceTool(notation: string) {
@@ -134,5 +136,9 @@ export class GameMcpTools {
 
   getCharacterSheetTool(characterId: string) {
     return this.getCharacter.execute({ characterId });
+  }
+
+  grantItemTool(characterId: string, equipmentId: string) {
+    return this.grantItem.execute({ characterId, equipmentId });
   }
 }

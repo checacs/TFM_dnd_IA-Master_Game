@@ -114,6 +114,7 @@ El `dm-engine` intercepta cada `tool_call`/resultado del bucle y lo traduce a un
 | `get_enemy_catalog` | *(sin evento)* | Solo contexto interno para el LLM, la UI no reacciona |
 | `get_game_state` | *(sin evento)* | Igual, es una consulta de fundamentación |
 | `grant_xp` | `xp_otorgada` | Notifica en la app móvil si el personaje puede subir de nivel |
+| `grant_item` | `objeto_concedido` | La ficha del personaje (móvil) refleja el objeto en su inventario real — antes el DM podía narrar un hallazgo sin que existiera ninguna tool para concederlo de verdad |
 
 ## 5. Quién dispara `runDmTurn`
 
