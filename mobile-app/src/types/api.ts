@@ -144,4 +144,7 @@ export interface PlayerRollInput {
 export interface PlayerRollResult {
   notation: string;
   result: number;
+  /** Respuesta del DM-IA al turno que dispara esta tirada (ver PlayerRollUseCase) -- la pantalla no la muestra (el móvil no narra), pero invalida ['game', gameId] para que ui-web/HP se actualicen. */
+  narrative: string;
+  events: unknown[];
 }

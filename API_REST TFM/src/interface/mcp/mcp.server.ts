@@ -15,14 +15,23 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
 
   server.tool(
     'resolve_attack',
-    'Resuelve el ataque de un participante (normalmente un enemigo en su turno) contra un objetivo, ' +
-      'dentro de un combate activo.',
+    'Resuelve el ataque de un participante contra un objetivo, dentro de un combate activo. ' +
+      'PARA ATAQUES DE ENEMIGOS: llama a esta tool directamente, sin playerD20 -- el sistema tira su propio ' +
+      'd20 de impacto. PARA ATAQUES DE UN JUGADOR: NUNCA la llames en el mismo turno en que el jugador describe ' +
+      'su ataque -- primero dile que tire los dados (ej. "¡Tira los dados!") y NO resuelvas nada todavía (no ' +
+      'llames a end_player_turn tampoco, para que pueda seguir respondiendo). Cuando en el chat aparezca su ' +
+      'tirada ("🎲 **Nombre** tira 1d20: N"), LEE ese número N y llama a esta tool con playerD20=N -- así el ' +
+      'impacto se decide con la tirada que el jugador vio en pantalla al pulsar "Tirar Dados", no con una ' +
+      'tirada nueva e invisible resuelta por ti. El dado de daño siempre lo tira el sistema (el botón del ' +
+      'jugador no puede tirar dados de daño, solo 1d20).',
     {
       gameId: z.string(),
       targetId: z.string(),
       attackerModifier: z.number().int(),
       targetArmorClass: z.number().int(),
       damageDice: z.string().describe('Notación de dado de daño, ej. "1d6+2"'),
+      playerD20: z.number().int().min(1).max(20).optional()
+          .describe('Solo para ataques de un JUGADOR: el d20 en bruto que ya tiró con "Tirar Dados" (léelo del chat).'),
     },
     async (input) => ({
       content: [{ type: 'text', text: JSON.stringify(await tools.resolveAttackTool(input)) }],

@@ -110,29 +110,39 @@ causa mas comun de que la interfaz del jugador se desincronice de tu narracion):
 - NO EXISTE ningun boton de "Atacar" en el movil del jugador que resuelva un
   ataque por su cuenta -- el movil solo tiene "Tirar Dados" (una tirada de
   1d20 en bruto, sin ningun bonificador aplicado, que solo aparece como texto
-  en el chat) y un campo para escribir la accion en lenguaje natural. TODO
-  ataque, sin ninguna excepcion (un enemigo atacando a un jugador, un jugador
-  atacando a un enemigo, o cualquier ataque entre participantes), lo resuelves
-  TU llamando a resolve_attack -- nunca asumas que "ya se resolvio solo"
-  porque el jugador pulso "Tirar Dados" o escribio que ataca: esa tirada o
-  ese mensaje es solo la INTENCION del jugador, la resolucion mecanica real
-  (impacta o falla, cuanto daño) siempre pasa por resolve_attack, con el
-  attackerModifier real del personaje (get_character_sheet) y la CA real del
-  objetivo. Llama a resolve_attack ANTES de narrar el resultado: nunca
-  escribas "te golpea y pierdes X puntos de vida" sin haberla llamado antes
-  -- si no la llamas, el HP que ve el jugador en pantalla no cambia aunque tu
-  texto diga que si. Esto aplica a CADA ataque de CADA turno de combate, no
-  solo al primero.
+  en el chat) y un campo para escribir la accion en lenguaje natural.
+  ATAQUES DE ENEMIGOS (el jugador no tira nada): los resuelves TU
+  directamente llamando a resolve_attack SIN playerD20 -- el sistema tira su
+  propio d20 de impacto. Llama a resolve_attack ANTES de narrar el
+  resultado: nunca escribas "el goblin te golpea y pierdes X puntos de vida"
+  sin haberla llamado antes -- si no la llamas, el HP que ve el jugador en
+  pantalla no cambia aunque tu texto diga que si.
+  ATAQUES DE UN JUGADOR: son un proceso de DOS TURNOS, NUNCA los resuelvas en
+  el mismo turno en que el jugador describe su accion:
+    1. Turno N: el jugador te dice lo que quiere hacer (ej. "ataco al
+       esqueleto con mi espada"). TU respondes SOLO invitandole a tirar (ej.
+       "¡Tira los dados!") -- NO llames a resolve_attack todavia, NO llames a
+       end_player_turn todavia (el jugador tiene que poder seguir en su
+       turno para pulsar el boton). No inventes ni menciones ningun numero de
+       tirada en este turno: todavia no existe.
+    2. El jugador pulsa "Tirar Dados" en su movil -- esto publica en el chat
+       un mensaje tipo "🎲 **Nombre** tira 1d20: **N**" y dispara tu
+       siguiente turno automaticamente.
+    3. Turno N+1: LEE ese numero N publicado en el chat (es una tirada real
+       del DiceRoller del sistema, ya ejecutada -- no la reinventes ni la
+       cambies) y llama a resolve_attack con playerD20=N, junto con el
+       attackerModifier real del personaje (get_character_sheet) y la CA real
+       del objetivo. Narra el resultado (impacta/falla, daño) SOLO despues de
+       recibir la respuesta de resolve_attack, nunca antes.
   NUNCA le pidas al jugador que tire el dado de daño de su arma (ej. "tira
   1d8+3 de daño") ni ningun otro dado que no sea 1d20: el boton "Tirar
   Dados" del movil SOLO sabe tirar 1d20 en bruto, no tiene forma de tirar
   "1d8+3" ni ningun otro dado -- si se lo pides, el jugador no podra
-  cumplirlo. Toda tirada de ataque Y de daño la calculas TU internamente
-  llamando a resolve_attack (que tira su propio d20 de ataque y su propio
-  dado de daño); el "Tirar Dados" del jugador es como mucho una tirada de
-  1d20 informativa (para pruebas de habilidad o salvacion fuera de combate)
-  que TU interpretas con roll_dice o resolve_attack, nunca algo que el
-  jugador deba calcular o tirar el mismo con un dado que no sea d20.
+  cumplirlo. El dado de daño SIEMPRE lo tira el sistema dentro de
+  resolve_attack, tanto en ataques de jugador (con playerD20) como de
+  enemigo (sin playerD20); el jugador nunca lo calcula ni lo tira el mismo.
+  Fuera de combate, "Tirar Dados" sigue siendo una tirada de 1d20 informativa
+  (pruebas de habilidad o salvacion) que interpretas con roll_dice.
 - Cada vez que tu narracion implique que un personaje o enemigo cambia de
   celda (huye, se esconde, entra en otra sala, avanza o retrocede durante el
   combate, O SIMPLEMENTE camina de una sala a otra fuera de combate), llama a

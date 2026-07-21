@@ -10,6 +10,19 @@ export interface ResolveAttackInput {
   attackerModifier: number;
   targetArmorClass: number;
   damageDice: string;
+  /**
+   * El d20 EN BRUTO (sin modificador) que el propio jugador ya tiró con el
+   * botón "Tirar Dados" del móvil (ver PlayerRollUseCase), y que ya quedó
+   * publicado en el chat. Si se pasa, se usa este valor tal cual en vez de
+   * que el sistema tire un d20 nuevo por su cuenta -- se detectó que el
+   * jugador perdía la sensación de agencia cuando la IA resolvía su propio
+   * ataque con una tirada interna invisible, sin que él llegara a pulsar el
+   * botón. Solo aplica al d20 de IMPACTO: el dado de daño lo sigue tirando
+   * el sistema siempre (el botón del jugador está fijado a 1d20, no puede
+   * tirar "1d6+2"). Los ataques de ENEMIGOS (que el jugador no tira) siguen
+   * omitiendo este campo, y el sistema tira su propio d20 como antes.
+   */
+  playerD20?: number;
 }
 
 export interface AttackResult {
@@ -37,7 +50,8 @@ export class ResolveAttackUseCase {
       throw new DomainError('Partida no encontrada');
     }
 
-    const attackRoll = this.diceRoller.rollD20() + input.attackerModifier;
+    const d20 = input.playerD20 ?? this.diceRoller.rollD20();
+    const attackRoll = d20 + input.attackerModifier;
     const hit = attackRoll >= input.targetArmorClass;
     const damage = hit ? this.diceRoller.roll(input.damageDice) : 0;
 
@@ -75,9 +89,14 @@ export class ResolveAttackUseCase {
         input.targetId;
 
     const modifierText = input.attackerModifier >= 0 ? `+${input.attackerModifier}` : `${input.attackerModifier}`;
+    // Si el d20 vino de playerD20, se aclara que es la tirada del jugador (la
+    // que ya vio en pantalla al pulsar "Tirar Dados") y no una tirada nueva e
+    // invisible calculada por el sistema -- para que quede claro de dónde
+    // sale el número sin tener que ir a mirar el mensaje anterior del chat.
+    const rollSource = input.playerD20 !== undefined ? ' (tirada del jugador)' : '';
     const header =
-        `🎲 Ataque contra **${targetName}** (1d20${modifierText}): **${attackRoll}** vs CA ${input.targetArmorClass} → ` +
-        (hit ? '¡IMPACTA!' : 'falla');
+        `🎲 Ataque contra **${targetName}** (1d20${modifierText}${rollSource}): **${attackRoll}** vs ` +
+        `CA ${input.targetArmorClass} → ` + (hit ? '¡IMPACTA!' : 'falla');
 
     if (!hit) {
       return header;

@@ -115,6 +115,75 @@ describe('ResolveAttackUseCase', () => {
     expect(log[0].content.toLowerCase()).toContain('falla');
   });
 
+  describe('con playerD20 (el jugador ya tiró su propio d20 con el botón "Tirar Dados")', () => {
+    // Se comprobó que el jugador se quejaba de que la IA "tiraba por él": el
+    // ataque se resolvía con un d20 interno invisible en cuanto describía su
+    // acción, sin que él llegase a pulsar el botón de tirar dados en ningún
+    // momento -- perdía la sensación de agencia sobre su propia tirada. Ahora,
+    // si se pasa playerD20 (el resultado real que YA tiró el jugador y que ya
+    // quedó publicado en el chat vía PlayerRollUseCase), se usa ESE número en
+    // vez de que el sistema tire uno nuevo por su cuenta -- el daño, si
+    // impacta, lo sigue tirando el sistema (el jugador no tiene botón para
+    // tirar dados de daño, ver decisión de mantener "Tirar Dados" fijo a 1d20).
+
+    it('usa el d20 del jugador (no tira uno nuevo) para decidir impacto, y solo tira el dado de daño', async () => {
+      const { game, repo } = buildGameWithActiveEnemy();
+      const diceRoller = new FakeDiceRoller([5]); // si tirase su propio d20 tocaría 5 (y fallaría) -- no debe usarse
+      const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+      const result = await useCase.execute({
+        gameId: game.id,
+        targetId: 'enc-1-goblin-a',
+        attackerModifier: 2,
+        targetArmorClass: 17,
+        damageDice: '1d6+2',
+        playerD20: 15, // el jugador ya tiró un 15 con "Tirar Dados"
+      });
+
+      expect(result.hit).toBe(true); // 15 + 2 = 17 >= 17
+      expect(result.attackRoll).toBe(17);
+      expect(result.damage).toBe(5); // única tirada consumida del DiceRoller: el daño
+    });
+
+    it('el mensaje de chat dice "tirada del jugador" en vez de fingir que la tiró el sistema', async () => {
+      const { game, repo } = buildGameWithActiveEnemy();
+      const diceRoller = new FakeDiceRoller([5]);
+      const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+      await useCase.execute({
+        gameId: game.id,
+        targetId: 'enc-1-goblin-a',
+        attackerModifier: 2,
+        targetArmorClass: 17,
+        damageDice: '1d6+2',
+        playerD20: 15,
+      });
+
+      const saved = await repo.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log[0].content).toContain('15');
+      expect(log[0].content.toLowerCase()).toContain('tirada del jugador');
+    });
+
+    it('sin playerD20, sigue tirando su propio d20 como antes (compatibilidad con ataques de enemigos)', async () => {
+      const { game, repo } = buildGameWithActiveEnemy();
+      const diceRoller = new FakeDiceRoller([15, 5]);
+      const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+      const result = await useCase.execute({
+        gameId: game.id,
+        targetId: 'enc-1-goblin-a',
+        attackerModifier: 2,
+        targetArmorClass: 17,
+        damageDice: '1d6+2',
+      });
+
+      expect(result.attackRoll).toBe(17);
+      expect(result.hit).toBe(true);
+      expect(result.damage).toBe(5);
+    });
+  });
+
   it('lanza DomainError si la partida no existe', async () => {
     const repo = new FakeGameRepository();
     const diceRoller = new FakeDiceRoller([15, 5]);
