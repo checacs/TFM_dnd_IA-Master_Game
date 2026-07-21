@@ -29,14 +29,17 @@ npm run start            # http://localhost:4000
    - Se exploró el catálogo de mapas pero nunca se llamó a `set_battle_map`.
    - Se aplicó un mapa pero no se colocó a ningún participante con `place_participant`.
    - Se inició un combate (`start_combat`) pero no se colocó a **todos** los enemigos que devolvió (comparando instanceId por instanceId, no solo "algo se colocó").
-4. Límite de `MAX_TOOL_CALL_ITERATIONS` (8) para que un modelo que no deje de pedir tools no cuelgue el turno indefinidamente.
+4. `checkCombatStateNudge()` hace una comprobación aparte, con prioridad sobre `protocolNudge()`, apoyada en un `get_game_state` real (no en heurísticas de texto) cuando el turno llamó a `grant_xp` tras atacar a algún enemigo:
+   - **Victoria prematura:** si algún enemigo atacado ese turno sigue con `currentHp` real > 0, fuerza la corrección para que el combate siga (nunca declarar muerto a un enemigo por impresión narrativa — "llevamos varios golpes", "suena a que ya debería estar muerto").
+   - **Combate no cerrado:** si todos los enemigos del combate están a 0 HP real pero no se llamó a `end_combat`, fuerza la llamada — si no, el panel de "Combate" y los marcadores de enemigos derrotados se quedan en el tablero del jugador para siempre, aunque la narración ya haya pasado a otra escena.
+5. Límite de `MAX_TOOL_CALL_ITERATIONS` (8) para que un modelo que no deje de pedir tools no cuelgue el turno indefinidamente.
 
 ## Limitaciones conocidas
 
-El bucle anterior detecta huecos de protocolo verificables por código (tools que debían llamarse y no se llamaron), pero **no puede verificar que la narrativa en texto libre coincida con lo que las tools registraron**. Dos casos concretos, mitigados solo por el system prompt (no por código) en `dm-system-prompt.ts`, sección "Reglas de combate y movimiento EN CURSO":
+El bucle anterior detecta huecos de protocolo verificables por código (tools que debían llamarse y no se llamaron) y, desde `checkCombatStateNudge()`, también contradicciones entre la narrativa y el HP real de los enemigos ya atacados o el cierre del combate — pero **sigue sin poder verificar cualquier otra afirmación en texto libre que no tenga ya un chequeo dedicado**. Dos casos concretos, mitigados solo por el system prompt (no por código) en `dm-system-prompt.ts`, sección "Reglas de combate y movimiento EN CURSO":
 
 - El DM puede narrar que un enemigo golpea al jugador sin llamar a `resolve_attack` — si pasa, el HP que ve el jugador en la interfaz no se actualiza aunque el texto lo cuente.
-- El DM puede narrar que un personaje se mueve/huye/se esconde sin volver a llamar a `place_participant` — si pasa, la posición que devuelve `get_game_state` no coincide con lo narrado.
+- El DM puede narrar que un personaje se mueve/huye/se esconde sin volver a llamar a `place_participant` — si pasa, la posición que devuelve `get_game_state` no coincide con lo narrado. Esto incluye moverse a otra zona dentro del **mismo** mapa ya aplicado (no solo cambiar de mapa por completo): el `narrativeSuggestsLocationChange` actual solo detecta cambios de localización lo bastante explícitos como para disparar un mapa nuevo, no un simple cambio de sala/zona dentro de la escena ya montada.
 
 Si estos síntomas reaparecen con frecuencia pese al refuerzo del system prompt, el siguiente paso sería una verificación más estricta (ej. comparar el texto de la narrativa contra los eventos generados y forzar una re-narración si hay contradicción), no cubierta todavía.
 

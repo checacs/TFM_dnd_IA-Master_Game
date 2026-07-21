@@ -30,7 +30,7 @@ Configura la variable de entorno `VITE_API_URL` si el backend está en otra dire
 ### Pantalla de partida (`GameScreen` + `BoardPanel`)
 
 - **Jugadores**: dos columnas — roster de jugadores (nombre, clase, HP, condiciones) a la izquierda; mapa de batalla con marcadores de posición a la derecha, dimensionado para no recortar ni deformar tableros con más filas que columnas.
-- **Combate**: cuando hay un encuentro activo, la caja de combate (enemigos, fase de ronda, quién tiene el turno reclamado) aparece pegada debajo del roster de jugadores, en vez de duplicar la lista de enemigos en un panel aparte. Es de solo lectura — no hay botón de ataque aquí, eso vive en la app móvil (ver `mobile-app/README.md`).
+- **Combate**: cuando hay un encuentro activo, la caja de combate (enemigos, fase de ronda, quién tiene el turno reclamado) aparece pegada debajo del roster de jugadores, en vez de duplicar la lista de enemigos en un panel aparte. Es de solo lectura — no hay botón de ataque aquí, eso vive en la app móvil (ver `mobile-app/README.md`). Además de que exista `activeEncounter`, `GameScreen` exige que quede al menos un enemigo con `currentHp > 0`: es una red de seguridad en el propio frontend para el caso en que el backend no haya cerrado el combate (ver `end_combat` en `docs/04-servidor-mcp.md`) — sin ella, el panel y el marcador del enemigo ya derrotado se quedaban en pantalla aunque la partida ya hubiera avanzado a otra escena.
 - Los marcadores del mapa (jugadores y enemigos) dependen de que el DM-IA llame a `place_participant` — ver la sección "Limitaciones conocidas" del README de `dm-engine`.
 
 ## Scripts

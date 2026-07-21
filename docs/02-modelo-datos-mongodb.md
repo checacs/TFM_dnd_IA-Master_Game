@@ -93,6 +93,14 @@ interface Game {
     // DM-IA (enemigos); turnClaim es el characterId con el turno reclamado
     // desde el móvil ("Mi turno"); actedThisRound son los characterId que ya
     // actuaron en la ronda de jugadores actual.
+    // null en DOS momentos distintos, no solo uno: antes de que arranque el
+    // primer combate de la partida, Y de nuevo cada vez que la tool MCP
+    // end_combat cierra uno ya resuelto (ver 04-servidor-mcp.md sección 10).
+    // Se detectó en partida real que, sin end_combat, esto se quedaba
+    // "atascado" con datos de un combate ya terminado — el panel de
+    // "Combate" y los marcadores de enemigos derrotados seguían
+    // mostrándose en el tablero aunque la narración ya hubiera avanzado
+    // a otra escena.
     roundPhase: 'jugadores' | 'enemigos';
     turnClaim: string | null;
     actedThisRound: string[];

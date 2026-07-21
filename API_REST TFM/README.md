@@ -107,7 +107,7 @@ Invoke-RestMethod -Uri "http://localhost:3000/games/$gameId/message" -Method Pos
 npx @modelcontextprotocol/inspector
 ```
 
-En la interfaz: **Transport Type → Streamable HTTP**, **URL → `http://localhost:3000/mcp`**, **Connection Type → Direct** (si "Via Proxy" da error de conexión). Pestaña **Tools** para ver las 16 tools registradas (incluye `place_participant`, para tracking de posición en el tablero) y probarlas a mano.
+En la interfaz: **Transport Type → Streamable HTTP**, **URL → `http://localhost:3000/mcp`**, **Connection Type → Direct** (si "Via Proxy" da error de conexión). Pestaña **Tools** para ver las 22 tools registradas (las más recientes: `end_combat`, para cerrar de verdad un combate ya resuelto, y `cast_spell`, para lanzar un hechizo consumiendo una ranura real y aplicando su daño de verdad) y probarlas a mano.
 
 Para comprobar `tools/list` sin el Inspector:
 
@@ -125,6 +125,10 @@ Invoke-RestMethod -Uri "http://localhost:4000/turn" -Method Post -ContentType "a
 ```
 
 Necesita un `gameId` real (creado previamente contra `api`) — `dm-engine` lo usa para llamar a `get_game_state` y al resto de tools vía MCP.
+
+### Reintento automático ante cold-start de `dm-engine` (Render free tier)
+
+`HttpDmEngineClient` (`src/infrastructure/dm-engine/http-dm-engine.client.ts`) reintenta una vez el turno si el fallo es de **arranque** (timeout o conexión rechazada — típico de un servicio dormido en el plan gratuito de Render) — nunca si `dm-engine` ya respondió con un error HTTP, para no arriesgarse a duplicar una mutación que el servidor ya aplicó. Antes de esto, un cold-start dejaba el turno colgado ("El DM-IA no ha podido responder ahora mismo...") y obligaba al jugador a reescribir su mensaje a mano.
 
 ## Puntos a vigilar en la implementación
 
