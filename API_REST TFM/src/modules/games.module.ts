@@ -32,6 +32,7 @@ import { EndCombatUseCase } from '../application/use-cases/end-combat.use-case';
 import { AssignCaptainUseCase } from '../application/use-cases/assign-captain.use-case';
 import { GetCharacterUseCase } from '../application/use-cases/get-character.use-case';
 import { GrantItemUseCase } from '../application/use-cases/grant-item.use-case';
+import { GrantMagicItemUseCase } from '../application/use-cases/grant-magic-item.use-case';
 import { PlayerRollUseCase } from '../application/use-cases/player-roll.use-case';
 import { GameMcpTools } from '../interface/mcp/game-mcp-tools';
 import { DM_ENGINE_CLIENT } from '../domain/ports/dm-engine.port';
@@ -84,6 +85,7 @@ if (!DM_ENGINE_URL) {
     AssignCaptainUseCase,
     GetCharacterUseCase,
     GrantItemUseCase,
+    GrantMagicItemUseCase,
     PlayerRollUseCase,
     GameMcpTools,
     { provide: DM_ENGINE_CLIENT, useFactory: () => new HttpDmEngineClient(DM_ENGINE_URL as string) },

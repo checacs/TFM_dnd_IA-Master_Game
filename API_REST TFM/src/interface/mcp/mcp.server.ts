@@ -203,6 +203,22 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   );
 
   server.tool(
+    'grant_magic_item',
+    'Añade al inventario REAL de un personaje un objeto MÁGICO del catálogo (get_magic_items) — distinta de ' +
+      'grant_item, que solo concede equipo normal (armas, armaduras, objetos de aventurero). Llama a esta tool ' +
+      'SIEMPRE que tu narración implique que un jugador encuentra, recibe o saquea un objeto mágico concreto ' +
+      '(ej. "el anillo brilla al ponértelo", "el pergamino resulta ser un objeto encantado") — nunca lo des por ' +
+      'hecho solo con narrarlo: si no llamas a esta tool, el objeto nunca aparece en la ficha del jugador aunque ' +
+      'tu texto diga que lo tiene. Primero busca el objeto real con get_magic_items (nunca inventes uno que no ' +
+      'exista ahí) y usa su id como magicItemId.',
+    { characterId: z.string(), magicItemId: z.string() },
+    async ({ characterId, magicItemId }) => {
+      await tools.grantMagicItemTool(characterId, magicItemId);
+      return { content: [{ type: 'text', text: JSON.stringify({ granted: true }) }] };
+    },
+  );
+
+  server.tool(
     'apply_condition',
     'Aplica una condición (ej. "frightened", "blinded") a un jugador o enemigo del combate activo. ' +
       'Tiene efecto mecánico real: puede dar ventaja/desventaja en los ataques posteriores. ' +

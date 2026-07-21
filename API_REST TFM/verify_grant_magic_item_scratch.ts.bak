@@ -1,0 +1,81 @@
+import { Character } from './src/domain/entities/character.entity';
+import { MagicItem } from './src/domain/entities/magic-item.entity';
+import { CharacterRepository } from './src/domain/ports/character.repository.port';
+import { MagicItemRepository } from './src/domain/ports/magic-item.repository.port';
+import { GrantMagicItemUseCase } from './src/application/use-cases/grant-magic-item.use-case';
+
+class FakeCharacterRepository implements CharacterRepository {
+  private readonly characters = new Map<string, Character>();
+  seed(character: Character): void { this.characters.set(character.id, character); }
+  async findById(id: string): Promise<Character | null> { return this.characters.get(id) ?? null; }
+  async save(character: Character): Promise<void> { this.characters.set(character.id, character); }
+}
+
+class FakeMagicItemRepository implements MagicItemRepository {
+  constructor(private readonly items: MagicItem[]) {}
+  async findById(id: string): Promise<MagicItem | null> { return this.items.find((i) => i.id === id) ?? null; }
+  async search(): Promise<MagicItem[]> { return this.items; }
+}
+
+async function main() {
+  const ring = MagicItem.create(
+    {
+      name: 'Ring of Protection', category: 'Wondrous Items', rarity: 'Rare',
+      description: 'You gain a +1 bonus to AC and saving throws while wearing this ring.',
+      isVariant: false, variantNames: [],
+    },
+    'ring-of-protection',
+  );
+  const character = Character.create({
+    ownerId: 'user-1', gameId: 'game-1', name: 'Solo', class: 'guerrero',
+    attributes: { str: 14, dex: 12, con: 13, int: 8, wis: 10, cha: 10 },
+    hp: { current: 14, max: 14 }, ac: 16, unassignedSkillPoints: 0,
+  }, 'char-1');
+
+  const characters = new FakeCharacterRepository();
+  characters.seed(character);
+  const magicItems = new FakeMagicItemRepository([ring]);
+
+  // Bug real reportado: el DM narraba "el anillo brilla al ponertelo" y ahi
+  // se quedaba -- nunca llegaba al inventario real porque grant_item solo
+  // sirve para equipo normal, no para el catalogo de objetos magicos.
+  console.log('Inventario ANTES:', character.toSnapshot().inventory);
+  if (character.toSnapshot().inventory.length !== 0) {
+    throw new Error('FALLO: el inventario no deberia tener nada todavia');
+  }
+
+  const useCase = new GrantMagicItemUseCase(characters, magicItems);
+  await useCase.execute({ characterId: 'char-1', magicItemId: 'ring-of-protection' });
+
+  const saved = await characters.findById('char-1');
+  console.log('Inventario DESPUES de grant_magic_item:', saved!.toSnapshot().inventory);
+  if (saved!.toSnapshot().inventory.length !== 1 || saved!.toSnapshot().inventory[0].name !== 'Ring of Protection') {
+    throw new Error('FALLO: grant_magic_item no añadio el objeto magico al inventario');
+  }
+
+  // Caso de error: personaje inexistente.
+  let threwForMissingCharacter = false;
+  try {
+    await useCase.execute({ characterId: 'no-existe', magicItemId: 'ring-of-protection' });
+  } catch {
+    threwForMissingCharacter = true;
+  }
+  if (!threwForMissingCharacter) {
+    throw new Error('FALLO: deberia lanzar error si el personaje no existe');
+  }
+
+  // Caso de error: objeto magico inexistente en el catalogo (nunca inventar uno).
+  let threwForMissingItem = false;
+  try {
+    await useCase.execute({ characterId: 'char-1', magicItemId: 'objeto-inventado' });
+  } catch {
+    threwForMissingItem = true;
+  }
+  if (!threwForMissingItem) {
+    throw new Error('FALLO: deberia lanzar error si el objeto magico no existe en el catalogo');
+  }
+
+  console.log('OK: el objeto magico narrado ahora llega de verdad al inventario del personaje.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

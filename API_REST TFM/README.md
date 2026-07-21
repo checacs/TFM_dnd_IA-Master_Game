@@ -107,7 +107,7 @@ Invoke-RestMethod -Uri "http://localhost:3000/games/$gameId/message" -Method Pos
 npx @modelcontextprotocol/inspector
 ```
 
-En la interfaz: **Transport Type → Streamable HTTP**, **URL → `http://localhost:3000/mcp`**, **Connection Type → Direct** (si "Via Proxy" da error de conexión). Pestaña **Tools** para ver las 23 tools registradas (las más recientes: `end_combat`, para cerrar de verdad un combate ya resuelto, y `cast_spell`, para lanzar un hechizo consumiendo una ranura real y aplicando su daño de verdad) y probarlas a mano.
+En la interfaz: **Transport Type → Streamable HTTP**, **URL → `http://localhost:3000/mcp`**, **Connection Type → Direct** (si "Via Proxy" da error de conexión). Pestaña **Tools** para ver las 24 tools registradas (las más recientes: `end_combat`, para cerrar de verdad un combate ya resuelto; `cast_spell`, para lanzar un hechizo consumiendo una ranura real y aplicando su daño de verdad; y `grant_magic_item`, para que un objeto mágico narrado llegue de verdad al inventario del personaje) y probarlas a mano.
 
 Para comprobar `tools/list` sin el Inspector:
 

@@ -1,8 +1,8 @@
 # Servidor MCP
 
-**Estado:** v2.1 — actualizado para reflejar la implementación real (el diseño original era del paso 4; desde entonces se añadieron mapas de combate, el catálogo de hechizos, el modelo de rondas, posicionamiento en el tablero, objetos/condiciones, cierre de combate y lanzamiento real de hechizos)
+**Estado:** v2.2 — actualizado para reflejar la implementación real (el diseño original era del paso 4; desde entonces se añadieron mapas de combate, el catálogo de hechizos, el modelo de rondas, posicionamiento en el tablero, objetos/condiciones, cierre de combate, lanzamiento real de hechizos y concesión real de objetos mágicos)
 **Se apoya en:** `03-arquitectura-clean-api-nestjs.md`
-**Tools reales:** 23 (fueron creciendo desde las 6 originales; las dos últimas, `end_combat` y `cast_spell`, se añadieron para cerrar el combate de verdad tras derrotar a todos los enemigos y para que un hechizo narrado consuma una ranura y aplique daño real, respectivamente — ver `09.` más abajo)
+**Tools reales:** 24 (fueron creciendo desde las 6 originales; las tres últimas, `end_combat`, `cast_spell` y `grant_magic_item`, se añadieron para cerrar el combate de verdad tras derrotar a todos los enemigos, para que un hechizo narrado consuma una ranura y aplique daño real, y para conceder de verdad un objeto mágico encontrado, respectivamente — ver `09.`/`10.` más abajo)
 
 ---
 
@@ -31,6 +31,7 @@ No todo lo que hace la API necesita ser una tool. El criterio es simple: **¿qui
 | **Otorgar XP tras un evento narrativo** | DM-IA | **MCP** |
 | **Cerrar por completo un combate ya resuelto** | DM-IA | **MCP** (`end_combat`) |
 | **Lanzar un hechizo narrado (consumir ranura real, aplicar daño real)** | DM-IA | **MCP** (`cast_spell`; existe también una ruta REST equivalente para cuando es el propio jugador quien la dispara desde el móvil, con comprobación de propiedad del personaje) |
+| **Conceder un objeto MÁGICO narrado (anillo, capa, poción...)** | DM-IA | **MCP** (`grant_magic_item`; distinta de `grant_item`, que solo concede equipo normal) |
 
 Esto evita el error típico de "exponer toda la API como tools": cuantas menos tools, más predecible es el comportamiento del LLM. Nótese el paralelismo con el modelo de rondas (ver `01-especificacion-funcional.md`): "Mi turno" y la acción del jugador son siempre REST porque las decide el jugador humano, aunque ocurran en pleno combate — el DM-IA nunca reclama turno ni escribe la acción de un jugador por él.
 
@@ -244,18 +245,19 @@ Nota para quien conecte un cliente MCP a este servidor: si una tool falla (ej. `
 
 ## 9. Definición de terminado
 
-- Las 23 tools están registradas y responden a `tools/list` (verificado con el inspector oficial de MCP: `npx @modelcontextprotocol/inspector`, transporte "Streamable HTTP", conectado a `http://localhost:3000/mcp`).
+- Las 24 tools están registradas y responden a `tools/list` (verificado con el inspector oficial de MCP: `npx @modelcontextprotocol/inspector`, transporte "Streamable HTTP", conectado a `http://localhost:3000/mcp`).
 - `interface/mcp/` no contiene reglas de negocio.
 - Confirmado en vivo (no solo en teoría): una partida real, con Mongo real, respondiendo a `tools/list` y a llamadas de tool individuales.
 
-## 10. Añadidas tras detectar fallos reales en partida (`end_combat`, `cast_spell`)
+## 10. Añadidas tras detectar fallos reales en partida (`end_combat`, `cast_spell`, `grant_magic_item`)
 
-Dos tools no estaban en ninguna versión anterior de este documento porque el hueco que cubren solo se detectó jugando partidas reales, no en el diseño:
+Estas tools no estaban en ninguna versión anterior de este documento porque el hueco que cubren solo se detectó jugando partidas reales, no en el diseño:
 
 - **`end_combat(gameId)`** — se detectó que, tras derrotar a todos los enemigos de un combate, no existía ninguna forma de cerrar `activeEncounter` de verdad: `startEncounter()` incluso lanza error si ya hay uno activo, así que el combate se quedaba "abierto" para siempre aunque la narración ya hubiera pasado a otra escena — el panel de "Combate" y los marcadores de enemigos derrotados seguían mostrándose en el tablero del jugador. `dm-turn.ts` fuerza la llamada con un chequeo verificable contra `get_game_state` (no por impresión narrativa) en cuanto detecta que todos los enemigos atacados ese turno están a 0 HP real y `end_combat` todavía no se llamó.
 - **`cast_spell(gameId, casterCharacterId, spellId, targetId?)`** — se detectó que un personaje conjurador (mago/clérigo) podía llegar a un combate sin ningún hechizo conocido ni equipo arcano, y que aunque los tuviera, el DM-IA solo podía *narrar* que lanzaba un hechizo sin ningún efecto mecánico real (sin consumir ranura, sin aplicar daño). Comparte caso de uso (`CastSpellUseCase`) con el endpoint REST `POST /games/:id/cast-spell` (el jugador lanzando su propio hechizo desde el móvil), pero a diferencia de esa ruta, la tool MCP no manda `requestingUserId`: es el DM-IA quien decide resolver el hechizo, igual que `end_player_turn` o `grant_item` no comprueban propiedad porque las invoca el DM, no el jugador.
+- **`grant_magic_item(characterId, magicItemId)`** — se detectó que, al narrar el hallazgo de un objeto mágico concreto (anillo, capa, poción...), el DM-IA se limitaba a describirlo en texto sin que apareciera nunca en el inventario real del personaje — `grant_item` no sirve para esto porque solo concede equipo normal del catálogo de equipamiento, no objetos del catálogo de objetos mágicos. `GrantMagicItemUseCase` reutiliza el campo `InventoryItem.equipmentId` para guardar el id del objeto mágico (`MagicItem._id`) en vez de introducir un tipo de inventario paralelo, ya que ningún caso de uso revalida ese campo contra la colección `equipment`.
 
-Ambas siguen exactamente el mismo patrón que el resto: Zod + descripción imperativa en `mcp.server.ts`, método de una línea en `game-mcp-tools.ts`, caso de uso con tests en `application/`, y evento documentado en `05-motor-ia-dm-deepseek.md` sección 4 (`combate_terminado`, `hechizo_lanzado`).
+Todas siguen exactamente el mismo patrón que el resto: Zod + descripción imperativa en `mcp.server.ts`, método de una línea en `game-mcp-tools.ts`, caso de uso con tests en `application/`, y evento documentado en `05-motor-ia-dm-deepseek.md` sección 4 (`combate_terminado`, `hechizo_lanzado`, `objeto_magico_concedido`).
 
 ---
 

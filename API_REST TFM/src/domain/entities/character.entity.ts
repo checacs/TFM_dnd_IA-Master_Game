@@ -9,7 +9,15 @@ export interface SpellSlots {
 }
 
 export interface InventoryItem {
-  equipmentId: string; // Equipment._id del catálogo (docs, paso de integración mecánica)
+  // Normalmente Equipment._id del catálogo de equipo (arma/armadura/objeto de
+  // aventurero). GrantMagicItemUseCase reutiliza este mismo campo para el id
+  // de un objeto del catálogo de objetos mágicos (MagicItem._id) en vez de
+  // introducir un tipo de inventario paralelo -- ningún caso de uso revalida
+  // este id contra la colección `equipment` después de guardarlo, así que no
+  // hay colisión funcional real. equipWeapon sigue exigiendo que el id
+  // corresponda a un arma real del catálogo de equipo (un objeto mágico
+  // nunca se "equipa" como arma por esta vía).
+  equipmentId: string;
   name: string; // copia ligera, para no ir al catálogo solo por el nombre
 }
 

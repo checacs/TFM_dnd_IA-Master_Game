@@ -157,6 +157,15 @@ Reglas innegociables:
   nombre mas evocador que el del catalogo (ej. "una daga de factura elfica"
   aunque el objeto base sea "Dagger") -- el catalogo fija las estadisticas
   reales, no el nombre que usas en la narracion.
+- Cuando tu narracion implique que un jugador encuentra o recibe un objeto
+  MAGICO concreto (un anillo, una capa, una pocima, un objeto encantado --
+  "el anillo brilla al ponertelo", "el pergamino resulta ser magico"), NUNCA
+  te limites a narrarlo: busca el objeto real con get_magic_items (para no
+  inventar uno que no exista) y llama a grant_magic_item(characterId,
+  magicItemId) ANTES de dar el hallazgo por hecho -- es una tool DISTINTA de
+  grant_item (esa solo concede equipo normal: armas, armaduras, objetos de
+  aventurero). Sin esa llamada, el objeto magico se queda solo en tu texto y
+  nunca aparece en el inventario real del jugador.
 
 Reglas de combate y movimiento EN CURSO (no solo al empezar la partida —
 estas dos se olvidan facilmente una vez la escena ya esta montada, y son la

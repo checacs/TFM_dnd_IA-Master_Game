@@ -10,7 +10,8 @@ export type GameEventType =
   | 'turno_jugador_cerrado'
   | 'objeto_concedido'
   | 'combate_terminado'
-  | 'hechizo_lanzado';
+  | 'hechizo_lanzado'
+  | 'objeto_magico_concedido';
 
 export interface GameEvent {
   type: GameEventType;
@@ -36,6 +37,7 @@ const TOOL_TO_EVENT_TYPE: Partial<Record<string, GameEventType>> = {
   grant_item: 'objeto_concedido',
   end_combat: 'combate_terminado',
   cast_spell: 'hechizo_lanzado',
+  grant_magic_item: 'objeto_magico_concedido',
 };
 
 export function toGameEvent(toolName: string, toolResult: unknown): GameEvent | null {
