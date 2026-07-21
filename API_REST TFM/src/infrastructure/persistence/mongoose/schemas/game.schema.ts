@@ -102,6 +102,10 @@ export const gameMongooseSchema = new Schema(
     // Único jugador que puede escribir al DM fuera de combate (ver
     // Game.assignCaptain) — null hasta que se lanza la partida.
     captainUserId: { type: String, default: null },
+    // mapIds ya aplicados en esta partida (Game.setBattleMap) — para que el
+    // DM-IA pueda consultarlo vía get_game_state y variar de escenario en vez
+    // de repetir siempre el mismo mapa en campañas largas.
+    mapHistory: { type: [String], default: [] },
   },
   { collection: 'games', timestamps: true },
 );

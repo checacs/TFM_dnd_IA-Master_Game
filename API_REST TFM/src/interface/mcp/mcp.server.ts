@@ -63,8 +63,14 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
 
   server.tool(
     'get_battle_maps',
-    'Busca mapas de combate del catálogo por etiquetas (ej. "interior", "cueva", "castillo"). ' +
-      'Úsalo para elegir un mapId coherente con la escena antes de llamar a start_combat.',
+    'Busca mapas de combate del catálogo por etiquetas derivadas del sitio real que estás narrando ' +
+      '(interior/exterior, taberna, cueva, castillo, bosque, cabaña, almacén, cripta, mazmorra...), NUNCA ' +
+      'una lista fija de ejemplo: piensa en la escena concreta de TU historia, no repitas siempre las ' +
+      'mismas etiquetas de partida en partida. El resultado ya viene priorizado por relevancia y con el ' +
+      'orden variado a propósito -- no asumas que el primero de la lista es siempre la mejor opción, y ' +
+      'consulta get_game_state.mapHistory para evitar el mapId que ya hayas usado en esta partida si hay ' +
+      'alternativas razonables. Úsalo para elegir un mapId coherente con la escena antes de llamar a ' +
+      'start_combat/set_battle_map.',
     { tags: z.array(z.string()).optional() },
     async ({ tags }) => ({
       content: [{ type: 'text', text: JSON.stringify(await tools.searchMapsTool({ tags })) }],
@@ -119,8 +125,10 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
 
   server.tool(
     'get_game_state',
-    'Devuelve el estado actual de la partida: tablero, combate activo y jugadores. Úsalo para ' +
-      'fundamentar la narración en hechos reales, no en la memoria de la conversación.',
+    'Devuelve el estado actual de la partida: tablero, combate activo, jugadores y mapHistory (los ' +
+      'mapId ya aplicados en esta partida, en orden). Úsalo para fundamentar la narración en hechos ' +
+      'reales, no en la memoria de la conversación, y consulta mapHistory antes de elegir un mapa nuevo ' +
+      'con get_battle_maps para no repetir siempre el mismo escenario en partidas largas.',
     { gameId: z.string() },
     async ({ gameId }) => ({
       content: [{ type: 'text', text: JSON.stringify(await tools.gameStateTool(gameId)) }],

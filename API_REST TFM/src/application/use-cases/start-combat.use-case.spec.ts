@@ -142,6 +142,7 @@ describe('StartCombatUseCase', () => {
       combatPoint: null,
       zones: [],
     });
+    expect(saved?.toSnapshot().mapHistory).toEqual(['map-1']);
   });
 
   it('lanza DomainError si la partida no existe', async () => {

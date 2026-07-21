@@ -35,6 +35,8 @@ import { DM_ENGINE_CLIENT } from '../domain/ports/dm-engine.port';
 import { HttpDmEngineClient } from '../infrastructure/dm-engine/http-dm-engine.client';
 import { GAME_CODE_GENERATOR } from '../domain/ports/game-code-generator.port';
 import { RandomGameCodeGenerator } from '../infrastructure/game-code/random-game-code-generator';
+import { SHUFFLER } from '../domain/ports/shuffler.port';
+import { RandomShuffler } from '../infrastructure/random/random-shuffler';
 
 const DM_ENGINE_URL = process.env.DM_ENGINE_URL;
 
@@ -80,6 +82,7 @@ if (!DM_ENGINE_URL) {
     GameMcpTools,
     { provide: DM_ENGINE_CLIENT, useFactory: () => new HttpDmEngineClient(DM_ENGINE_URL as string) },
     { provide: GAME_CODE_GENERATOR, useClass: RandomGameCodeGenerator },
+    { provide: SHUFFLER, useClass: RandomShuffler },
   ],
   // GameMcpTools se exporta para que main.ts pueda recuperarlo con app.get()
   // y registrar las tools MCP sobre la misma instancia (mismos repositorios).

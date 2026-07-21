@@ -71,6 +71,7 @@ export class StartCombatUseCase {
         cols: mapSnapshot.cols,
         imageUrl: mapSnapshot.imageUrl,
         zones: mapSnapshot.zones,
+        mapId: input.mapId,
       });
     }
 

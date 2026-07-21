@@ -120,6 +120,45 @@ describe('Game', () => {
 
       expect(game.toSnapshot().board.zones).toEqual([]);
     });
+
+    describe('mapHistory (para que el DM-IA pueda evitar repetir mapas ya usados)', () => {
+      it('empieza vacío en una partida nueva', () => {
+        const game = buildGame();
+        expect(game.toSnapshot().mapHistory).toEqual([]);
+      });
+
+      it('registra el mapId cada vez que se aplica un mapa del catálogo', () => {
+        const game = buildGame();
+        game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna.png', mapId: 'tavernaMercenarios' });
+        game.setBattleMap({ rows: 34, cols: 18, imageUrl: '/maps/ruinas.png', mapId: 'ruinas-bosque' });
+
+        expect(game.toSnapshot().mapHistory).toEqual(['tavernaMercenarios', 'ruinas-bosque']);
+      });
+
+      it('no duplica el mismo mapId si se reaplica dos veces seguidas', () => {
+        const game = buildGame();
+        game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna.png', mapId: 'tavernaMercenarios' });
+        game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna.png', mapId: 'tavernaMercenarios' });
+
+        expect(game.toSnapshot().mapHistory).toEqual(['tavernaMercenarios']);
+      });
+
+      it('no registra nada si setBattleMap se llama sin mapId (compatibilidad hacia atrás)', () => {
+        const game = buildGame();
+        game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna.png' });
+
+        expect(game.toSnapshot().mapHistory).toEqual([]);
+      });
+
+      it('toSnapshot devuelve una copia, no la referencia interna', () => {
+        const game = buildGame();
+        game.setBattleMap({ rows: 10, cols: 14, imageUrl: '/maps/taberna.png', mapId: 'tavernaMercenarios' });
+        const snapshot = game.toSnapshot();
+        snapshot.mapHistory.push('intruso');
+
+        expect(game.toSnapshot().mapHistory).toEqual(['tavernaMercenarios']);
+      });
+    });
   });
 
   describe('clearBattleMap', () => {

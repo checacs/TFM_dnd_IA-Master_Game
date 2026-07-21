@@ -27,7 +27,13 @@ export class SetBattleMapUseCase {
     }
 
     const snapshot = map.toSnapshot();
-    game.setBattleMap({ rows: snapshot.rows, cols: snapshot.cols, imageUrl: snapshot.imageUrl, zones: snapshot.zones });
+    game.setBattleMap({
+      rows: snapshot.rows,
+      cols: snapshot.cols,
+      imageUrl: snapshot.imageUrl,
+      zones: snapshot.zones,
+      mapId: input.mapId,
+    });
     await this.games.save(game);
   }
 }

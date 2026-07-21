@@ -88,6 +88,14 @@ export interface GameProps {
    * se reasigna explícitamente con assignCaptain.
    */
   captainUserId: string | null;
+  /**
+   * mapId (catálogo BattleMap) de cada mapa que se ha aplicado alguna vez en esta
+   * partida, en orden — para que el DM-IA pueda consultarlo vía get_game_state y
+   * evitar reelegir siempre el mismo escenario en campañas largas. No se registra
+   * nada si setBattleMap se llama sin mapId (compatibilidad hacia atrás), y no se
+   * duplica si se reaplica el mismo mapa dos veces seguidas.
+   */
+  mapHistory: string[];
 }
 
 export type CreateGameInput = Pick<GameProps, 'name' | 'hostUserId' | 'maxPlayers'> & {
@@ -116,6 +124,7 @@ export class Game {
     if (!props.narrativeLog) props.narrativeLog = [];
     if (!props.board.zones) props.board.zones = [];
     if (props.captainUserId === undefined) props.captainUserId = null;
+    if (!props.mapHistory) props.mapHistory = [];
     props.players = props.players.map((p) => ({ ...p, conditions: p.conditions ?? [], position: p.position ?? null }));
     if (props.activeEncounter) {
       props.activeEncounter.enemies = props.activeEncounter.enemies.map((e) => ({
@@ -141,6 +150,7 @@ export class Game {
       activeEncounter: null,
       narrativeLog: [],
       captainUserId: null,
+      mapHistory: [],
       board: {
         rows: input.board?.rows ?? DEFAULT_BOARD_SIZE,
         cols: input.board?.cols ?? DEFAULT_BOARD_SIZE,
@@ -151,8 +161,13 @@ export class Game {
     });
   }
 
-  /** Aplica un mapa del catálogo (docs BattleMap) — resetea el punto de combate porque las dimensiones pueden cambiar. */
-  setBattleMap(map: { rows: number; cols: number; imageUrl: string; zones?: MapZone[] }): void {
+  /**
+   * Aplica un mapa del catálogo (docs BattleMap) — resetea el punto de combate porque las
+   * dimensiones pueden cambiar. Si se indica mapId, se registra en mapHistory (sin duplicar
+   * si es el mismo que el último aplicado) para que el DM-IA pueda consultar qué mapas ya ha
+   * usado esta partida y variar en vez de repetir siempre el mismo escenario.
+   */
+  setBattleMap(map: { rows: number; cols: number; imageUrl: string; zones?: MapZone[]; mapId?: string }): void {
     this.props.board = {
       rows: map.rows,
       cols: map.cols,
@@ -160,6 +175,9 @@ export class Game {
       combatPoint: null,
       zones: map.zones ?? [],
     };
+    if (map.mapId && this.props.mapHistory[this.props.mapHistory.length - 1] !== map.mapId) {
+      this.props.mapHistory.push(map.mapId);
+    }
   }
 
   /**
@@ -411,6 +429,7 @@ export class Game {
   toSnapshot(): GameProps {
     return {
       ...this.props,
+      mapHistory: [...(this.props.mapHistory ?? [])],
       players: this.props.players.map((p) => ({
         ...p,
         conditions: [...(p.conditions ?? [])],
