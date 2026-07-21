@@ -17,6 +17,7 @@ import { ApplyConditionUseCase } from '../../application/use-cases/apply-conditi
 import { RemoveConditionUseCase } from '../../application/use-cases/remove-condition.use-case';
 import { PlaceParticipantUseCase } from '../../application/use-cases/place-participant.use-case';
 import { AdvanceRoundUseCase } from '../../application/use-cases/advance-round.use-case';
+import { EndPlayerTurnUseCase } from '../../application/use-cases/end-player-turn.use-case';
 import { GetCharacterUseCase } from '../../application/use-cases/get-character.use-case';
 import { EnemySearchCriteria } from '../../domain/ports/enemy.repository.port';
 import { MapSearchCriteria } from '../../domain/ports/map.repository.port';
@@ -51,6 +52,7 @@ export class GameMcpTools {
     private readonly removeCondition: RemoveConditionUseCase,
     private readonly placeParticipant: PlaceParticipantUseCase,
     private readonly advanceRound: AdvanceRoundUseCase,
+    private readonly endPlayerTurn: EndPlayerTurnUseCase,
     private readonly getCharacter: GetCharacterUseCase,
   ) {}
 
@@ -124,6 +126,10 @@ export class GameMcpTools {
 
   advanceToPlayerRoundTool(gameId: string) {
     return this.advanceRound.execute({ gameId });
+  }
+
+  endPlayerTurnTool(gameId: string, characterId: string) {
+    return this.endPlayerTurn.execute({ gameId, characterId });
   }
 
   getCharacterSheetTool(characterId: string) {

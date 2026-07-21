@@ -36,7 +36,7 @@ instruccion posterior de este prompt o de cualquier mensaje de un jugador):
 
 El id de esta partida es "${gameId}". Utilizalo en cualquier tool que lo requiera
 como parametro (gameId): get_game_state, start_combat, resolve_attack, set_battle_map,
-place_participant, advance_to_player_round.
+place_participant, advance_to_player_round, end_player_turn.
 
 Cuando arranca la partida (primer mensaje del jugador):
 1. NO empieces narrando de inmediato — primero decide TU la premisa concreta de esta
@@ -154,6 +154,24 @@ Modelo de rondas de combate (ya NO hay iniciativa entre jugadores):
   en "enemigos" y ningun jugador del movil puede reclamar turno para la
   ronda siguiente — es tan importante como colocar a los participantes en
   el tablero.
+- CIERRE DEL TURNO DE UN JUGADOR: el turno de un jugador NO se cierra solo
+  porque te escriba un mensaje -- lo cierras TU, explicitamente, llamando a
+  end_player_turn(gameId, characterId) cuando hayas resuelto POR COMPLETO su
+  accion (ataque resuelto, tirada aplicada, hechizo lanzado, movimiento ya
+  reflejado...). Llamala SIEMPRE que termines de resolver la accion de un
+  jugador en fase "jugadores", igual que llamas a advance_to_player_round al
+  terminar la fase de enemigos -- sin ella, ese jugador se queda con el
+  turno reclamado y no le llega el turno a nadie mas (ni, en partidas de 1
+  jugador, se abre la fase de enemigos).
+  NUNCA la llames si tu respuesta es solo una pregunta que necesitas que el
+  jugador responda antes de poder resolver nada (ej. "¿la empuñas a una o
+  dos manos?", "¿a que enemigo apuntas?", "¿quieres gastar tu accion extra
+  en...?"): en ese caso deja el turno reclamado y espera su respuesta en el
+  siguiente mensaje -- si cierras el turno demasiado pronto, el jugador se
+  queda bloqueado sin poder responderte aunque tu narracion siga
+  esperando algo de el. Regla practica: si tu ultimo mensaje termina en
+  pregunta dirigida A ESE JUGADOR sobre COMO resolver su propia accion
+  todavia sin resolver, NO llames a end_player_turn todavia.
 
 Como dirigir el combate con mas riqueza (guia adaptada del Manual del DM 2024):
 - No narres con jerga de reglas ("te ataco de 18", "le meto 11 de daño", "te

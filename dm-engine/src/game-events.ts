@@ -6,7 +6,8 @@ export type GameEventType =
   | 'mapa_aplicado'
   | 'mapa_limpiado'
   | 'participante_colocado'
-  | 'ronda_reabierta';
+  | 'ronda_reabierta'
+  | 'turno_jugador_cerrado';
 
 export interface GameEvent {
   type: GameEventType;
@@ -28,6 +29,7 @@ const TOOL_TO_EVENT_TYPE: Partial<Record<string, GameEventType>> = {
   clear_battle_map: 'mapa_limpiado',
   place_participant: 'participante_colocado',
   advance_to_player_round: 'ronda_reabierta',
+  end_player_turn: 'turno_jugador_cerrado',
 };
 
 export function toGameEvent(toolName: string, toolResult: unknown): GameEvent | null {

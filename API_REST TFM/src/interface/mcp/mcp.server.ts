@@ -247,4 +247,22 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       return { content: [{ type: 'text', text: JSON.stringify({ advanced: true }) }] };
     },
   );
+
+  server.tool(
+    'end_player_turn',
+    'Cierra el turno de UN jugador concreto dentro de la ronda de jugadores de un combate activo: libera su ' +
+      'candado de turno y lo marca como "ya ha actuado esta ronda" (si con esto ya actuaron todos los ' +
+      'jugadores vivos, la fase pasa a "enemigos" automáticamente). Llámala SOLO cuando hayas resuelto POR ' +
+      'COMPLETO la acción de ese jugador (ataque resuelto con resolve_attack, tirada aplicada, hechizo ' +
+      'lanzado, movimiento/huida ya reflejado, etc.) y no necesites nada más de él para terminar su turno. ' +
+      'NUNCA la llames si tu respuesta es solo una pregunta aclaratoria para el jugador (p. ej. "¿la empuñas ' +
+      'a una o dos manos?", "¿a qué enemigo apuntas?") — en ese caso espera a que responda antes de cerrar su ' +
+      'turno; si la cierras demasiado pronto, el jugador se queda bloqueado sin poder escribir más aunque tú ' +
+      'todavía le estés preguntando algo. El characterId de cada jugador está en get_game_state.players[].characterId.',
+    { gameId: z.string(), characterId: z.string() },
+    async ({ gameId, characterId }) => {
+      await tools.endPlayerTurnTool(gameId, characterId);
+      return { content: [{ type: 'text', text: JSON.stringify({ turnEnded: true }) }] };
+    },
+  );
 }

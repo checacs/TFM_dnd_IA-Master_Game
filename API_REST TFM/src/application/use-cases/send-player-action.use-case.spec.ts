@@ -55,7 +55,7 @@ function buildGameOutsideCombat(): { game: Game; games: FakeGameRepository } {
 
 describe('SendPlayerActionUseCase', () => {
   describe('en combate', () => {
-    it('envía la acción al DM cuando el jugador tiene el turno reclamado, y libera el turno al terminar', async () => {
+    it('envía la acción al DM cuando el jugador tiene el turno reclamado', async () => {
       const { game, games } = buildGameInCombat();
       game.claimTurn('char-1');
       await games.save(game);
@@ -71,11 +71,50 @@ describe('SendPlayerActionUseCase', () => {
       });
 
       expect(result.narrative).toBe('El goblin retrocede.');
-      const saved = await games.findById(game.id);
-      const encounter = saved?.toSnapshot().activeEncounter;
-      expect(encounter?.turnClaim).toBeNull();
-      expect(encounter?.actedThisRound).toEqual(['char-1']);
     });
+
+    it(
+        'NO libera el turno automáticamente tras enviar la acción — antes lo hacía ' +
+        'incondicionalmente (Game.releaseTurnAfterAction en cada mensaje), lo que en partidas ' +
+        'de 1 jugador bloqueaba para siempre al único jugador en cuanto el DM respondía con una ' +
+        'simple pregunta aclaratoria ("¿la empuñas a una o dos manos?"), sin haber resuelto nada ' +
+        'todavía. Ahora el cierre del turno depende de que el DM llame explícitamente a la tool ' +
+        'end_player_turn (ver EndPlayerTurnUseCase) cuando de verdad haya resuelto la acción.',
+        async () => {
+          const { game, games } = buildGameInCombat();
+          game.claimTurn('char-1');
+          await games.save(game);
+          const dmEngine = new FakeDmEngineClient('¿La empuñas a una o dos manos?');
+          const sendMessage = new SendMessageUseCase(games, dmEngine);
+          const useCase = new SendPlayerActionUseCase(games, sendMessage);
+
+          await useCase.execute({
+            gameId: game.id,
+            requestingUserId: 'user-1',
+            characterId: 'char-1',
+            content: 'Voy a atacar con mi espada larga',
+          });
+
+          const saved = await games.findById(game.id);
+          const encounter = saved?.toSnapshot().activeEncounter;
+          // El turno sigue reclamado por char-1: puede responder la pregunta del
+          // DM en un segundo mensaje sin que nadie más pueda colarse ni quedarse
+          // bloqueado esperando "a los demás" (que ni siquiera existen, en solo).
+          expect(encounter?.turnClaim).toBe('char-1');
+          expect(encounter?.actedThisRound).toEqual([]);
+          expect(encounter?.roundPhase).toBe('jugadores');
+
+          // Puede seguir enviando mensajes (responder la pregunta) sin que el
+          // candado se lo impida.
+          const second = await useCase.execute({
+            gameId: game.id,
+            requestingUserId: 'user-1',
+            characterId: 'char-1',
+            content: 'A dos manos',
+          });
+          expect(second.narrative).toBe('¿La empuñas a una o dos manos?');
+        },
+    );
 
     it('lanza DomainError si el jugador no tiene el turno reclamado', async () => {
       const { game, games } = buildGameInCombat();
