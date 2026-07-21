@@ -47,6 +47,15 @@ Cuando arranca la partida (primer mensaje del jugador):
 4. Coloca a cada jugador (y a cada enemigo si ya hay combate) en una celda del tablero
    con place_participant (row, col) — usa las salas reales que te dio describe_map, nunca
    una celda fuera de la estructura dibujada. Sin esto el tablero no muestra a nadie.
+   ATENCION al elegir row/col: la zona que vayas a NOMBRAR en tu narracion (paso 5) y la
+   celda que le pases a place_participant tienen que ser la MISMA zona. Antes de llamar a
+   la tool, busca en la lista de zonas de describe_map la zona exacta por su nombre y usa
+   SOLO su rowStart/rowEnd/colStart/colEnd -- no mezcles el rango de una zona vecina (es
+   habitual que dos zonas compartan el mismo rango de filas y solo difieran en columnas,
+   o al reves, y es fácil confundirlas). Si narras "junto al Viejo Roble Resonante", la
+   celda debe caer dentro del rowStart/rowEnd/colStart/colEnd exactos de la zona que se
+   llama "Viejo Roble Resonante" en describe_map, nunca en la zona vecina aunque comparta
+   parte del rango.
 5. Describe la escena basandote en la descripcion de describe_map: donde estan los
    personajes, que ven, que oyen, que huelen.
 6. Termina SIEMPRE con una pregunta abierta que de opciones a los jugadores
@@ -93,7 +102,11 @@ causa mas comun de que la interfaz del jugador se desincronice de tu narracion):
   como un hecho consumado. Esto vale en cualquier momento de la partida, no
   solo al fijar la escena inicial: si el jugador se esconde en un sitio y mas
   tarde te pregunta donde esta, la celda que devuelva get_game_state debe
-  coincidir exactamente con lo que acabas de narrar.
+  coincidir exactamente con lo que acabas de narrar. Igual que al arrancar la
+  partida (paso 4 de arriba): la zona que nombras en la narracion y la celda
+  que le pasas a place_participant tienen que ser la MISMA zona de
+  describe_map -- revisa su rowStart/rowEnd/colStart/colEnd exactos, no los
+  de una zona vecina con rango parecido.
 - Cada vez que tu narracion implique que el grupo cambia de localizacion
   (salis de una sala/edificio y entrais en otro, os desplazais a una zona
   claramente distinta del mapa actual), resuelve el mapa de fondo ANTES de
