@@ -93,7 +93,7 @@ textarea {
 
 .full-bleed-card h1 {
   margin: 0 0 0.3rem;
-  font-size: 1.6rem;
+  font-size: 1.9rem;
   color: var(--color-gold-bright);
   text-align: center;
   letter-spacing: 0.02em;
@@ -102,7 +102,7 @@ textarea {
 .full-bleed-card .subtitle {
   text-align: center;
   color: var(--color-parchment-dark);
-  font-size: 0.85rem;
+  font-size: 1.05rem;
   margin: 0 0 1.5rem;
 }
 
@@ -112,7 +112,7 @@ textarea {
 
 .field-group label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.98rem;
   color: var(--color-parchment-dark);
   margin-bottom: 0.35rem;
 }
@@ -125,11 +125,27 @@ textarea {
   border: 1px solid rgba(212, 175, 55, 0.4);
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-parchment);
-  font-size: 0.95rem;
+  font-size: 1.15rem;
 }
 
 .field-group input::placeholder {
   color: rgba(237, 225, 196, 0.4);
+}
+
+/* El <select> nativo del navegador (la lista desplegable de "Máximo de
+   jugadores") NO respeta el fondo oscuro traslúcido de la tarjeta -- el
+   propio sistema operativo la pinta con fondo claro, y el texto color
+   parchment (claro) quedaba casi invisible sobre ese fondo claro. Un color
+   oscuro se lee bien tanto cerrado (sobre la tarjeta) como en la lista
+   desplegable (sobre el fondo claro del sistema). */
+.field-group select {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.field-group select option {
+  color: var(--color-ink);
+  background: var(--color-parchment);
 }
 
 .btn-gold {
@@ -140,7 +156,7 @@ textarea {
   background: linear-gradient(180deg, var(--color-gold-bright), var(--color-gold));
   color: #241a08;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   transition: filter 0.15s ease;
 }
 
@@ -160,7 +176,34 @@ textarea {
   border: 1px solid rgba(237, 225, 196, 0.3);
   background: transparent;
   color: var(--color-parchment-dark);
-  font-size: 0.85rem;
+  font-size: 1.05rem;
+}
+
+/* Separador visual entre "unirme con código" y "crear/elegir partida" --
+   antes solo había un margin-top de 1rem entre ambos bloques y se leían
+   como una sola cosa continua. */
+.section-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--color-parchment-dark);
+  font-size: 0.9rem;
+  margin: 1.75rem 0;
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.section-divider:not(:empty)::before {
+  margin-right: 0.75rem;
+}
+
+.section-divider:not(:empty)::after {
+  margin-left: 0.75rem;
 }
 
 .game-list {
@@ -195,11 +238,11 @@ textarea {
 .game-list-name {
   font-weight: 700;
   color: var(--color-gold-bright);
-  font-size: 0.9rem;
+  font-size: 1.1rem;
 }
 
 .game-list-meta {
-  font-size: 0.72rem;
+  font-size: 0.92rem;
   color: var(--color-parchment-dark);
 }
 
@@ -298,7 +341,7 @@ textarea {
 
 .error-msg {
   color: #ff8a80;
-  font-size: 0.82rem;
+  font-size: 1.02rem;
   margin: 0.5rem 0 0;
   text-align: center;
 }

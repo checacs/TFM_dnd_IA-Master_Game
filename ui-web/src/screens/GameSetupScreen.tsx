@@ -97,8 +97,10 @@ export function GameSetupScreen() {
           </button>
         </form>
 
+        <div className="section-divider">o</div>
+
         {!showCreate && (
-          <button className="btn-gold" onClick={() => setShowCreate(true)} style={{ marginTop: '1rem' }}>
+          <button className="btn-gold" onClick={() => setShowCreate(true)}>
             Crear nueva partida
           </button>
         )}
