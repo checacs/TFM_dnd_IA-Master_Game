@@ -45,14 +45,6 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
     return result;
   }, [players, enemies]);
 
-  const cells: ('player' | 'enemy' | null)[] = Array.from({ length: board.rows * board.cols }, () => null);
-  let po = 0;
-  for (let i = 0; i < cells.length && po < players.length; i++) { cells[i] = 'player'; po++; }
-  let eo = 0;
-  for (let i = 0; i < cells.length && eo < enemies.length; i++) {
-    if (cells[i] === null) { cells[i] = 'enemy'; eo++; }
-  }
-
   return (
     <div className="board-panel">
       <h3 className="section-title">Jugadores</h3>
@@ -98,18 +90,16 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
               </div>
             </div>
           ) : (
-            <div
-              className="board-grid"
-              style={{
-                gridTemplateColumns: `repeat(${board.cols}, 28px)`,
-                gridTemplateRows: `repeat(${board.rows}, 28px)`,
-              }}
-            >
-              {cells.map((cell, i) => (
-                <div key={i} className={`board-cell ${cell ?? ''}`}>
-                  {cell ? cell[0].toUpperCase() : ''}
-                </div>
-              ))}
+            // Antes de que el DM cargue el primer mapa (justo al arrancar la
+            // historia, de pie en la calle del pueblo) no hay imagen que
+            // mostrar todavía. En vez de una cuadrícula vacía en bruto (que
+            // no representa nada real y confundía, dando la impresión de que
+            // ya había un mapa cargado), un mensaje de espera simple -- no
+            // afecta en nada a cómo el DM-IA elige el mapa (eso es lógica de
+            // backend/dm-engine, independiente de esta pantalla) ni a la
+            // columna de jugadores de la izquierda (arriba, sin cambios).
+            <div className="board-map-placeholder">
+              <p>Esperando a que el Dungeon Master describa la escena...</p>
             </div>
           )}
         </div>
