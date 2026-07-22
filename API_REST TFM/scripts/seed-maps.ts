@@ -22,8 +22,11 @@ const maps = [
     // no tenga salas que catalogar -- es una ilustracion de calle en primer
     // plano, no una planta con cuadricula real, así que el valor exacto no
     // importa para el juego (no se necesita mover a nadie por el tablero aquí).
-    rows: 12,
-    cols: 12,
+    // Aun así, ajustado a pixel (imagen real 829x871, ratio 0.9518) para que
+    // ningún futuro place_participant sufra el letterboxing de BoardPanel.tsx:
+    // antes 12x12 (ratio 1.0, +5.07%), ahora 21x20 (ratio 0.9524, +0.06%).
+    rows: 21,
+    cols: 20,
     imageUrl: '/maps/battleMap-tablonAnuncios.png',
     // Sin zonas a proposito (ver dm-system-prompt.ts): es solo una imagen de
     // calle, no una sala con salas que catalogar. zones: [] hace que
@@ -84,7 +87,14 @@ const maps = [
     name: 'Gran salón del trono con pilares',
     description: 'Salón del trono de un castillo, con estandartes, estatuas de grifos y alfombra ceremonial.',
     tags: ['interior', 'castillo', 'nobleza', 'trono', 'pilares'],
-    rows: 29,
+    // Recalibrado a pixel: imagen real 1024x1024 (CUADRADA), declarado antes
+    // 29x30 (ratio 1.0345, +3.45% de letterboxing sobre el contenedor
+    // cuadrado). Ajustado a rows=cols=30 (el cambio nominal más pequeño posible
+    // -- solo +1 fila) para eliminar el letterboxing sin tocar ninguna zona:
+    // verificado con overlay sobre la imagen real que las 3 zonas existentes
+    // (salón del trono, salón central de pilares con estatuas de grifos,
+    // vestíbulo de entrada) siguen encajando perfectamente sin rescalar nada.
+    rows: 30,
     cols: 30,
     imageUrl: '/maps/battleMap2-GreatCastlePilares.png',
     zones: [
@@ -98,6 +108,12 @@ const maps = [
     name: 'Fortaleza (planta completa)',
     description: 'Planta completa de una pequeña fortaleza: entrada, barracones, forja, biblioteca, dormitorio, tesoro y sala ritual.',
     tags: ['interior', 'castillo', 'mazmorra', 'multisala'],
+    // Verificado a pixel: imagen real 784x1360, ratio -0.88% vs declarado
+    // (negligible, sin letterboxing perceptible) -- SIN CAMBIOS. La imagen
+    // trae los nombres de sala en inglés dibujados encima ("9 Ritual Room",
+    // "8 Treasure Room", "5 Storage" x2, "7 Bedchamber", "6 Library",
+    // "3. Barracks", "4. Armory/Smithy", "Entrance Hall"...) y el overlay de
+    // las 8 zonas de abajo encaja casi perfecto con cada etiqueta.
     rows: 35,
     cols: 20,
     imageUrl: '/maps/battleMap3-castle.png',
@@ -117,6 +133,11 @@ const maps = [
     name: 'Cueva del río subterráneo',
     description: 'Sistema de cuevas conectado por un río, con estanque oculto, gruta de cristales y guarida de hongos.',
     tags: ['exterior', 'cueva', 'subterraneo'],
+    // Verificado a pixel: imagen real 918x1714, ratio +0.19% vs declarado
+    // (negligible) -- SIN CAMBIOS. Etiquetas en inglés dibujadas en la imagen
+    // ("Hidden Pool", "Waterfall Chamber", "River Fork", "Fungal Lair",
+    // "Crystal Grotto", "Main Cavern", "Guard Post") confirman por overlay
+    // que las 7 zonas de abajo encajan con cada sala.
     rows: 41,
     cols: 22,
     imageUrl: '/maps/battleMap4-caverna.png',
@@ -137,6 +158,12 @@ const maps = [
         'Luminoso junto al Embarcadero Antiguo, un Santuario Oculto y la Gruta de Cristales, todo conectado ' +
         'por la corriente que cruza la Caverna Principal hasta el Puesto de Guardia de la entrada.',
     tags: ['exterior', 'cueva', 'subterraneo'],
+    // Verificado a pixel: imagen real 752x1408, ratio -0.88% vs declarado
+    // (negligible) -- SIN CAMBIOS. Etiquetas en inglés dibujadas en la imagen
+    // ("The North Cascades", "The Rushing Chasm", "River Fork", "The Ancient
+    // Jetty"/"The Luminous Pool", "The Hidden Shrine", "Crystal Grotto",
+    // "Main Cavern", "Guard Post") confirman por overlay que las 8 zonas de
+    // abajo encajan con cada sala.
     rows: 34,
     cols: 18,
     imageUrl: '/maps/battleMap5-caverna.png',
@@ -159,6 +186,10 @@ const maps = [
         'Santuario de los Antiguos, el Cruce Principal, la Armería Real, un puente colgante sobre un abismo, ' +
         'el Cruce de las Ratas, una entrada de servicio y la Sala de los Ecos.',
     tags: ['interior', 'laberinto', 'mazmorra', 'trono', 'prision', 'multisala'],
+    // Verificado a pixel: imagen real 752x1408, ratio negligible -- SIN
+    // CAMBIOS. Esta imagen trae los nombres de sala en ESPAÑOL dibujados
+    // encima, coincidiendo casi letra a letra con los nombres de zona de
+    // abajo (los 14) -- el overlay fue un ajuste casi perfecto.
     rows: 34,
     cols: 18,
     imageUrl: '/maps/battleMap6-LaberintoDeLosEcos.png',
@@ -185,22 +216,29 @@ const maps = [
     description: 'Planta completa de una fortaleza con mazmorras: sala de tortura, barracones, almacén, ' +
         'celdas de la prisión, armería, sala central, escalera al patio de armas y escaleras que bajan a las criptas.',
     tags: ['interior', 'castillo', 'prision', 'mazmorra', 'multisala', 'cripta', 'tumba'],
+    // Recalibrado a pixel: imagen real 848x1264, ratio declarada 19/30=0.6333
+    // vs objetivo 0.6709 (-5.6%, mismatch real, no negligible). Cambiado cols
+    // 19->20 (el cambio nominal más pequeño posible) y reescaladas todas las
+    // colStart/colEnd por ×20/19≈1.0526 para conservar la disposición
+    // relativa de las salas. Verificado con overlay sobre la imagen real
+    // (que trae los nombres de sala en español dibujados encima, coincidiendo
+    // con los nombres de zona de abajo) -- excelente encaje tras el reescalado.
     rows: 30,
-    cols: 19,
+    cols: 20,
     imageUrl: '/maps/battleMap9-CriptaDeLosEcos.png',
     zones: [
       { name: 'Sala de Tortura', cells: [{ rowStart: 0, rowEnd: 8, colStart: 0, colEnd: 5 }] },
-      { name: 'Escalera al Patio de Armas', cells: [{ rowStart: 0, rowEnd: 4, colStart: 14, colEnd: 18 }] },
-      { name: 'Celdas de la Prisión (norte)', cells: [{ rowStart: 5, rowEnd: 9, colStart: 14, colEnd: 18 }] },
+      { name: 'Escalera al Patio de Armas', cells: [{ rowStart: 0, rowEnd: 4, colStart: 15, colEnd: 19 }] },
+      { name: 'Celdas de la Prisión (norte)', cells: [{ rowStart: 5, rowEnd: 9, colStart: 15, colEnd: 19 }] },
       { name: 'Barracones', cells: [{ rowStart: 9, rowEnd: 16, colStart: 0, colEnd: 5 }] },
-      { name: 'Armería', cells: [{ rowStart: 9, rowEnd: 16, colStart: 13, colEnd: 18 }] },
-      { name: 'Sala Central', cells: [{ rowStart: 15, rowEnd: 24, colStart: 5, colEnd: 13 }] },
+      { name: 'Armería', cells: [{ rowStart: 9, rowEnd: 16, colStart: 14, colEnd: 19 }] },
+      { name: 'Sala Central', cells: [{ rowStart: 15, rowEnd: 24, colStart: 5, colEnd: 14 }] },
       { name: 'Almacén', cells: [{ rowStart: 17, rowEnd: 23, colStart: 0, colEnd: 5 }] },
-      { name: 'Prisión Celdas 1-6', cells: [{ rowStart: 17, rowEnd: 23, colStart: 13, colEnd: 18 }] },
+      { name: 'Prisión Celdas 1-6', cells: [{ rowStart: 17, rowEnd: 23, colStart: 14, colEnd: 19 }] },
       { name: 'Escalera a las Criptas', cells: [{ rowStart: 22, rowEnd: 30, colStart: 0, colEnd: 5 }] },
       { name: 'Celdas de la Prisión (sur)', cells: [{ rowStart: 26, rowEnd: 30, colStart: 5, colEnd: 9 }] },
-      { name: 'Larder', cells: [{ rowStart: 23, rowEnd: 30, colStart: 13, colEnd: 18 }] },
-      { name: 'Puesto de Guardia', cells: [{ rowStart: 27, rowEnd: 30, colStart: 8, colEnd: 12 }] },
+      { name: 'Larder', cells: [{ rowStart: 23, rowEnd: 30, colStart: 14, colEnd: 19 }] },
+      { name: 'Puesto de Guardia', cells: [{ rowStart: 27, rowEnd: 30, colStart: 8, colEnd: 13 }] },
     ],
   },
   {
@@ -210,6 +248,10 @@ const maps = [
         'Sagrada, el Túmulo del Héroe Caído, la Senda de la Enredadera, las Ruinas del Templo del Sol, el Coto ' +
         'de Caza de los Trasgos y un Viejo Roble Resonante junto a la entrada al claro.',
     tags: ['exterior', 'ruinas', 'bosque', 'multisala', 'claro'],
+    // Verificado a pixel: imagen real 752x1408, ratio negligible -- SIN
+    // CAMBIOS. Nombres de sala en español dibujados en la imagen coinciden
+    // exactamente con los nombres de zona de abajo (9 salas) -- overlay
+    // perfecto.
     rows: 34,
     cols: 18,
     imageUrl: '/maps/battleMap7-RuinasClaroDelBosque.png',
@@ -230,10 +272,14 @@ const maps = [
     name: 'Fortaleza subterranea (planta completa)',
     description: 'Planta completa de unas forteleza subterranea: entrada, prisiones, tesoro, celdas, armería, tortura',
     tags: ['interior', 'prision', 'tesoros', 'multisala'],
+    // Verificado a pixel: imagen real 752x1408, ratio negligible -- SIN
+    // CAMBIOS. Nombres de sala en español dibujados en la imagen coinciden
+    // exactamente con los nombres de zona de abajo (9 salas) -- overlay
+    // perfecto, confirmando el borrador anterior.
     rows: 34,
     cols: 18,
     imageUrl: '/maps/battleMap8-FortalezaSubterranea.png',
-    // Zonas leídas visualmente sobre la rejilla calibrada (c0-c17 / r0-r34) — borrador, revisar bordes.
+    // Zonas leídas visualmente sobre la rejilla calibrada (c0-c17 / r0-r34) — confirmado con overlay pixel-perfecto sobre la imagen real.
     zones: [
       { name: 'Sala de Tortura', cells: [{ rowStart: 0, rowEnd: 9, colStart: 0, colEnd: 6 }] },
       { name: 'Cripta de los Despojos', cells: [{ rowStart: 0, rowEnd: 6, colStart: 7, colEnd: 12 }] },
@@ -254,15 +300,24 @@ const maps = [
         'una cocina-despensa con alacena y mesa, la escalera de caracol que baja, una bodega con barriles y ' +
         'cajas, y la entrada de la casa.',
     tags: ['interior', 'casa', 'habitaciones', 'multisala', 'piso1'],
-    rows: 20,
+    // Recalibrado a pixel: imagen real 768x1365, ratio declarada 20/12=... (ver
+    // cols/rows=0.6 vs objetivo 0.5626, +6.65%, mismatch real). Cambiado rows
+    // 20->21 (el cambio nominal más pequeño posible) y reescaladas todas las
+    // rowStart/rowEnd por ×21/20=1.05 para conservar la disposición relativa.
+    // Esta imagen no trae etiquetas de texto -- verificado visualmente contra
+    // la descripción del mapa (cama/alfombra/estantería=Dormitorio arriba,
+    // estantería de cocina/mesa=Cocina y Despensa centro-izq, escalera de
+    // caracol=Escalera de Caracol centro-der, barriles/cajas=Bodega abajo-izq,
+    // puerta pequeña=Entrada abajo) tras el reescalado.
+    rows: 21,
     cols: 12,
     imageUrl: '/maps/battleMap10-CasaOcupadaPiso1.png',
     zones: [
       { name: 'Dormitorio', cells: [{ rowStart: 0, rowEnd: 8, colStart: 1, colEnd: 11 }] },
-      { name: 'Cocina y Despensa', cells: [{ rowStart: 8, rowEnd: 12, colStart: 0, colEnd: 6 }] },
-      { name: 'Escalera de Caracol', cells: [{ rowStart: 11, rowEnd: 15, colStart: 7, colEnd: 11 }] },
-      { name: 'Bodega', cells: [{ rowStart: 14, rowEnd: 18, colStart: 0, colEnd: 6 }] },
-      { name: 'Entrada', cells: [{ rowStart: 18, rowEnd: 19, colStart: 6, colEnd: 9 }] },
+      { name: 'Cocina y Despensa', cells: [{ rowStart: 8, rowEnd: 13, colStart: 0, colEnd: 6 }] },
+      { name: 'Escalera de Caracol', cells: [{ rowStart: 12, rowEnd: 16, colStart: 7, colEnd: 11 }] },
+      { name: 'Bodega', cells: [{ rowStart: 15, rowEnd: 19, colStart: 0, colEnd: 6 }] },
+      { name: 'Entrada', cells: [{ rowStart: 19, rowEnd: 20, colStart: 6, colEnd: 9 }] },
     ],
   },
   {
@@ -273,6 +328,11 @@ const maps = [
         'un plano de guerra, un pasillo central, una armería-estudio con armero y mesa de trabajo, una gran ' +
         'bodega con barriles y escombros, y la entrada trasera.',
     tags: ['interior', 'casa', 'habitaciones', 'armeria', 'multisala', 'piso2'],
+    // Verificado a pixel: imagen real 677x1351, ratio negligible (-0.22%) --
+    // SIN CAMBIOS. Overlay sobre la imagen real confirma buen encaje: mesa de
+    // mapas/cofres arriba (Sala de Mapas), corredor con ventana redonda y
+    // escalera (Pasillo Central), armero/sofá/mesa con plano (Armería y
+    // Estudio), barriles/cajas (Bodega), puerta (Entrada).
     rows: 22,
     cols: 11,
     imageUrl: '/maps/battleMap10-CasaOcupadaPiso2.png',
@@ -291,15 +351,22 @@ const maps = [
         'almacen-piso2) por una escalera de carga central: estanterías y barriles a ambos lados de la ' +
         'nave, el hueco de la escalera en el centro, y grandes puertas de carga al norte y al sur.',
     tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso1', 'escaleras'],
-    rows: 32,
+    // Recalibrado a pixel: imagen real 1408x768 (ratio W/H = 11/6 = 1.8333
+    // exacto), declarado 61/32=1.9063 (+3.98%, mismatch real). Cambiado rows
+    // 32->33 (cambio nominal más pequeño que tocar cols: +1 fila vs -2
+    // columnas) y reescaladas todas las rowStart/rowEnd por ×33/32=1.03125.
+    // Verificado con overlay sobre la imagen real: encaje excelente con las
+    // estanterías del almacén oeste/este, el hueco central de la escalera de
+    // carga con la polea, y las puertas norte/sur.
+    rows: 33,
     cols: 61,
     imageUrl: '/maps/battleMap12-AlmacenPiso1.png',
     zones: [
-      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 25 }] },
-      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 28, colStart: 26, colEnd: 44 }] },
-      { name: 'Almacén Este', cells: [{ rowStart: 0, rowEnd: 31, colStart: 45, colEnd: 60 }] },
+      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 32, colStart: 0, colEnd: 25 }] },
+      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 29, colStart: 26, colEnd: 44 }] },
+      { name: 'Almacén Este', cells: [{ rowStart: 0, rowEnd: 32, colStart: 45, colEnd: 60 }] },
       { name: 'Entrada Norte', cells: [{ rowStart: 0, rowEnd: 3, colStart: 26, colEnd: 34 }] },
-      { name: 'Entrada Sur', cells: [{ rowStart: 28, rowEnd: 31, colStart: 26, colEnd: 34 }] },
+      { name: 'Entrada Sur', cells: [{ rowStart: 29, rowEnd: 32, colStart: 26, colEnd: 34 }] },
     ],
   },
   {
@@ -310,15 +377,20 @@ const maps = [
         'la oficina del encargado con un ventanal enrejado y una pequeña armería con lanzas y escudo. La ' +
         'única puerta de carga está al sur.',
     tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso2', 'escaleras'],
-    rows: 32,
+    // Misma imagen base que almacen-piso1 (1408x768, ratio real 11/6=1.8333),
+    // mismo mismatch (+3.98%) y misma corrección: rows 32->33, cols sin tocar,
+    // rowStart/rowEnd reescalados por ×33/32=1.03125. Verificado con overlay:
+    // la oficina del encargado (escritorio, ventanal enrejado) y la armería
+    // (lanzas, escudo, barriles) encajan perfectamente en su mitad este.
+    rows: 33,
     cols: 61,
     imageUrl: '/maps/battleMap12-AlmacenPiso2.png',
     zones: [
-      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 25 }] },
-      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 28, colStart: 26, colEnd: 44 }] },
+      { name: 'Almacén Oeste', cells: [{ rowStart: 0, rowEnd: 32, colStart: 0, colEnd: 25 }] },
+      { name: 'Hueco de la Escalera', cells: [{ rowStart: 3, rowEnd: 29, colStart: 26, colEnd: 44 }] },
       { name: 'Oficina del Encargado', cells: [{ rowStart: 0, rowEnd: 15, colStart: 45, colEnd: 60 }] },
-      { name: 'Armería', cells: [{ rowStart: 16, rowEnd: 31, colStart: 45, colEnd: 60 }] },
-      { name: 'Entrada', cells: [{ rowStart: 28, rowEnd: 31, colStart: 26, colEnd: 34 }] },
+      { name: 'Armería', cells: [{ rowStart: 16, rowEnd: 32, colStart: 45, colEnd: 60 }] },
+      { name: 'Entrada', cells: [{ rowStart: 29, rowEnd: 32, colStart: 26, colEnd: 34 }] },
     ],
   },
   {
@@ -329,6 +401,11 @@ const maps = [
         'polea de carga, y una armería de reserva con lanzas colgadas. Las puertas de carga están al sur. No tiene' +
         'escaleras, es solo un piso.',
     tags: ['interior', 'almacen', 'comercio', 'tienda'],
+    // Verificado a pixel: imagen real 729x1456, ratio negligible (-0.14%) --
+    // SIN CAMBIOS. Overlay confirma buen encaje: estantería alta (Estantería
+    // Oeste), pasillo de barriles/cajas central, escritorio con documentos
+    // (Rincón del Encargado), lanzas colgadas (Armería de Reserva), puerta
+    // (Entrada).
     rows: 22,
     cols: 11,
     imageUrl: '/maps/battleMap13-Almacen1.png',
@@ -347,6 +424,9 @@ const maps = [
         'estanterías, cada uno repleto de cajas, telas y provisiones. La puerta de carga está al sur. No tiene' +
         'escaleras, es solo un piso.',
     tags: ['interior', 'almacen', 'comercio', 'tienda'],
+    // Verificado a pixel: imagen real 720x1438, ratio negligible (-0.14%) --
+    // SIN CAMBIOS. Overlay confirma los dos pasillos de estanterías (oeste y
+    // este) y la puerta de carga al sur.
     rows: 22,
     cols: 11,
     imageUrl: '/maps/battleMap14-Almacen2.png',
@@ -364,16 +444,27 @@ const maps = [
         'larga y chimenea de cocina, una despensa y cocina que recorre todo el muro oeste, alcobas y un rincón ' +
         'de lectura al ala este, y al sur una zona de almacenaje con un cofre junto a la entrada porticada.',
     tags: ['interior', 'cabana', 'bosque', 'multisala'],
-    rows: 21,
+    // Recalibrado a pixel: imagen real 720x1438, ratio declarada 11/21=0.5238
+    // vs objetivo 0.5007 (+4.62%, mismatch real -- esta es la única cabaña de
+    // esta familia de imágenes con un rows distinto: las otras tres
+    // (almacen-mercancias, almacen-suministros, cabana-bosque-pequena) ya
+    // usaban rows=22/cols=11, que es exactamente el tamaño real de esta
+    // familia de assets). Cambiado rows 21->22 (cambio nominal mínimo, y
+    // además alinea esta imagen con el resto de la familia) y reescaladas
+    // todas las rowStart/rowEnd por ×22/21≈1.0476. Verificado con overlay:
+    // dormitorios con camas (Norte), estantería de cocina (Oeste), mesa larga
+    // con chimenea (Comedor Central), alcobas (Ala Este), cofre de
+    // almacenaje (Almacenaje Sur), entrada porticada (Entrada Sur).
+    rows: 22,
     cols: 11,
     imageUrl: '/maps/battleMap15-cabañaBosqueGrande.png',
     zones: [
       { name: 'Dormitorios Norte', cells: [{ rowStart: 0, rowEnd: 6, colStart: 3, colEnd: 10 }] },
-      { name: 'Cocina y Despensa Oeste', cells: [{ rowStart: 3, rowEnd: 14, colStart: 0, colEnd: 2 }] },
-      { name: 'Comedor Central', cells: [{ rowStart: 6, rowEnd: 11, colStart: 3, colEnd: 7 }] },
-      { name: 'Ala Este (Alcobas)', cells: [{ rowStart: 6, rowEnd: 18, colStart: 8, colEnd: 10 }] },
-      { name: 'Almacenaje Sur', cells: [{ rowStart: 14, rowEnd: 19, colStart: 3, colEnd: 7 }] },
-      { name: 'Entrada Sur', cells: [{ rowStart: 19, rowEnd: 20, colStart: 3, colEnd: 7 }] },
+      { name: 'Cocina y Despensa Oeste', cells: [{ rowStart: 3, rowEnd: 15, colStart: 0, colEnd: 2 }] },
+      { name: 'Comedor Central', cells: [{ rowStart: 6, rowEnd: 12, colStart: 3, colEnd: 7 }] },
+      { name: 'Ala Este (Alcobas)', cells: [{ rowStart: 6, rowEnd: 19, colStart: 8, colEnd: 10 }] },
+      { name: 'Almacenaje Sur', cells: [{ rowStart: 15, rowEnd: 20, colStart: 3, colEnd: 7 }] },
+      { name: 'Entrada Sur', cells: [{ rowStart: 20, rowEnd: 21, colStart: 3, colEnd: 7 }] },
     ],
   },
   {
@@ -383,6 +474,10 @@ const maps = [
         'de árboles y rocas. Por dentro es una única estancia: cocina y mesa junto a la puerta al oeste, dos ' +
         'camas y una chimenea central al este. Una pequeña entrada porticada da acceso por el sur.',
     tags: ['exterior', 'interior', 'cabana', 'bosque'],
+    // Verificado a pixel: imagen real 720x1438, ratio negligible (-0.14%) --
+    // SIN CAMBIOS. Overlay confirma el interior de la cabaña (cocina y
+    // dormitorio) rodeado por el bosque en las cuatro direcciones y el porche
+    // sur junto a la entrada.
     rows: 22,
     cols: 11,
     imageUrl: '/maps/battleMap16-cabañaBosquePequeña.png',
