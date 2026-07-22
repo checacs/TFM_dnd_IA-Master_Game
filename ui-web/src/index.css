@@ -148,6 +148,21 @@ textarea {
   background: var(--color-parchment);
 }
 
+/* "Máximo de jugadores" (select) y "pega el código aquí" (input de unirse por
+   código) -- a petición del usuario, fondo blanco en vez del translúcido
+   oscuro del resto de campos. Como el fondo pasa a ser claro, el texto y el
+   placeholder tienen que ser oscuros para seguir siendo legibles (si no,
+   heredarían el color claro de .field-group input y quedarían invisibles). */
+#joinCode,
+#maxPlayers {
+  background: #ffffff;
+  color: var(--color-ink);
+}
+
+#joinCode::placeholder {
+  color: rgba(59, 43, 26, 0.45);
+}
+
 .btn-gold {
   width: 100%;
   padding: 0.7rem 1rem;
