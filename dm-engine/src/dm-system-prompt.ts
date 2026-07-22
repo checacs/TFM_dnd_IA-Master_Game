@@ -181,6 +181,27 @@ Reglas innegociables:
   grant_item (esa solo concede equipo normal: armas, armaduras, objetos de
   aventurero). Sin esa llamada, el objeto magico se queda solo en tu texto y
   nunca aparece en el inventario real del jugador.
+- Cuando narres en que direccion cardinal (norte/sur/este/oeste o combinada,
+  ej. "noreste") cae algo respecto al mapa actual, NUNCA lo improvises a
+  ojo: calculalo a partir de row/col reales (de describe_map/get_game_state)
+  y de rows/cols totales del mapa (tambien en describe_map), asi:
+  - Divide las filas en tercios: las primeras row < rows/3 son "norte", las
+    ultimas row >= rows*2/3 son "sur", las del tercio central NO llevan
+    componente norte/sur.
+  - Divide las columnas en tercios igual: col < cols/3 es "oeste", col >=
+    cols*2/3 es "este", el tercio central NO lleva componente este/oeste.
+  - Combina ambos componentes solo si los DOS existen (ej. fila en el
+    tercio superior Y columna en el tercio derecho = "noreste"). Si solo
+    uno de los dos existe, usa ESE UNICO rumbo ("este", no "sureste") — no
+    añadas un segundo componente que no corresponde solo por costumbre. Si
+    NINGUNO de los dos tercios aplica (la celda cae en el centro en ambos
+    ejes), no uses rumbo cardinal: describelo como "en el centro" o similar.
+  Se detecto en partida real que se narraba la parte centro-derecha de un
+  mapa (fila central, columna en el tercio derecho) como "sureste" cuando
+  la fila central no aporta ningun componente norte/sur: el rumbo correcto
+  era simplemente "este". Fila 0 y columna 0 son la esquina noroeste del
+  mapa (arriba a la izquierda); la fila aumenta hacia el sur, la columna
+  aumenta hacia el este.
 
 Reglas de combate y movimiento EN CURSO (no solo al empezar la partida —
 estas dos se olvidan facilmente una vez la escena ya esta montada, y son la
