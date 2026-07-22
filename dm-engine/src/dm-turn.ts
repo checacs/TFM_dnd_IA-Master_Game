@@ -68,6 +68,24 @@ const LOCATION_ENTRY_CUES = [
   /\bsub(e|es|imos|[ií]s|en|iendo)\b/i,
 ];
 
+/**
+ * El arranque fijo de partida (dm-system-prompt.ts, "Cuando arranca la
+ * partida") tiene un punto muy concreto donde el chequeo genérico de arriba
+ * NO basta: el turno en el que el jugador elige taberna o tablón de anuncios
+ * no siempre trae un verbo de salida (el grupo ya estaba de pie en la calle,
+ * no "sale" de ningún sitio con nombre) ni uno de entrada reconocible --
+ * "os acercáis al tablón..." no matchea ningún LOCATION_ENTRY_CUES. Se
+ * comprobó en partida real que el DM describió el tablón de anuncios sin
+ * llamar a ninguna tool de mapa, y el chequeo de arriba no lo detectó porque
+ * exige AMBAS señales. Aquí no hace falta un verbo: basta con que aparezca
+ * el nombre EXACTO de uno de los dos destinos del arranque. Se limita a los
+ * primeros mensajes de la partida (VILLAGE_START_MAX_MESSAGES) para no
+ * disparar falsos positivos más adelante, si "la taberna" se menciona de
+ * pasada como recuerdo en una escena ya resuelta.
+ */
+const VILLAGE_START_MAX_MESSAGES = 4;
+const VILLAGE_DESTINATION_CUES = [/tabl[oó]n de anuncios/i, /\btaberna\b/i];
+
 function narrativeSuggestsLocationChange(text: string): boolean {
   const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
   const hasEntry = LOCATION_ENTRY_CUES.some((p) => p.test(text));
@@ -168,6 +186,7 @@ function protocolNudge(
     combatEnemyIds: Set<string>,
     placedParticipantIds: Set<string>,
     narrativeText: string,
+    messageCount: number,
 ): string | null {
   // Se comprobó en partida real que el DM narraba salir de una localización
   // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
@@ -180,6 +199,14 @@ function protocolNudge(
       calledTools.has('get_battle_maps') || calledTools.has('describe_map') ||
       calledTools.has('set_battle_map') || calledTools.has('clear_battle_map') ||
       calledTools.has('start_combat');
+  if (!touchedMapSystem && messageCount <= VILLAGE_START_MAX_MESSAGES &&
+      VILLAGE_DESTINATION_CUES.some((cue) => cue.test(narrativeText))) {
+    return 'Tu narración menciona la taberna o el tablón de anuncios (la elección de arranque de la partida), ' +
+        'pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del arranque: llama a ' +
+        'describe_map con el mapId correspondiente ("tabernaMercenarios" o "tablonAnuncios"), luego a ' +
+        'set_battle_map, y coloca a los jugadores con place_participant (salvo en tablonAnuncios, que no tiene ' +
+        'zonas que validar) antes de dar la escena por buena.';
+  }
   if (!touchedMapSystem && narrativeSuggestsLocationChange(narrativeText)) {
     return 'Tu narración de este turno suena a que el grupo ha cambiado de localización (salís de un sitio y ' +
         'entráis/bajáis/llegáis a otro), pero no has llamado a ninguna tool de mapa en este turno. Antes de dar ' +
@@ -472,7 +499,10 @@ export async function runDmTurn(
           staleEncounterNudge ??
           noToolsNudge ??
           combatStateNudge ??
-          protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');
+          protocolNudge(
+              calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '',
+              messages.length,
+          );
       if (nudge) {
         correctionUsed = true;
         console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);

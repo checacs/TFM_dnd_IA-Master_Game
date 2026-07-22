@@ -39,12 +39,21 @@ const maps = [
     name: 'Taberna Mercenarios',
     description: 'Sala principal de una taberna, con mesas, chimenea y zona de barra.',
     tags: ['interior', 'taberna', 'social'],
-    rows: 25,
-    cols: 26,
+    // rows/cols medidos a pixel sobre la imagen real (antes eran 25x26 "a
+    // ojo"): el interior con rejilla dibujada mide ~924x852px dentro de un
+    // lienzo de 1024x1024, con un paso de rejilla de ~39px -- eso da ~24
+    // columnas x ~22 filas reales, no 26x25. Con los valores viejos, las
+    // últimas filas (22-24) caían FUERA de la sala dibujada, en la franja
+    // exterior sin rejilla (cartel, arbustos, escalones de la entrada) --
+    // se detectó en partida real que la IA colocó a los jugadores ahí en vez
+    // de dentro de la taberna, con place_participant técnicamente "dentro"
+    // de una zona que en realidad se extendía más allá del dibujo.
+    rows: 22,
+    cols: 24,
     imageUrl: '/maps/battleMap1-tabernaMercenarios.png',
     zones: [
-      { name: 'Salón Principal', cells: [{ rowStart: 0, rowEnd: 24, colStart: 0, colEnd: 18 }] },
-      { name: 'Barra y Almacén', cells: [{ rowStart: 0, rowEnd: 24, colStart: 19, colEnd: 25 }] },
+      { name: 'Salón Principal', cells: [{ rowStart: 0, rowEnd: 21, colStart: 0, colEnd: 15 }] },
+      { name: 'Barra y Almacén', cells: [{ rowStart: 0, rowEnd: 21, colStart: 16, colEnd: 23 }] },
     ],
   },
   {

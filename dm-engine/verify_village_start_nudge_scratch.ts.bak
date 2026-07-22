@@ -1,0 +1,63 @@
+// Replica standalone de la logica nueva de protocolNudge para el arranque
+// fijo (taberna/tablon de anuncios) -- confirma que dispara sin necesitar
+// verbo de salida/entrada, solo con el nombre del destino, y solo dentro de
+// los primeros mensajes de la partida.
+const VILLAGE_START_MAX_MESSAGES = 4;
+const VILLAGE_DESTINATION_CUES = [/tabl[oó]n de anuncios/i, /\btaberna\b/i];
+
+function villageStartNudgeFires(touchedMapSystem: boolean, narrativeText: string, messageCount: number): boolean {
+  if (touchedMapSystem) return false;
+  if (messageCount > VILLAGE_START_MAX_MESSAGES) return false;
+  return VILLAGE_DESTINATION_CUES.some((cue) => cue.test(narrativeText));
+}
+
+const casos: [string, boolean, string, number, boolean][] = [
+  [
+    'El caso real reportado: narra el tablon sin ningun verbo de entrada/salida, muy al inicio',
+    false,
+    'Os acercáis al polvoriento tablón de anuncios de la plaza. Hay varios contratos colgados...',
+    2,
+    true,
+  ],
+  [
+    'Taberna mencionada muy al inicio, sin tocar tools de mapa',
+    false,
+    'Decidís entrar en la taberna del pueblo, conocida como El Jabalí Somnoliento.',
+    2,
+    true,
+  ],
+  [
+    'No deberia disparar si SI se tocaron tools de mapa este turno',
+    true,
+    'Os acercáis al tablón de anuncios de la plaza.',
+    2,
+    false,
+  ],
+  [
+    'No deberia disparar mas alla de los primeros mensajes (mencion de pasada mas adelante)',
+    false,
+    'Recordáis la taberna donde estuvisteis hace un rato mientras seguís explorando la cueva.',
+    20,
+    false,
+  ],
+  [
+    'Texto neutro sin ninguno de los dos destinos no dispara',
+    false,
+    'Atacas al goblin con tu espada.',
+    2,
+    false,
+  ],
+];
+
+let ok = true;
+for (const [descripcion, touchedMapSystem, texto, messageCount, esperado] of casos) {
+  const resultado = villageStartNudgeFires(touchedMapSystem, texto, messageCount);
+  const estado = resultado === esperado ? 'OK' : 'FALLO';
+  if (resultado !== esperado) ok = false;
+  console.log(`[${estado}] ${descripcion} -> ${resultado} (esperado ${esperado})`);
+}
+
+if (!ok) {
+  throw new Error('Algún caso no coincide con lo esperado');
+}
+console.log('ÉXITO: el nudge de arranque (taberna/tablón) se comporta como se espera.');
