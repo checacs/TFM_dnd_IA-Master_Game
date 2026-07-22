@@ -31,7 +31,21 @@ export class EndCombatUseCase {
       throw new DomainError('Partida no encontrada');
     }
 
+    // Aviso garantizado de que el combate ha terminado de verdad -- igual que
+    // start-combat.use-case.ts ya deja constancia de que empieza, sin
+    // depender de que el DM-IA se acuerde de narrarlo con claridad. Se pidió
+    // explícitamente tras detectarse que, en partida real, el fin de un
+    // combate solo quedaba reflejado en la narración libre del modelo (a
+    // veces sutil), mientras que la ficha del enemigo seguía visible en el
+    // panel hasta que la interfaz refrescaba el estado.
+    const encounter = game.toSnapshot().activeEncounter;
+    const allDefeated = !!encounter && encounter.enemies.every((e) => e.currentHp <= 0);
+    const content = allDefeated
+      ? '🏆 **¡COMBATE TERMINADO!** — Todos los enemigos han sido derrotados.'
+      : '🏳️ **Combate terminado.**';
+
     game.endEncounter();
+    game.appendNarrativeEntry({ role: 'assistant', content });
     await this.games.save(game);
   }
 }

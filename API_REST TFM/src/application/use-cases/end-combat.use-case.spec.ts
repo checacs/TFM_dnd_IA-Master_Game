@@ -42,6 +42,51 @@ describe('EndCombatUseCase', () => {
     expect(saved?.toSnapshot().activeEncounter).toBeNull();
   });
 
+  it(
+      'añade un mensaje de sistema garantizado de fin de combate al narrativeLog, distinguiendo victoria ' +
+      'de otros desenlaces -- no depende de que el DM-IA se acuerde de narrarlo con claridad',
+      async () => {
+        const { game, repo } = buildGameWithDefeatedEnemy();
+        const useCase = new EndCombatUseCase(repo);
+
+        await useCase.execute({ gameId: game.id });
+
+        const saved = await repo.findById(game.id);
+        const log = saved!.toSnapshot().narrativeLog;
+        const combatEndEntry = log.find((e) => e.content.includes('COMBATE TERMINADO'));
+
+        expect(combatEndEntry).toBeDefined();
+        expect(combatEndEntry?.role).toBe('assistant');
+        expect(combatEndEntry?.content).toContain('derrotados');
+      },
+  );
+
+  it(
+      'usa un mensaje neutro (sin declarar victoria) si el combate termina con algún enemigo aún vivo ' +
+      '(huida o tregua negociada)',
+      async () => {
+        const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+        game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        game.assignCaptain('host-1', 'user-1');
+        game.launch('host-1');
+        game.startEncounter({
+          enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 5, ac: 15 }],
+        });
+        const repo = new FakeGameRepository();
+        repo.seed(game);
+        const useCase = new EndCombatUseCase(repo);
+
+        await useCase.execute({ gameId: game.id });
+
+        const saved = await repo.findById(game.id);
+        const log = saved!.toSnapshot().narrativeLog;
+        const combatEndEntry = log.find((e) => e.content.includes('Combate terminado'));
+
+        expect(combatEndEntry).toBeDefined();
+        expect(combatEndEntry?.content).not.toContain('COMBATE TERMINADO');
+      },
+  );
+
   it('lanza DomainError si la partida no existe', async () => {
     const repo = new FakeGameRepository();
     const useCase = new EndCombatUseCase(repo);

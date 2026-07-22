@@ -353,6 +353,7 @@ export function CharacterSheetScreen({ route }: Props) {
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>CA</Text>
                 <Text style={styles.statValue}>{character.ac}</Text>
+                <Text style={styles.statHint}>Clase de Armadura</Text>
               </View>
             </View>
 
@@ -685,6 +686,7 @@ const styles = StyleSheet.create({
   },
   statLabel: { fontSize: 12, fontWeight: '700', color: colors.inkSoft, letterSpacing: 1 },
   statValue: { fontSize: 22, fontWeight: '700', color: colors.ink, marginTop: 4 },
+  statHint: { fontSize: 10, color: colors.inkSoft, marginTop: 2, textAlign: 'center' },
   section: {
     backgroundColor: 'rgba(237, 225, 196, 0.85)',
     borderWidth: 1.5,

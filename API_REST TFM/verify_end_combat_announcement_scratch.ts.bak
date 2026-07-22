@@ -1,0 +1,57 @@
+import { Game } from './src/domain/entities/game.entity';
+import { EndCombatUseCase } from './src/application/use-cases/end-combat.use-case';
+import type { GameRepository } from './src/domain/ports/game.repository.port';
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void {
+    this.games.set(game.id, game);
+  }
+  async findById(id: string): Promise<Game | null> {
+    return this.games.get(id) ?? null;
+  }
+  async findByUserId(_userId: string): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> {
+    this.games.set(game.id, game);
+  }
+}
+
+async function main() {
+  // Escenario 1: victoria (todos los enemigos a 0 HP)
+  {
+    const game = Game.create({ name: 'Test', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.assignCaptain('host-1', 'user-1');
+    game.launch('host-1');
+    game.startEncounter({ enemies: [{ instanceId: 'e1', enemyRefId: 'enemy-1', name: 'Goblin', currentHp: 0, ac: 15 }] });
+    const repo = new FakeGameRepository();
+    repo.seed(game);
+    const useCase = new EndCombatUseCase(repo);
+    await useCase.execute({ gameId: game.id });
+    const saved = await repo.findById(game.id);
+    const log = saved!.toSnapshot().narrativeLog;
+    console.log('Escenario victoria:', JSON.stringify(log[log.length - 1]));
+    console.log('activeEncounter tras end_combat:', saved!.toSnapshot().activeEncounter);
+  }
+
+  // Escenario 2: huida/tregua (enemigo vivo)
+  {
+    const game = Game.create({ name: 'Test2', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.assignCaptain('host-1', 'user-1');
+    game.launch('host-1');
+    game.startEncounter({ enemies: [{ instanceId: 'e1', enemyRefId: 'enemy-1', name: 'Goblin', currentHp: 5, ac: 15 }] });
+    const repo = new FakeGameRepository();
+    repo.seed(game);
+    const useCase = new EndCombatUseCase(repo);
+    await useCase.execute({ gameId: game.id });
+    const saved = await repo.findById(game.id);
+    const log = saved!.toSnapshot().narrativeLog;
+    console.log('Escenario huida/tregua:', JSON.stringify(log[log.length - 1]));
+  }
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
