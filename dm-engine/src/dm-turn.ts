@@ -43,10 +43,29 @@ export interface DmTurnResult {
  * salir de una taberna y entrar en una cripta sin tocar ninguna tool de mapa,
  * y el tablero se quedaba con la imagen de la taberna.
  */
-const LOCATION_EXIT_CUES = [/\bsales? de\b/i, /\babandonas\b/i, /\bdejas atr[aá]s\b/i, /\bte alejas de\b/i];
+// Cobertura amplia de conjugaciones (2a persona singular/plural, 1a plural,
+// 3a singular/plural, gerundio) para cada verbo -- las listas anteriores solo
+// cubrian un puñado de formas sueltas (ej. /\bentr[aá]is?\b/i SOLO reconocia
+// "entrais"/"entráis", ni siquiera "entra" o "entras"; a "entramos" -- la
+// forma mas natural con la que un DM narra un grupo entero moviendose junto,
+// "Entramos en la sala de armas" -- le faltaba por completo). Se detecto en
+// partida real que un cambio de localizacion narrado con "entramos" no
+// disparaba este chequeo y el tablero se quedaba con el mapa anterior.
+const LOCATION_EXIT_CUES = [
+  /\bsal(e|es|imos|[ií]s|en|iendo)\s+de\b/i,
+  /\babandon(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bdej(a|as|amos|[aá]is|an|ando)\s+atr[aá]s\b/i,
+  /\b(te|nos|se)?\s*alej(a|as|amos|[aá]is|an|ando)\s+de\b/i,
+];
 const LOCATION_ENTRY_CUES = [
-  /\bentr[aá]is?\b/i, /\bdesciend[ea]s?\b/i, /\bacced[ea]s?\b/i, /\bte adentras\b/i,
-  /\bcruzas\b/i, /\bllega[sn]?\b/i, /\bbaj[ao]s?\b/i, /\bsub[ei]s?\b/i,
+  /\bentr(a|as|amos|[aá]is|an|ando)\b/i,
+  /\b(descend(emos|[eé]is|iendo)|desciend(e|es|en))\b/i,
+  /\bacced(e|es|emos|[eé]is|en|iendo)\b/i,
+  /\b(te|nos|se)?\s*adentr(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bcruz(a|as|amos|[aá]is|an|ando)\b/i,
+  /\blleg(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bbaj(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bsub(e|es|imos|[ií]s|en|iendo)\b/i,
 ];
 
 function narrativeSuggestsLocationChange(text: string): boolean {

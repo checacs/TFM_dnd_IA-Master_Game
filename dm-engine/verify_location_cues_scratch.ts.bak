@@ -1,0 +1,53 @@
+// Replica standalone de las regex de dm-turn.ts (no exportadas) para verificar
+// la cobertura de conjugaciones sin tocar el resto de la maquinaria del turno.
+const LOCATION_EXIT_CUES = [
+  /\bsal(e|es|imos|[ií]s|en|iendo)\s+de\b/i,
+  /\babandon(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bdej(a|as|amos|[aá]is|an|ando)\s+atr[aá]s\b/i,
+  /\b(te|nos|se)?\s*alej(a|as|amos|[aá]is|an|ando)\s+de\b/i,
+];
+const LOCATION_ENTRY_CUES = [
+  /\bentr(a|as|amos|[aá]is|an|ando)\b/i,
+  /\b(descend(emos|[eé]is|iendo)|desciend(e|es|en))\b/i,
+  /\bacced(e|es|emos|[eé]is|en|iendo)\b/i,
+  /\b(te|nos|se)?\s*adentr(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bcruz(a|as|amos|[aá]is|an|ando)\b/i,
+  /\blleg(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bbaj(a|as|amos|[aá]is|an|ando)\b/i,
+  /\bsub(e|es|imos|[ií]s|en|iendo)\b/i,
+];
+
+function narrativeSuggestsLocationChange(text: string): boolean {
+  const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
+  const hasEntry = LOCATION_ENTRY_CUES.some((p) => p.test(text));
+  return hasExit && hasEntry;
+}
+
+const casos: [string, boolean][] = [
+  // El caso real reportado: "entramos" (1a plural) no se detectaba antes.
+  ['Salís de la taberna y entramos todos juntos en la sala de armas.', true],
+  ['Abandonáis la posada y entramos en la cripta oscura.', true],
+  ['Salimos de la taberna. Entra primero Checa y luego Sandra.', true],
+  // Solo entrada, sin salida explícita -- NO debe disparar (movimiento dentro
+  // del mismo mapa, cubierto por place_participant, no por cambio de mapa).
+  ['Entramos en la sala del fondo.', false],
+  ['Entra Checa en la sala de armas.', false],
+  // Casos ya cubiertos antes (no deben romperse con el cambio).
+  ['Sales de la cueva y bajáis por la ladera hasta el pueblo.', true],
+  ['Te alejas de la hoguera y desciendes por el túnel.', true],
+  // Frase neutra sin ninguna de las dos señales.
+  ['Atacas al goblin con tu espada.', false],
+];
+
+let ok = true;
+for (const [texto, esperado] of casos) {
+  const resultado = narrativeSuggestsLocationChange(texto);
+  const estado = resultado === esperado ? 'OK' : 'FALLO';
+  if (resultado !== esperado) ok = false;
+  console.log(`[${estado}] "${texto}" -> ${resultado} (esperado ${esperado})`);
+}
+
+if (!ok) {
+  throw new Error('Algún caso no coincide con lo esperado');
+}
+console.log('ÉXITO: todas las cobertura de conjugaciones se comporta como se espera.');
