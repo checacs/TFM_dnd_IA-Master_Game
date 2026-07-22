@@ -182,6 +182,56 @@ function combatWithoutToolsNudge(calledTools: Set<string>, narrativeText: string
 }
 
 /**
+ * Se detectó en partida real un bug distinto de todos los anteriores: el
+ * jugador escribió explícitamente "Muéstranos el mapa" y el DM respondió
+ * "Veo que el mapa ya está mostrándose en el tablero", inventando posiciones
+ * de zonas sin haber llamado NUNCA a describe_map/set_battle_map en ese
+ * turno ni en ninguno anterior ya aplicado a la escena actual (el tablero
+ * seguía mostrando el mapa de una escena previa -- la taberna -- mientras la
+ * narración ya estaba en un molino varios turnos más adelante). A diferencia
+ * de narrativeSuggestsLocationChange (que analiza la NARRACIÓN del propio DM
+ * en busca de verbos de movimiento), este chequeo mira el ÚLTIMO MENSAJE DEL
+ * JUGADOR -- si pide explícitamente ver el mapa y este turno no tocó ninguna
+ * tool de mapa, es una señal mucho más fiable que cualquier heurístico sobre
+ * el texto del DM, y por eso NO se limita a los primeros mensajes de partida
+ * (VILLAGE_START_MAX_MESSAGES): un jugador puede pedir ver el mapa en
+ * cualquier punto de la campaña.
+ */
+const PLAYER_MAP_REQUEST_CUES = [
+  /mu[eé]stra(nos)?\s+el\s+mapa/i,
+  /ense[ñn]a(nos)?\s+el\s+mapa/i,
+  /(no\s+(vemos|se\s+ve|est[aá]\s+saliendo)|d[oó]nde\s+est[aá])\s+el\s+mapa/i,
+  /queremos\s+ver\s+el\s+mapa/i,
+  /actualiza(nos)?\s+el\s+mapa/i,
+  /el\s+mapa\s+(no\s+(ha\s+)?cambia(do)?|sigue\s+igual|est[aá]\s+mal)/i,
+];
+
+function lastPlayerMessageText(messages: ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      const content = messages[i].content;
+      return typeof content === 'string' ? content : '';
+    }
+  }
+  return '';
+}
+
+function playerRequestedMapNudge(calledTools: Set<string>, lastPlayerMessage: string): string | null {
+  const touchedMapSystem =
+      calledTools.has('get_battle_maps') || calledTools.has('describe_map') ||
+      calledTools.has('set_battle_map') || calledTools.has('clear_battle_map');
+  if (touchedMapSystem || !PLAYER_MAP_REQUEST_CUES.some((cue) => cue.test(lastPlayerMessage))) {
+    return null;
+  }
+  return 'El jugador te ha pedido explícitamente ver el mapa (o te dice que no lo ve, o que no ha cambiado), ' +
+      'pero no has llamado a NINGUNA tool de mapa en este turno. NUNCA respondas que "el mapa ya se está ' +
+      'mostrando" o similar si no acabas de comprobarlo con una tool real: llama a get_battle_maps/describe_map ' +
+      'para encontrar el mapa que corresponde a la escena actual y luego a set_battle_map (y place_participant ' +
+      'para recolocar a los jugadores) antes de responderle -- si de verdad ningún mapa del catálogo encaja, ' +
+      'llama a clear_battle_map y dilo con sinceridad, pero nunca afirmes que ya está resuelto sin haberlo hecho.';
+}
+
+/**
  * El system prompt (dm-system-prompt.ts) le pide al modelo un protocolo de pasos
  * (describe_map -> set_battle_map -> place_participant) pero es solo texto: nada
  * en el código obligaba a cumplirlo. Se comprobó en producción que DeepSeek puede
@@ -495,19 +545,27 @@ export async function runDmTurn(
       // Orden de prioridad: 1) staleEncounterConflictNudge (señal 100%
       // determinista: start_combat rechazado por un combate huérfano ya
       // activo -- el fallo más grave, porque implica engañar al jugador con
-      // enemigos que no coinciden con lo narrado); 2) combate resuelto sin
-      // NINGUNA tool; 3) checkCombatStateNudge (un hecho verificable contra
-      // el HP real vía get_game_state); 4) protocolNudge (heurísticos de
-      // texto sobre mapas/colocación, el más leve de todos).
+      // enemigos que no coinciden con lo narrado); 2) playerRequestedMapNudge
+      // (también determinista: el jugador pidió el mapa explícitamente y no
+      // se tocó ninguna tool -- muy grave porque el DM puede llegar a mentir
+      // diciendo que "ya se está mostrando"); 3) combate resuelto sin NINGUNA
+      // tool; 4) checkCombatStateNudge (un hecho verificable contra el HP
+      // real vía get_game_state); 5) protocolNudge (heurísticos de texto
+      // sobre mapas/colocación a partir de la NARRACIÓN del DM, el más leve
+      // de todos porque depende de cómo el propio DM elija contarlo).
       const staleEncounterNudge = staleEncounterConflictNudge(failedStartCombatMessage);
-      const noToolsNudge = staleEncounterNudge
+      const mapRequestNudge = staleEncounterNudge
+          ? null
+          : playerRequestedMapNudge(calledTools, lastPlayerMessageText(messages));
+      const noToolsNudge = (staleEncounterNudge || mapRequestNudge)
           ? null
           : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = (staleEncounterNudge || noToolsNudge)
+      const combatStateNudge = (staleEncounterNudge || mapRequestNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
           staleEncounterNudge ??
+          mapRequestNudge ??
           noToolsNudge ??
           combatStateNudge ??
           protocolNudge(
