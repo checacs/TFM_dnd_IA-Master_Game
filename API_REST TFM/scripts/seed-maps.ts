@@ -209,7 +209,7 @@ const maps = [
     description: 'Claro de bosque con un estanque reflectante en el centro: el Círculo de Piedras, la Arboleda ' +
         'Sagrada, el Túmulo del Héroe Caído, la Senda de la Enredadera, las Ruinas del Templo del Sol, el Coto ' +
         'de Caza de los Trasgos y un Viejo Roble Resonante junto a la entrada al claro.',
-    tags: ['exterior', 'ruinas', 'bosque', 'multisala'],
+    tags: ['exterior', 'ruinas', 'bosque', 'multisala', 'claro'],
     rows: 34,
     cols: 18,
     imageUrl: '/maps/battleMap7-RuinasClaroDelBosque.png',

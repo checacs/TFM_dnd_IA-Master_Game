@@ -21,7 +21,7 @@
 }</component>
   <component name="GithubPullRequestsUISettings"><![CDATA[{
   "selectedUrlAndAccountId": {
-    "url": "https://github.com/checacs/TFM_IA_MASTER.git",
+    "url": "https://github.com/checacs/TFM_dnd_IA-Master_Game.git",
     "accountId": "d0b61d9c-cb0a-4ee0-bc94-ebbb21ce6e6f"
   }
 }]]></component>
@@ -120,6 +120,9 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="ReadonlyStatusHandler">
+    <option name="SHOW_DIALOG" value="false" />
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -137,7 +140,7 @@
       <workItem from="1784128880934" duration="9303000" />
       <workItem from="1784142133306" duration="15090000" />
       <workItem from="1784278169717" duration="5918000" />
-      <workItem from="1784539422835" duration="2041000" />
+      <workItem from="1784539422835" duration="2814000" />
     </task>
     <task id="LOCAL-00001" summary="author">
       <option name="closed" value="true" />

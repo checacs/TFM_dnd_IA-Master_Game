@@ -2,9 +2,5 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/API_REST TFM" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/dm-engine" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/mobile-app" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/ui-web" vcs="Git" />
   </component>
 </project>
