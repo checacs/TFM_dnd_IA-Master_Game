@@ -1,0 +1,90 @@
+// Replica standalone de la logica de protocolNudge para el arranque fijo
+// (taberna/tablon de anuncios), tras el SEGUNDO reporte real del mismo bug
+// (el jugador eligio tablon, el DM narro sin cargar el mapa, y hubo que
+// pedirselo explicitamente). Confirma los dos ajustes: el regex del tablon
+// ya no exige la frase completa "tablon de anuncios" (basta "tablon" solo,
+// que es como el DM lo menciona una vez establecida la escena), y el
+// umbral de mensajes se amplio de 4 a 10 para cubrir la negociacion real
+// (elegir destino -> leer contratos -> decidir cual, varios turnos).
+const VILLAGE_START_MAX_MESSAGES = 10;
+const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i];
+
+function villageStartNudgeFires(touchedMapSystem: boolean, narrativeText: string, messageCount: number): boolean {
+  if (touchedMapSystem) return false;
+  if (messageCount > VILLAGE_START_MAX_MESSAGES) return false;
+  return VILLAGE_DESTINATION_CUES.some((cue) => cue.test(narrativeText));
+}
+
+const casos: [string, boolean, string, number, boolean][] = [
+  [
+    'El caso real original: narra "tablón de anuncios" completo, muy al inicio',
+    false,
+    'Os acercáis al polvoriento tablón de anuncios de la plaza. Hay varios contratos colgados...',
+    2,
+    true,
+  ],
+  [
+    'El SEGUNDO caso real reportado: solo dice "el tablón" (sin "de anuncios"), en el turno 2',
+    false,
+    'San se acerca al tablón y pasa la mirada por los pergaminos, mientras Che se cruza de brazos junto a él.',
+    3,
+    true,
+  ],
+  [
+    'Tercer turno de la misma negociación, SI menciona "tablón" de nuevo -- antes se escapaba por el umbral bajo',
+    false,
+    'Os quedáis mirando el tablón, decidiendo cuál de los contratos elegir.',
+    5,
+    true,
+  ],
+  [
+    'Límite realista del heurístico: si esa misma respuesta NO repite "tablón"/"taberna" ' +
+    '(solo habla de "el de la mina"/"los pergaminos"), no hay nada que matchear -- no es un fallo, ' +
+    'es el límite esperado de un heurístico de texto (no análisis semántico)',
+    false,
+    'Che estira el cuello para leer el de la mina, y os quedáis los dos mirando los pergaminos.',
+    5,
+    false,
+  ],
+  [
+    'Taberna mencionada muy al inicio, sin tocar tools de mapa',
+    false,
+    'Decidís entrar en la taberna del pueblo, conocida como El Jabalí Somnoliento.',
+    2,
+    true,
+  ],
+  [
+    'No debería disparar si SÍ se tocaron tools de mapa este turno',
+    true,
+    'Os acercáis al tablón de anuncios de la plaza.',
+    2,
+    false,
+  ],
+  [
+    'No debería disparar mucho más allá del arranque (mención de pasada en una mazmorra ya avanzada)',
+    false,
+    'Recordáis la taberna donde estuvisteis hace un rato mientras seguís explorando la cueva.',
+    30,
+    false,
+  ],
+  [
+    'Texto neutro sin ninguno de los dos destinos no dispara',
+    false,
+    'Atacas al goblin con tu espada.',
+    2,
+    false,
+  ],
+];
+
+let ok = true;
+for (const [descripcion, touchedMapSystem, texto, messageCount, esperado] of casos) {
+  const resultado = villageStartNudgeFires(touchedMapSystem, texto, messageCount);
+  const estado = resultado === esperado ? 'OK' : 'FALLO';
+  if (resultado !== esperado) ok = false;
+  console.log(`[${estado}] ${descripcion} -> ${resultado} (esperado ${esperado})`);
+}
+
+if (!ok) {
+  throw new Error('Algún caso no coincide con lo esperado');
+}
+console.log('ÉXITO: el nudge de arranque (taberna/tablón), con la cobertura ampliada, se comporta como se espera.');

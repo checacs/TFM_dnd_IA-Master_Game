@@ -78,13 +78,24 @@ const LOCATION_ENTRY_CUES = [
  * comprobó en partida real que el DM describió el tablón de anuncios sin
  * llamar a ninguna tool de mapa, y el chequeo de arriba no lo detectó porque
  * exige AMBAS señales. Aquí no hace falta un verbo: basta con que aparezca
- * el nombre EXACTO de uno de los dos destinos del arranque. Se limita a los
+ * el nombre de uno de los dos destinos del arranque. Se limita a los
  * primeros mensajes de la partida (VILLAGE_START_MAX_MESSAGES) para no
  * disparar falsos positivos más adelante, si "la taberna" se menciona de
  * pasada como recuerdo en una escena ya resuelta.
+ *
+ * Dos ajustes tras un segundo reporte real con el mismo bug:
+ * 1) El regex del tablón exigía la frase completa "tablón de anuncios",
+ *    pero una vez establecida la escena el DM ya solo dice "el tablón" a
+ *    secas ("San se acerca al tablón y pasa la mirada por los pergaminos")
+ *    -- no matcheaba nada. Ahora basta con la palabra "tablón" sola.
+ * 2) VILLAGE_START_MAX_MESSAGES era demasiado bajo (4): la negociación real
+ *    del arranque (elegir taberna/tablón, leer contratos, decidir cuál)
+ *    dura fácilmente 3-4 turnos de ida y vuelta, y a partir del segundo
+ *    turno el umbral ya se había superado y el chequeo dejaba de aplicar
+ *    justo cuando aún hacía falta.
  */
-const VILLAGE_START_MAX_MESSAGES = 4;
-const VILLAGE_DESTINATION_CUES = [/tabl[oó]n de anuncios/i, /\btaberna\b/i];
+const VILLAGE_START_MAX_MESSAGES = 10;
+const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i];
 
 function narrativeSuggestsLocationChange(text: string): boolean {
   const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
