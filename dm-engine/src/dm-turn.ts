@@ -26,6 +26,21 @@ export class NoMutationYetError extends Error {
  */
 const MAX_TOOL_CALL_ITERATIONS = 8;
 
+/**
+ * Límite de avisos correctivos por turno. Antes era un booleano de un solo
+ * uso (correctionUsed): en cuanto se disparaba UN aviso, ningún otro podía
+ * dispararse en ese turno, ni siquiera el MISMO otra vez. Se comprobó en
+ * partida real que el modelo, tras recibir la nota de corrección, a veces
+ * "arregla" solo el TEXTO de la narración (deja de sonar mal) pero sigue sin
+ * llamar a la tool real que la corrección le pedía -- con un único intento,
+ * esa respuesta a medio corregir se aceptaba tal cual. Permitir un segundo
+ * intento le da al modelo una vuelta más para completar la corrección de
+ * verdad (llamar a la tool, no solo mejorar el texto) antes de rendirse y
+ * aceptar la respuesta. No se sube más para no disparar la latencia del
+ * turno sin límite si el modelo insiste en no corregir.
+ */
+const MAX_CORRECTION_ATTEMPTS = 2;
+
 export interface DmTurnResult {
   narrative: string;
   events: GameEvent[];
@@ -251,6 +266,11 @@ const PLAYER_MAP_REQUEST_CUES = [
   /queremos\s+ver\s+el\s+mapa/i,
   /actualiza(nos)?\s+el\s+mapa/i,
   /el\s+mapa\s+(no\s+(ha\s+)?cambia(do)?|sigue\s+igual|est[aá]\s+mal)/i,
+  // Ampliado tras un bug real: el jugador no siempre dice "el mapa" a secas
+  // -- a veces nombra el sitio concreto que no ve ("no vemos el tablón de
+  // anuncios", "no vemos la taberna"). Mismo patrón "no vemos / dónde está"
+  // que las líneas de arriba, pero con el nombre del lugar en vez de "mapa".
+  /(no\s+(vemos|se\s+ve)|d[oó]nde\s+est[aá])\s+(el\s+tabl[oó]n|la\s+taberna|el\s+escenario|la\s+imagen)/i,
 ];
 
 function lastPlayerMessageText(messages: ChatMessage[]): string {
@@ -296,6 +316,7 @@ function protocolNudge(
     narrativeText: string,
     messageCount: number,
     appliedMapId: string | null,
+    lastPlayerMessage: string,
 ): string | null {
   // Se comprobó en partida real que el DM narraba salir de una localización
   // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
@@ -308,14 +329,25 @@ function protocolNudge(
       calledTools.has('get_battle_maps') || calledTools.has('describe_map') ||
       calledTools.has('set_battle_map') || calledTools.has('clear_battle_map') ||
       calledTools.has('start_combat');
-  if (!touchedMapSystem && messageCount > 1 && messageCount <= VILLAGE_START_MAX_MESSAGES &&
-      VILLAGE_DESTINATION_CUES.some((cue) => cue.test(narrativeText))) {
-    return 'Tu narración menciona la taberna o el tablón de anuncios (la elección de arranque de la partida), ' +
-        'pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del arranque: llama a ' +
-        'describe_map con el mapId correspondiente ("tabernaMercenarios" o "tablonAnuncios"), luego a ' +
-        'set_battle_map -- y si es la taberna, coloca a los jugadores con place_participant en la zona real que ' +
-        'vayas a narrar; si es el tablón de anuncios, NO llames a place_participant en absoluto (esa imagen no ' +
-        'muestra marcadores de personajes) y pasa directamente a describir los contratos disponibles.';
+  // Se comprobó en partida real un bug distinto: el jugador escribió "Vamos
+  // al tablón de anuncios" y el DM respondió "El de la cueva suena bien...
+  // vamos a investigar eso" -- una narración que NO menciona ni "tablón" ni
+  // "taberna" en absoluto (decidió un contrato inventado sin describir el
+  // tablón ni aplicar su mapa), así que VILLAGE_DESTINATION_CUES sobre la
+  // narración del DM no detectaba nada. Por eso también se comprueba el
+  // ÚLTIMO MENSAJE DEL JUGADOR: si el jugador acaba de elegir taberna/tablón
+  // explícitamente, da igual que la narración del DM lo omita por completo --
+  // sigue siendo el turno de aplicar el mapa.
+  const mentionsDestination = VILLAGE_DESTINATION_CUES.some(
+      (cue) => cue.test(narrativeText) || cue.test(lastPlayerMessage),
+  );
+  if (!touchedMapSystem && messageCount > 1 && messageCount <= VILLAGE_START_MAX_MESSAGES && mentionsDestination) {
+    return 'Tu narración (o el mensaje del jugador) menciona la taberna o el tablón de anuncios (la elección de ' +
+        'arranque de la partida), pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del ' +
+        'arranque: llama a describe_map con el mapId correspondiente ("tabernaMercenarios" o "tablonAnuncios"), ' +
+        'luego a set_battle_map -- y si es la taberna, coloca a los jugadores con place_participant en la zona ' +
+        'real que vayas a narrar; si es el tablón de anuncios, NO llames a place_participant en absoluto (esa ' +
+        'imagen no muestra marcadores de personajes) y pasa directamente a describir los contratos disponibles.';
   }
   if (!touchedMapSystem && narrativeSuggestsLocationChange(narrativeText)) {
     return 'Tu narración de este turno suena a que el grupo ha cambiado de localización (salís de un sitio y ' +
@@ -529,9 +561,20 @@ export async function runDmTurn(
   let appliedMapId: string | null = null;
   const systemPrompt = buildDmSystemPrompt(gameId);
   const withSystem = (): ChatMessage[] => [{ role: 'system', content: systemPrompt }, ...messages];
+  // Longitud del historial de la partida ANTES de este turno -- se usa como
+  // "messageCount" en los nudges que distinguen "turno 1" / "primeros
+  // mensajes de la partida" de turnos más avanzados. Se comprobó que usar
+  // messages.length en vivo (recalculado en cada vuelta del bucle) era un
+  // bug: cada corrección de protocolo AÑADE 2 entradas al array (la
+  // respuesta rechazada del modelo + la nota interna de corrección), así que
+  // tras un segundo intento de corrección (MAX_CORRECTION_ATTEMPTS) el
+  // propio turno 1 ya "parecía" tener messageCount > 1 y disparaba avisos
+  // pensados para turnos posteriores. Fijar el valor una sola vez, al
+  // principio del turno, antes de que ninguna corrección lo infle.
+  const initialMessageCount = messages.length;
 
   let iterations = 0;
-  let correctionUsed = false;
+  let correctionAttempts = 0;
   let response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
 
   for (;;) {
@@ -605,7 +648,7 @@ export async function runDmTurn(
       continue;
     }
 
-    if (!correctionUsed) {
+    if (correctionAttempts < MAX_CORRECTION_ATTEMPTS) {
       // Orden de prioridad: 1) gameStartNudge (señal 100% determinista: el
       // turno 1 se reconoce por messageCount === 1, y es el fallo más
       // temprano posible en cualquier partida -- si el arranque ya sale mal,
@@ -621,7 +664,7 @@ export async function runDmTurn(
       // get_game_state); 6) protocolNudge (heurísticos de texto sobre
       // mapas/colocación a partir de la NARRACIÓN del DM, el más leve de
       // todos porque depende de cómo el propio DM elija contarlo).
-      const gameStart = gameStartNudge(messages.length, response.message.content ?? '');
+      const gameStart = gameStartNudge(initialMessageCount, response.message.content ?? '');
       const staleEncounterNudge = gameStart ? null : staleEncounterConflictNudge(failedStartCombatMessage);
       const mapRequestNudge = (gameStart || staleEncounterNudge)
           ? null
@@ -640,11 +683,11 @@ export async function runDmTurn(
           combatStateNudge ??
           protocolNudge(
               calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '',
-              messages.length, appliedMapId,
+              initialMessageCount, appliedMapId, lastPlayerMessageText(messages),
           );
       if (nudge) {
-        correctionUsed = true;
-        console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);
+        correctionAttempts += 1;
+        console.log(`[dm-engine] Aviso correctivo de protocolo (intento ${correctionAttempts}/${MAX_CORRECTION_ATTEMPTS}): ${nudge}`);
         messages.push(response.message);
         // OJO: este aviso iba antes con role:'user' -- eso hace que el
         // modelo lo lea como si el JUGADOR hubiera escrito ese texto tan

@@ -1,0 +1,133 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(
+    private readonly tools: McpToolInfo[] = [],
+    private readonly results: Record<string, unknown> = {},
+  ) {}
+  async listTools(): Promise<McpToolInfo[]> { return this.tools; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  // Caso 1: EXACTAMENTE el bug real reportado -- el jugador escribe "Vamos
+  // al tablon de anuncios" y el DM responde saltándose por completo el paso
+  // 2 del arranque: "El de la cueva suena bien... vamos a investigar eso" --
+  // una narración que NO menciona "tablón" ni "taberna" en absoluto y no
+  // toca ninguna tool de mapa. Antes de este fix, VILLAGE_DESTINATION_CUES
+  // solo miraba la narración del DM y no detectaba nada porque el texto
+  // roto no menciona el destino -- ahora también mira el ÚLTIMO MENSAJE DEL
+  // JUGADOR, que sí lo menciona.
+  const chat1 = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant',
+        content: 'El de la cueva suena bien. Una bestia hambrienta en una cueva... ¿qué podría salir mal? ' +
+            'Vamos a investigar eso.',
+      },
+    },
+    // Tras el aviso correctivo, el DM SÍ corrige de verdad (llama a las
+    // tools reales), no solo repite un texto igual de roto -- así se
+    // demuestra que el aviso lleva a una corrección real, no solo a un
+    // reintento que se agota sin arreglar nada (ver Caso 2 de
+    // verify_tablon_no_markers_scratch.ts.bak para ese otro escenario).
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant',
+        content: 'San se acerca al tablón de anuncios. Hay varios contratos: uno sobre una bestia en una ' +
+            'cueva, otro de escolta de caravana. ¿Cuál os interesa?',
+      },
+    },
+  ]);
+  const toolCaller1 = new FakeToolCaller([], {
+    describe_map: { mapId: 'tablonAnuncios', rows: 21, cols: 20, zones: [] },
+    set_battle_map: undefined,
+  });
+  const history1: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    {
+      role: 'assistant',
+      content: '¿Entráis en la taberna del pueblo o os acercáis al tablón de anuncios de la plaza?',
+    },
+    { role: 'user', content: 'Vamos al tablon de anuncios' },
+  ];
+  const result1 = await runDmTurn(chat1, toolCaller1, history1, 'g1');
+  console.log('CASO 1 (bug real) -> narrativa final:', result1.narrative);
+  console.log('CASO 1 -> llamadas al modelo:', chat1.receivedCalls.length);
+  if (chat1.receivedCalls.length !== 4) {
+    throw new Error('FALLO CASO 1: no se disparó el aviso correctivo esperado (el jugador eligió tablón/taberna y el DM lo ignoró)');
+  }
+  const toolsCalledCaso1 = toolCaller1.calls.map((c) => c.name);
+  if (!toolsCalledCaso1.includes('describe_map') || !toolsCalledCaso1.includes('set_battle_map')) {
+    throw new Error('FALLO CASO 1: el DM no llegó a aplicar el mapa tras la corrección');
+  }
+
+  // Caso 2: EXACTAMENTE el segundo bug real reportado -- el jugador escribe
+  // "No vemos el tablón de anuncios" (no "no vemos EL MAPA", que ya estaba
+  // cubierto) y el DM sigue sin tocar ninguna tool de mapa. Antes de ampliar
+  // PLAYER_MAP_REQUEST_CUES esto no disparaba nada.
+  const chat2 = new FakeChatClient([
+    { message: { role: 'assistant', content: 'El atardecer pinta el cielo de tonos granate mientras seguís charlando junto a la plaza.' } },
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    { message: { role: 'assistant', content: 'Ahora sí veis el tablón con sus contratos colgados.' } },
+  ]);
+  const toolCaller2 = new FakeToolCaller([], {
+    describe_map: { mapId: 'tablonAnuncios', rows: 21, cols: 20, zones: [] },
+    set_battle_map: undefined,
+  });
+  const history2: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    { role: 'assistant', content: '¿Entráis en la taberna o os acercáis al tablón de anuncios?' },
+    { role: 'user', content: 'No vemos el tablón de anuncios' },
+  ];
+  const result2 = await runDmTurn(chat2, toolCaller2, history2, 'g1');
+  console.log('CASO 2 (segundo bug real) -> narrativa final:', result2.narrative);
+  console.log('CASO 2 -> llamadas al modelo:', chat2.receivedCalls.length);
+  if (chat2.receivedCalls.length !== 4) {
+    throw new Error('FALLO CASO 2: no se disparó el aviso correctivo esperado para "no vemos el tablón de anuncios"');
+  }
+
+  console.log('OK: el arranque de partida se corrige tanto si el DM ignora la elección como si el jugador pide ver el sitio por su nombre.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
