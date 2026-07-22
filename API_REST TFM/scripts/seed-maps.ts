@@ -14,13 +14,34 @@ import { mapMongooseSchema } from '../src/infrastructure/persistence/mongoose/sc
  */
 const maps = [
   {
-    _id: 'tavernaMercenarios',
+    _id: 'tablonAnuncios',
+    name: 'Tablon Anuncios',
+    description: 'Tablon de anuncios del pueblo sobre trabajos remunerados o dar ayuda a gente necesitada.',
+    tags: ['calle', 'tablon', 'social', 'anuncios', 'pueblo'],
+    // rows/cols son obligatorios en el esquema (BattleMapProps) aunque este mapa
+    // no tenga salas que catalogar -- es una ilustracion de calle en primer
+    // plano, no una planta con cuadricula real, así que el valor exacto no
+    // importa para el juego (no se necesita mover a nadie por el tablero aquí).
+    rows: 12,
+    cols: 12,
+    imageUrl: '/maps/battleMap-tablonAnuncios.png',
+    // Sin zonas a proposito (ver dm-system-prompt.ts): es solo una imagen de
+    // calle, no una sala con salas que catalogar. zones: [] hace que
+    // isCellInsideZones acepte cualquier celda (ver battle-map.entity.ts) --
+    // el DM no necesita place_participant con una celda concreta aqui. La
+    // entrada anterior tenía una zona sin "cells" (campo obligatorio del tipo
+    // MapZone), lo que habría roto isCellInsideZone si algún place_participant
+    // hubiera pasado ese zoneName.
+    zones: [],
+  },
+  {
+    _id: 'tabernaMercenarios',
     name: 'Taberna Mercenarios',
     description: 'Sala principal de una taberna, con mesas, chimenea y zona de barra.',
     tags: ['interior', 'taberna', 'social'],
     rows: 25,
     cols: 26,
-    imageUrl: '/maps/battleMap1-tavernaMercenarios.png',
+    imageUrl: '/maps/battleMap1-tabernaMercenarios.png',
     zones: [
       { name: 'Salón Principal', cells: [{ rowStart: 0, rowEnd: 24, colStart: 0, colEnd: 18 }] },
       { name: 'Barra y Almacén', cells: [{ rowStart: 0, rowEnd: 24, colStart: 19, colEnd: 25 }] },

@@ -1,0 +1,25 @@
+import { BattleMap, isCellInsideZones } from './src/domain/entities/battle-map.entity';
+
+const tablon = BattleMap.create({
+  name: 'Tablon Anuncios',
+  description: 'Tablon de anuncios del pueblo sobre trabajos remunerados o dar ayuda a gente necesitada.',
+  tags: ['calle', 'tablon', 'social', 'anuncios', 'pueblo'],
+  rows: 12,
+  cols: 12,
+  imageUrl: '/maps/battleMap-tablonAnuncios.png',
+  zones: [],
+});
+
+const snapshot = tablon.toSnapshot();
+console.log('rows/cols:', snapshot.rows, snapshot.cols);
+console.log('zones:', JSON.stringify(snapshot.zones));
+
+// Con zones vacio, CUALQUIER celda debe pasar la validacion (sin zonas que catalogar).
+console.log('celda (0,0) valida:', isCellInsideZones(snapshot.zones, 0, 0));
+console.log('celda (5,5) valida:', isCellInsideZones(snapshot.zones, 5, 5));
+console.log('celda (100,100) valida (fuera de rango pero sin zonas):', isCellInsideZones(snapshot.zones, 100, 100));
+
+if (!isCellInsideZones(snapshot.zones, 0, 0) || !isCellInsideZones(snapshot.zones, 5, 5)) {
+  throw new Error('FALLO: deberia aceptar cualquier celda con zones vacio');
+}
+console.log('ÉXITO: el mapa del tablon de anuncios es valido y no exige ninguna zona concreta.');
