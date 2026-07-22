@@ -40,8 +40,9 @@ const maps = [
   {
     _id: 'tabernaMercenarios',
     name: 'Taberna Mercenarios',
-    description: 'Sala principal de una taberna, con mesas, chimenea y zona de barra.',
-    tags: ['interior', 'taberna', 'social'],
+    description: 'Sala principal de una taberna, con mesas, chimenea y zona de barra. Una escalera junto a la ' +
+        'cocina baja al sótano de almacenaje (mapId sotanoTaberna).',
+    tags: ['interior', 'taberna', 'social', 'escaleras'],
     // Recalibrado a pixel sobre la imagen real (antes 25x26 "a ojo"), en DOS
     // pasadas -- la primera pasada (rows:21 cols:24, calcada de la rejilla
     // real dibujada) resultó estar mal planteada: BoardPanel.tsx pinta el
@@ -299,7 +300,7 @@ const maps = [
         'baja (mapId casa-escondite-piso2) por una escalera de caracol: un dormitorio con arcón y estantería, ' +
         'una cocina-despensa con alacena y mesa, la escalera de caracol que baja, una bodega con barriles y ' +
         'cajas, y la entrada de la casa.',
-    tags: ['interior', 'casa', 'habitaciones', 'multisala', 'piso1'],
+    tags: ['interior', 'casa', 'habitaciones', 'multisala', 'piso1', 'escaleras'],
     // Recalibrado a pixel: imagen real 768x1365, ratio declarada 20/12=... (ver
     // cols/rows=0.6 vs objetivo 0.5626, +6.65%, mismatch real). Cambiado rows
     // 20->21 (el cambio nominal más pequeño posible) y reescaladas todas las
@@ -327,7 +328,7 @@ const maps = [
         'superior (mapId casa-escondite-piso1) por una escalera de caracol: una sala de mapas con cofres y ' +
         'un plano de guerra, un pasillo central, una armería-estudio con armero y mesa de trabajo, una gran ' +
         'bodega con barriles y escombros, y la entrada trasera.',
-    tags: ['interior', 'casa', 'habitaciones', 'armeria', 'multisala', 'piso2'],
+    tags: ['interior', 'casa', 'habitaciones', 'armeria', 'multisala', 'piso2', 'escaleras'],
     // Verificado a pixel: imagen real 677x1351, ratio negligible (-0.22%) --
     // SIN CAMBIOS. Overlay sobre la imagen real confirma buen encaje: mesa de
     // mapas/cofres arriba (Sala de Mapas), corredor con ventana redonda y
@@ -489,6 +490,112 @@ const maps = [
       { name: 'Bosque Este', cells: [{ rowStart: 8, rowEnd: 15, colStart: 9, colEnd: 10 }] },
       { name: 'Porche Sur', cells: [{ rowStart: 14, rowEnd: 15, colStart: 4, colEnd: 7 }] },
       { name: 'Bosque Sur', cells: [{ rowStart: 16, rowEnd: 21, colStart: 0, colEnd: 10 }] },
+    ],
+  },
+  {
+    _id: 'sotanoTaberna',
+    name: 'Sótano de la Taberna',
+    description: 'Sótano de almacenaje de la taberna, conectado a la sala principal (mapId tabernaMercenarios) ' +
+        'por una escalera de caracol que sube a la cocina: dos almacenes separados por un muro de piedra y ' +
+        'madera, llenos de barriles, cajas y sacos de provisiones. En el segundo almacén hay una vieja escalera ' +
+        'de madera desmontable junto a una trampilla candada que lleva a un nivel inferior aún sin explorar.',
+    tags: ['interior', 'taberna', 'sotano', 'almacen', 'multisala', 'escaleras'],
+    // Calibrado a pixel: imagen real 847x1264, ratio 0.6701, prácticamente
+    // idéntica a cripta-multisala (0.6709) -- mismo rows=30/cols=20 (precedente
+    // ya probado). Esta imagen trae los nombres de sala en español dibujados
+    // encima ("Escaleras hacia la cocina de la taberna", "Almacén del Sótano 1",
+    // "Almacén del Sótano 2", "Muro de piedra y madera"); verificado con
+    // overlay sobre la imagen real que las 3 zonas de abajo encajan con cada
+    // sala. La "Escalera de madera de quitar y poner" y la "Trampilla al nivel
+    // inferior" son solo props narrativos dentro de Almacén del Sótano 2 (un
+    // gancho para una futura planta inferior) -- no llevan zona propia porque
+    // no existe todavía ningún mapId para ese nivel.
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap17-sotanoTaberna.png',
+    zones: [
+      { name: 'Escaleras a la Cocina', cells: [{ rowStart: 2, rowEnd: 13, colStart: 0, colEnd: 8 }] },
+      { name: 'Almacén del Sótano 1', cells: [{ rowStart: 2, rowEnd: 13, colStart: 8, colEnd: 20 }] },
+      { name: 'Almacén del Sótano 2', cells: [{ rowStart: 14, rowEnd: 27, colStart: 6, colEnd: 20 }] },
+    ],
+  },
+  {
+    _id: 'molino-piso1',
+    name: 'Molino (planta baja)',
+    description: 'Planta baja de un molino, conectada a la planta intermedia (mapId molino-piso2) por una ' +
+        'escalera de caracol: un vestíbulo de entrada curvo, la sala de molienda central con el gran engranaje, ' +
+        'almacenes de grano al este, un taller de carpintería y una cocina-comedor, y el dormitorio de los ' +
+        'molineros al oeste.',
+    tags: ['interior', 'molino', 'multisala', 'piso1', 'escaleras'],
+    // Calibrado a pixel: imagen real 847x1264, ratio 0.6701 -- mismo rows=30/
+    // cols=20 que sotanoTaberna y cripta-multisala. Edificio ovalado (torre de
+    // molino), no rectangular, con los nombres de sala en español dibujados
+    // encima ("Escaleras hacia el nivel superior", "Sala de Molienda Central",
+    // "Almacén de Grano 1/2" -- una única zona de almacenaje partida en dos
+    // etiquetas por el propio dibujo, sin muro real entre ambas mitades --,
+    // "Taller de Carpintería", "Cocina-Comedor", "Dormitorio de los
+    // Molineros", "Vestíbulo de Entrada"). Verificado con overlay sobre la
+    // imagen real: buen encaje en las 7 zonas de abajo.
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap18-MolinoPiso1.png',
+    zones: [
+      { name: 'Escaleras Hacia el Nivel Superior', cells: [{ rowStart: 4, rowEnd: 16, colStart: 1, colEnd: 7 }] },
+      { name: 'Sala de Molienda Central', cells: [{ rowStart: 4, rowEnd: 16, colStart: 7, colEnd: 14 }] },
+      { name: 'Almacenes de Grano', cells: [{ rowStart: 4, rowEnd: 16, colStart: 14, colEnd: 20 }] },
+      { name: 'Dormitorio de los Molineros', cells: [{ rowStart: 16, rowEnd: 24, colStart: 0, colEnd: 8 }] },
+      { name: 'Taller de Carpintería', cells: [{ rowStart: 16, rowEnd: 20, colStart: 8, colEnd: 20 }] },
+      { name: 'Cocina-Comedor', cells: [{ rowStart: 20, rowEnd: 24, colStart: 8, colEnd: 20 }] },
+      { name: 'Vestíbulo de Entrada', cells: [{ rowStart: 24, rowEnd: 29, colStart: 2, colEnd: 18 }] },
+    ],
+  },
+  {
+    _id: 'molino-piso2',
+    name: 'Molino (planta intermedia)',
+    description: 'Planta intermedia de un molino, conectada por la misma escalera de caracol a la planta baja ' +
+        '(mapId molino-piso1) y a la planta superior (mapId molino-piso3): una zona de carga con polea que da ' +
+        'al exterior, almacenes de grano, un salón de clasificación, la oficina del capataz y un almacén de ' +
+        'herramientas y repuestos.',
+    tags: ['interior', 'molino', 'multisala', 'piso2', 'escaleras'],
+    // Misma imagen base que molino-piso1 (847x1263, ratio 0.6706 -- negligible
+    // vs 0.6701) -- mismo rows=30/cols=20. Verificado con overlay sobre la
+    // imagen real: buen encaje en las 6 zonas de abajo (misma disposición
+    // general que molino-piso1, con la zona de carga con polea sustituyendo a
+    // la sala de molienda del piso de abajo).
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap18-MolinoPiso2.png',
+    zones: [
+      { name: 'Subida desde la Planta Inferior', cells: [{ rowStart: 4, rowEnd: 16, colStart: 1, colEnd: 7 }] },
+      { name: 'Zona de Carga con Polea', cells: [{ rowStart: 4, rowEnd: 8, colStart: 7, colEnd: 20 }] },
+      { name: 'Almacenes de Grano', cells: [{ rowStart: 8, rowEnd: 16, colStart: 7, colEnd: 20 }] },
+      { name: 'Salón de Clasificación', cells: [{ rowStart: 16, rowEnd: 20, colStart: 8, colEnd: 20 }] },
+      { name: 'Oficina del Capataz', cells: [{ rowStart: 16, rowEnd: 24, colStart: 0, colEnd: 8 }] },
+      { name: 'Almacén de Herramientas y Repuestos', cells: [{ rowStart: 20, rowEnd: 27, colStart: 8, colEnd: 20 }] },
+    ],
+  },
+  {
+    _id: 'molino-piso3',
+    name: 'Molino (planta superior)',
+    description: 'Planta superior de un molino, conectada por la misma escalera de caracol a la planta ' +
+        'intermedia (mapId molino-piso2): la zona del eje principal y el mecanismo del eje vertical con las ' +
+        'grandes ruedas dentadas que mueven las aspas, un almacén de sacos y herramientas de ajuste, y el ' +
+        'pequeño despacho del molinero.',
+    tags: ['interior', 'molino', 'multisala', 'piso3', 'escaleras'],
+    // Misma imagen base que molino-piso1/piso2 (847x1264, ratio 0.6701) --
+    // mismo rows=30/cols=20. Esta es la planta de la maquinaria (ejes y
+    // engranajes que mueven las aspas del molino), sin escalera hacia una
+    // planta superior (es la última planta del edificio). Verificado con
+    // overlay sobre la imagen real: buen encaje en las 5 zonas de abajo.
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap18-MolinoPiso3.png',
+    zones: [
+      { name: 'Subida desde la Planta Inferior', cells: [{ rowStart: 4, rowEnd: 16, colStart: 1, colEnd: 7 }] },
+      { name: 'Zona del Eje Principal', cells: [{ rowStart: 4, rowEnd: 16, colStart: 7, colEnd: 14 }] },
+      { name: 'Eje Vertical del Molino', cells: [{ rowStart: 4, rowEnd: 16, colStart: 14, colEnd: 20 }] },
+      { name: 'Almacén de Sacos y Herramientas', cells: [{ rowStart: 16, rowEnd: 24, colStart: 0, colEnd: 8 }] },
+      { name: 'Pequeño Despacho del Molinero', cells: [{ rowStart: 16, rowEnd: 27, colStart: 8, colEnd: 20 }] },
     ],
   },
 ];
