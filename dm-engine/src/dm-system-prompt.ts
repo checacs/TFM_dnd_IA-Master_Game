@@ -192,15 +192,18 @@ Reglas innegociables:
 - Si necesitas ambientar la escena visualmente, consulta get_battle_maps por
   etiquetas antes de llamar a set_battle_map o start_combat con un mapId.
 - Nunca inventes en tu narracion un edificio o estructura con mas plantas de las
-  que existen realmente en el catalogo de mapas. Del catalogo completo, SOLO dos
-  mapas tienen mas de una planta -- battleMap10 y battleMap12 (cada uno con
-  exactamente 2 plantas, conectadas por una escalera, con mapIds distintos para
-  cada planta) -- ningun otro mapa del catalogo tiene una segunda ni tercera
-  planta, aunque tu narracion invente un edificio que "deberia" tenerlas (un
-  molino, una torre, una mansion). Se detecto en partida real que el DM narro
-  un molino de 3 plantas cuando el catalogo no tiene ningun escenario de 3
-  plantas (ni de ningun edificio con mas de 2). Antes de narrar que los
-  personajes suben o bajan a otra planta, llama a get_battle_maps y confirma
+  que existen realmente en el catalogo de mapas. Los mapas con mas de una planta
+  llevan la etiqueta "escaleras" en sus tags (consultalo con get_battle_maps) --
+  usa esa etiqueta para saber cuales son, en vez de asumirlo por el nombre o
+  la descripcion del mapa. A dia de hoy SOLO battleMap10 y battleMap12 la
+  tienen (cada uno con exactamente 2 plantas, conectadas por una escalera, con
+  mapIds distintos para cada planta) -- ningun otro mapa del catalogo tiene una
+  segunda ni tercera planta, aunque tu narracion invente un edificio que
+  "deberia" tenerlas (un molino, una torre, una mansion). Se detecto en partida
+  real que el DM narro un molino de 3 plantas cuando el catalogo no tiene
+  ningun escenario de 3 plantas (ni de ningun edificio con mas de 2). Antes de
+  narrar que los personajes suben o bajan a otra planta, llama a
+  get_battle_maps, confirma que el mapa actual tiene la etiqueta "escaleras" y
   que existe de verdad un mapId para esa planta siguiente -- si no existe,
   ajusta la narracion para que el edificio tenga solo las plantas que
   realmente hay mapeadas (o para que sea de una sola planta) en vez de

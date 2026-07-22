@@ -258,7 +258,7 @@ const maps = [
     description: 'Planta superior de un gran almacén de mercancías, conectada a la planta baja (mapId ' +
         'almacen-piso2) por una escalera de carga central: estanterías y barriles a ambos lados de la ' +
         'nave, el hueco de la escalera en el centro, y grandes puertas de carga al norte y al sur.',
-    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso1'],
+    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso1', 'escaleras'],
     rows: 32,
     cols: 61,
     imageUrl: '/maps/battleMap12-AlmacenPiso1.png',
@@ -277,7 +277,7 @@ const maps = [
         'escalera de carga central: estanterías de mercancías al oeste, el hueco de la escalera, y al este ' +
         'la oficina del encargado con un ventanal enrejado y una pequeña armería con lanzas y escudo. La ' +
         'única puerta de carga está al sur.',
-    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso2'],
+    tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso2', 'escaleras'],
     rows: 32,
     cols: 61,
     imageUrl: '/maps/battleMap12-AlmacenPiso2.png',
@@ -294,7 +294,8 @@ const maps = [
     name: 'Almacén de mercancías',
     description: 'Nave de almacén estrecha y alargada: una estantería alta recorre todo el muro oeste, tres ' +
         'pasillos centrales de barriles y cajas, un pequeño rincón del encargado con escritorio junto a una ' +
-        'polea de carga, y una armería de reserva con lanzas colgadas. Las puertas de carga están al sur.',
+        'polea de carga, y una armería de reserva con lanzas colgadas. Las puertas de carga están al sur. No tiene' +
+        'escaleras, es solo un piso.',
     tags: ['interior', 'almacen', 'comercio', 'tienda'],
     rows: 22,
     cols: 11,
@@ -311,7 +312,8 @@ const maps = [
     _id: 'almacen-suministros',
     name: 'Almacén de suministros',
     description: 'Nave de almacén dividida en dos largos pasillos de estanterías por un muro central de ' +
-        'estanterías, cada uno repleto de cajas, telas y provisiones. La puerta de carga está al sur.',
+        'estanterías, cada uno repleto de cajas, telas y provisiones. La puerta de carga está al sur. No tiene' +
+        'escaleras, es solo un piso.',
     tags: ['interior', 'almacen', 'comercio', 'tienda'],
     rows: 22,
     cols: 11,
