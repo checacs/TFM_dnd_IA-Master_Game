@@ -1,0 +1,80 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(
+    private readonly tools: McpToolInfo[] = [],
+    private readonly results: Record<string, unknown> = {},
+  ) {}
+  async listTools(): Promise<McpToolInfo[]> { return this.tools; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  // Reproduce el bug real reportado: el jugador manda el mensaje inicial, el
+  // DM narra mencionando "tablón de anuncios" sin llamar a ninguna tool de
+  // mapa (dispara villageStartDestinationNudge), y en su segunda respuesta
+  // (tras la corrección) el DM debe seguir sonando como el DM, NO responder
+  // como si el jugador le hubiera hablado a él.
+  const chat = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant',
+        content: 'Os acercáis al polvoriento tablón de anuncios de la plaza del pueblo.',
+      },
+    },
+    {
+      message: {
+        role: 'assistant',
+        content: 'Os acercáis al tablón de anuncios. Hay varios contratos colgados... ¿cuál os interesa?',
+      },
+    },
+  ]);
+  const toolCaller = new FakeToolCaller();
+  const result = await runDmTurn(chat, toolCaller, [], 'g1');
+
+  if (chat.receivedCalls.length !== 2) {
+    throw new Error('FALLO: no se disparó la corrección esperada (se esperaban 2 llamadas al modelo)');
+  }
+
+  const secondCallMessages = chat.receivedCalls[1].messages;
+  const correctionMessage = secondCallMessages[secondCallMessages.length - 1];
+
+  console.log('rol del mensaje de corrección:', correctionMessage.role);
+  console.log('contenido incluye instrucción de no mencionarlo:', String(correctionMessage.content).includes('NUNCA menciones'));
+  console.log('narrativa final:', result.narrative);
+
+  if (correctionMessage.role !== 'system') {
+    throw new Error(
+        `FALLO: el mensaje de corrección se sigue inyectando con role:'${correctionMessage.role}' -- el modelo lo ` +
+        'lee como si el JUGADOR lo hubiera escrito, y responde conversacionalmente a él (el bug real reportado: ' +
+        '"Tienes razón, disculpa. Pero necesito que elijáis primero..."). Debe ser role:\'system\'.',
+    );
+  }
+  if (!String(correctionMessage.content).includes('NUNCA menciones')) {
+    throw new Error('FALLO: falta la instrucción explícita de no mencionar la corrección al jugador');
+  }
+  if (!String(correctionMessage.content).includes('el jugador NO ha escrito esto')) {
+    throw new Error('FALLO: falta la aclaración de que esto no es texto del jugador');
+  }
+
+  console.log('ÉXITO: la corrección se inyecta como role:system con instrucción explícita de no mencionarla.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

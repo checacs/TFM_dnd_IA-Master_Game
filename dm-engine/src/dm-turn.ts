@@ -507,7 +507,23 @@ export async function runDmTurn(
         correctionUsed = true;
         console.log(`[dm-engine] Aviso correctivo de protocolo: ${nudge}`);
         messages.push(response.message);
-        messages.push({ role: 'user', content: nudge });
+        // OJO: este aviso iba antes con role:'user' -- eso hace que el
+        // modelo lo lea como si el JUGADOR hubiera escrito ese texto tan
+        // técnico, y responda conversacionalmente a "él" (se detectó en
+        // partida real: el DM respondió "Tienes razón, disculpa. Pero
+        // necesito que elijáis primero..." -- una disculpa meta dirigida al
+        // aviso interno, rompiendo la inmersión, en vez de simplemente
+        // corregir su narración). role:'system' + la instrucción explícita
+        // de reescribir sin mencionar la corrección evita que el jugador
+        // vea nunca este intercambio.
+        messages.push({
+          role: 'system',
+          content: `Nota interna de corrección -- el jugador NO ha escrito esto, es el sistema: ${nudge} ` +
+              'Reescribe tu respuesta de este turno aplicando esta corrección y narrando de forma natural, como ' +
+              'si fuera tu primera respuesta. NUNCA menciones esta nota, te disculpes por ella, ni le hables al ' +
+              'jugador sobre haber cometido un error de protocolo -- el jugador no debe notar que hubo ninguna ' +
+              'corrección.',
+        });
         response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
         continue;
       }
