@@ -1,0 +1,29 @@
+.music-control {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-md);
+  background: var(--color-night-panel);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(3px);
+}
+
+.music-control-btn {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.15rem;
+  color: var(--color-parchment);
+}
+
+.music-control-volume {
+  width: 80px;
+  accent-color: var(--color-gold);
+}

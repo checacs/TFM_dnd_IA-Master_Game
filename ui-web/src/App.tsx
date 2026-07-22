@@ -7,6 +7,8 @@ import { LoginScreen } from './screens/LoginScreen';
 import { GameSetupScreen } from './screens/GameSetupScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
+import { BackgroundMusicController } from './audio/BackgroundMusicController';
+import { MusicControl } from './audio/MusicControl';
 import type { ReactNode } from 'react';
 
 const queryClient = new QueryClient({
@@ -39,6 +41,8 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
+            <MusicControl />
+            <BackgroundMusicController />
             <AppRoutes />
           </AuthProvider>
         </BrowserRouter>

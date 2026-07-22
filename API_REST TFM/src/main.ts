@@ -42,6 +42,11 @@ async function bootstrap() {
   // Sirve las imágenes de assets/maps/ en http://localhost:3000/maps/<archivo>.
   app.useStaticAssets(join(__dirname, '..', 'assets', 'maps'), { prefix: '/maps' });
 
+  // Sirve la música de fondo de assets/music/ en http://localhost:3000/music/<archivo>.
+  // ui-web decide qué pista sonar (pantallas iniciales, taberna, resto de
+  // mapas, combate) — ver ui-web/src/audio/musicController.ts.
+  app.useStaticAssets(join(__dirname, '..', 'assets', 'music'), { prefix: '/music' });
+
   // Servidor MCP (docs/04-servidor-mcp.md), en modo stateless (sin sesión).
   // GameMcpTools se recupera UNA vez del contenedor de Nest (mismos
   // repositorios que la API REST), pero McpServer/transport se crean
