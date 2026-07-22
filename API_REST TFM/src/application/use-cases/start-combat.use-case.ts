@@ -60,6 +60,19 @@ export class StartCombatUseCase {
 
     game.startEncounter({ enemies: encounterEnemies });
 
+    // Aviso llamativo y GARANTIZADO de que el combate ha arrancado de verdad
+    // -- igual que resolve_attack/cast_spell ya dejan constancia de sus
+    // tiradas en el chat sin depender de que el DM-IA se acuerde de narrarlo
+    // con dramatismo, este mensaje se añade aquí mismo, no en la narración
+    // libre del modelo. Se pidió explícitamente tras detectarse en partida
+    // real que un combate podía empezar sin ningún aviso claro para el
+    // jugador más allá de la propia narración (que a veces era sutil).
+    const enemyNames = encounterEnemies.map((e) => `**${e.name}**`).join(', ') || 'enemigos desconocidos';
+    game.appendNarrativeEntry({
+      role: 'assistant',
+      content: `⚔️ **¡ENTRÁIS EN COMBATE!!!** — Enemigos: ${enemyNames}`,
+    });
+
     if (input.mapId) {
       const map = await this.mapRepository.findById(input.mapId);
       if (!map) {

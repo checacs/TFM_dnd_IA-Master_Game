@@ -1,0 +1,65 @@
+import { Game } from './src/domain/entities/game.entity';
+import { Enemy } from './src/domain/entities/enemy.entity';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { EnemyRepository } from './src/domain/ports/enemy.repository.port';
+import { MapRepository } from './src/domain/ports/map.repository.port';
+import { StartCombatUseCase } from './src/application/use-cases/start-combat.use-case';
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void { this.games.set(game.id, game); }
+  async findById(id: string): Promise<Game | null> { return this.games.get(id) ?? null; }
+  async findByUserId(): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.games.set(game.id, game); }
+}
+
+class FakeEnemyRepository implements EnemyRepository {
+  constructor(private readonly items: Enemy[]) {}
+  async findById(id: string): Promise<Enemy | null> { return this.items.find((i) => i.id === id) ?? null; }
+  async search(): Promise<Enemy[]> { return this.items; }
+}
+
+class FakeMapRepository implements MapRepository {
+  async findById(): Promise<null> { return null; }
+  async search(): Promise<[]> { return []; }
+}
+
+async function main() {
+  const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+  game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Sandra', class: 'mago', currentHp: 9 });
+  game.assignCaptain('host-1', 'user-1');
+  game.launch('host-1');
+
+  const games = new FakeGameRepository();
+  games.seed(game);
+
+  const wolf = Enemy.create({
+    name: 'Lobo', description: '', tags: [], challengeRating: 0.25,
+    attributes: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
+    hp: 11, ac: 13, attacks: [], resistances: [],
+  }, 'wolf-1');
+  const enemyRepo = new FakeEnemyRepository([wolf]);
+  const mapRepo = new FakeMapRepository();
+
+  const useCase = new StartCombatUseCase(games, enemyRepo, mapRepo);
+  await useCase.execute({ gameId: game.id, enemyIds: ['wolf-1'] });
+
+  const saved = await games.findById(game.id);
+  const log = saved!.toSnapshot().narrativeLog;
+  console.log('narrativeLog tras start_combat:', JSON.stringify(log, null, 2));
+
+  const combatEntry = log.find((e) => e.content.includes('ENTRÁIS EN COMBATE'));
+  if (!combatEntry) {
+    throw new Error('FALLO: no se encontró el mensaje de "¡ENTRÁIS EN COMBATE!!!" en el narrativeLog');
+  }
+  if (!combatEntry.content.includes('Lobo')) {
+    throw new Error('FALLO: el mensaje de combate no menciona al enemigo real');
+  }
+  if (combatEntry.role !== 'assistant') {
+    throw new Error('FALLO: el mensaje debería tener role "assistant" para renderizarse como burbuja del DM');
+  }
+
+  console.log('OK: "¡ENTRÁIS EN COMBATE!!!" aparece como mensaje de sistema garantizado, listando los enemigos reales.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

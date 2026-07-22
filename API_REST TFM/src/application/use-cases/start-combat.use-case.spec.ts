@@ -92,6 +92,40 @@ describe('StartCombatUseCase', () => {
     expect(encounter?.enemies[0].imageUrl).toBe('https://www.dnd5eapi.co/api/images/monsters/goblin.png');
   });
 
+  it(
+      'añade un mensaje de sistema garantizado "¡ENTRÁIS EN COMBATE!!!" al narrativeLog, listando los enemigos ' +
+      'reales -- no depende de que el DM-IA se acuerde de narrarlo con dramatismo',
+      async () => {
+        const games = new FakeGameRepository();
+        const enemyRepo = new FakeEnemyRepository();
+        const mapRepo = new FakeMapRepository();
+
+        const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+        game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        game.assignCaptain('host-1', 'user-1');
+        game.launch('host-1');
+        games.seed(game);
+
+        const goblin = Enemy.create({
+          name: 'Goblin explorador', description: '', tags: [], challengeRating: 0.25,
+          attributes: { str: 8, dex: 12, con: 10, int: 10, wis: 8, cha: 8 },
+          hp: 7, ac: 15, attacks: [], resistances: [],
+        }, 'enemy-1');
+        enemyRepo.seed(goblin);
+
+        const useCase = new StartCombatUseCase(games, enemyRepo, mapRepo);
+        await useCase.execute({ gameId: game.id, enemyIds: ['enemy-1'] });
+
+        const saved = await games.findById(game.id);
+        const log = saved!.toSnapshot().narrativeLog;
+        const combatEntry = log.find((e) => e.content.includes('ENTRÁIS EN COMBATE'));
+
+        expect(combatEntry).toBeDefined();
+        expect(combatEntry?.role).toBe('assistant');
+        expect(combatEntry?.content).toContain('Goblin explorador');
+      },
+  );
+
   it('deja imageUrl en null si el enemigo del catálogo no tiene imagen', async () => {
     const games = new FakeGameRepository();
     const enemyRepo = new FakeEnemyRepository();
