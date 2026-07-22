@@ -1,0 +1,47 @@
+import { MapZone, isCellInsideZone, findZoneByName } from './src/domain/entities/battle-map.entity';
+
+// Confirma, usando las funciones REALES de dominio (isCellInsideZone,
+// findZoneByName -- las mismas que usa PlaceParticipantUseCase para validar
+// zoneName), que las zonas recalibradas de la taberna (rows=27 cols=27, ver
+// seed-maps.ts) siguen siendo coherentes: los puntos verificados
+// visualmente sobre la imagen real (centro de Salón Principal, centro de
+// Barra y Almacén, la mesa suroeste donde ocurrió el bug real, la fila del
+// umbral de la puerta) deben caer dentro de su zona, y puntos claramente
+// fuera (columna/fila del vecino, o pasado el muro) deben ser rechazados.
+
+const zones: MapZone[] = [
+  { name: 'Salón Principal', cells: [{ rowStart: 2, rowEnd: 22, colStart: 2, colEnd: 16 }] },
+  { name: 'Barra y Almacén', cells: [{ rowStart: 2, rowEnd: 22, colStart: 17, colEnd: 24 }] },
+];
+
+function isInsideNamedZone(zoneName: string, row: number, col: number): boolean {
+  const zone = findZoneByName(zones, zoneName);
+  if (!zone) throw new Error(`Zona no encontrada: ${zoneName}`);
+  return isCellInsideZone(zone, row, col);
+}
+
+const casos: [string, string, number, number, boolean][] = [
+  ['Centro de Salón Principal', 'Salón Principal', 12, 9, true],
+  ['Centro de Barra y Almacén', 'Barra y Almacén', 12, 20, true],
+  ['Mesa suroeste (donde ocurrió el bug real)', 'Salón Principal', 20, 4, true],
+  ['Fila del umbral de la puerta (última fila válida)', 'Salón Principal', 22, 12, true],
+  ['Borde columna 16 = última de Salón', 'Salón Principal', 12, 16, true],
+  ['Borde columna 17 = primera de Barra', 'Barra y Almacén', 12, 17, true],
+  ['Columna 16 NO debe estar en Barra', 'Barra y Almacén', 12, 16, false],
+  ['Columna 17 NO debe estar en Salón', 'Salón Principal', 12, 17, false],
+  ['Fila 23 (franja exterior, más allá de rowEnd) rechazada en Salón', 'Salón Principal', 23, 9, false],
+  ['Fila 0 (dentro del muro superior, antes de rowStart) rechazada en Salón', 'Salón Principal', 0, 9, false],
+];
+
+let ok = true;
+for (const [descripcion, zona, row, col, esperado] of casos) {
+  const resultado = isInsideNamedZone(zona, row, col);
+  const estado = resultado === esperado ? 'OK' : 'FALLO';
+  if (resultado !== esperado) ok = false;
+  console.log(`[${estado}] ${descripcion} (r${row}c${col} en "${zona}") -> ${resultado} (esperado ${esperado})`);
+}
+
+if (!ok) {
+  throw new Error('Algún caso de zona de la taberna no coincide con lo esperado');
+}
+console.log('ÉXITO: las zonas recalibradas de la taberna se comportan como se espera a nivel de dominio.');

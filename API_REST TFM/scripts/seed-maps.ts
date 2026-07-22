@@ -39,21 +39,44 @@ const maps = [
     name: 'Taberna Mercenarios',
     description: 'Sala principal de una taberna, con mesas, chimenea y zona de barra.',
     tags: ['interior', 'taberna', 'social'],
-    // rows/cols medidos a pixel sobre la imagen real (antes eran 25x26 "a
-    // ojo"): el interior con rejilla dibujada mide ~924x852px dentro de un
-    // lienzo de 1024x1024, con un paso de rejilla de ~39px -- eso da ~24
-    // columnas x ~22 filas reales, no 26x25. Con los valores viejos, las
-    // últimas filas (22-24) caían FUERA de la sala dibujada, en la franja
-    // exterior sin rejilla (cartel, arbustos, escalones de la entrada) --
-    // se detectó en partida real que la IA colocó a los jugadores ahí en vez
-    // de dentro de la taberna, con place_participant técnicamente "dentro"
-    // de una zona que en realidad se extendía más allá del dibujo.
-    rows: 22,
-    cols: 24,
+    // Recalibrado a pixel sobre la imagen real (antes 25x26 "a ojo"), en DOS
+    // pasadas -- la primera pasada (rows:21 cols:24, calcada de la rejilla
+    // real dibujada) resultó estar mal planteada: BoardPanel.tsx pinta el
+    // mapa en un contenedor con aspect-ratio = cols/rows y ahí encima el
+    // <img> con object-fit:contain, así que si cols/rows no coincide con el
+    // ratio real de la imagen (1024x1024 -- CUADRADA, confirmado con PIL),
+    // el navegador añade franjas vacías (letterboxing) a los lados para
+    // encajarla sin deformarla -- y el % de cada marcador se calcula sobre
+    // el CONTENEDOR, no sobre el dibujo real, así que con rows≠cols en una
+    // imagen cuadrada todo marcador queda desplazado. Por eso rows Y cols
+    // tienen que ser IGUALES aquí (contenedor cuadrado = imagen cuadrada =
+    // cero letterboxing), no el conteo literal de casillas del dibujo (que
+    // es 24 columnas x 21 filas, ligeramente rectangular).
+    //
+    // Con rows=cols=27 (1024/27 ≈ 37.9px por celda, casi igual al paso real
+    // de ~38px de la rejilla dibujada) se localizaron las líneas reales de
+    // la rejilla por pixel (picos de oscuridad + verificación cruzada por
+    // FFT de la periodicidad) y se tradujeron a este sistema de coordenadas
+    // cuadrado: el muro exterior deja un margen de ~2 filas/columnas antes
+    // de que empiece el suelo real, y la franja de fuera (cartel, arbustos,
+    // escalones de la entrada, sin rejilla dibujada) empieza pasada la fila
+    // 22 -- las zonas de abajo excluyen ese margen por todos los lados. Se
+    // verificó pintando marcadores de prueba sobre la imagen real con esta
+    // fórmula exacta ((fila+0.5)/rows, (col+0.5)/cols) y confirmando que
+    // caen dentro del dibujo, no en el muro ni en la franja exterior. El
+    // muro/pilar que separa la sala principal del ala de barra y almacén
+    // cae en la columna 16/17 en este sistema.
+    //
+    // Antes (25x26 "a ojo" y luego 21x24 "por rejilla real pero rectangular")
+    // se detectó en partida real que la IA colocaba a los jugadores fuera de
+    // la taberna (en la franja exterior con el cartel y los arbustos) pese a
+    // que place_participant los daba por "dentro" de la zona.
+    rows: 27,
+    cols: 27,
     imageUrl: '/maps/battleMap1-tabernaMercenarios.png',
     zones: [
-      { name: 'Salón Principal', cells: [{ rowStart: 0, rowEnd: 21, colStart: 0, colEnd: 15 }] },
-      { name: 'Barra y Almacén', cells: [{ rowStart: 0, rowEnd: 21, colStart: 16, colEnd: 23 }] },
+      { name: 'Salón Principal', cells: [{ rowStart: 2, rowEnd: 22, colStart: 2, colEnd: 16 }] },
+      { name: 'Barra y Almacén', cells: [{ rowStart: 2, rowEnd: 22, colStart: 17, colEnd: 24 }] },
     ],
   },
   {
