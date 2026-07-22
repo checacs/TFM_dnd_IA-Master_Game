@@ -119,7 +119,51 @@ const LOCATION_ENTRY_CUES = [
  * eligió el jugador) justo en el turno donde debe limitarse a preguntar.
  */
 const VILLAGE_START_MAX_MESSAGES = 10;
-const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i];
+const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i, /\banuncios?\b/i];
+
+/**
+ * Se detectó en partida real un bug distinto de todos los anteriores, y más
+ * sutil: el jugador respondía con una elección de arranque perfectamente
+ * clara ("tablón", "vamos al tablón de anuncios", "taberna", "ir a la
+ * taberna"...) y el DM SÍ llamaba a set_battle_map -- pero con el mapId
+ * EQUIVOCADO (aplicaba "tabernaMercenarios" cuando el jugador había pedido el
+ * tablón, o viceversa). protocolNudge/playerRequestedMapNudge no lo detectan
+ * porque ambos solo comprueban "¿se tocó ALGUNA tool de mapa?", nunca "¿es la
+ * tool CORRECTA para lo que pidió el jugador?". Esta comprobación es
+ * determinista en ambos sentidos: qué destino pidió el jugador (por palabras
+ * clave en su último mensaje) y qué mapId se aplicó de verdad este turno (leído
+ * del propio argumento de la llamada a set_battle_map, ver appliedMapId más
+ * abajo) -- si no coinciden, se fuerza la corrección antes de aceptar el turno.
+ * Igual que el resto de comprobaciones de arranque, se limita a los primeros
+ * mensajes de la partida (VILLAGE_START_MAX_MESSAGES) para no disparar falsos
+ * positivos si "la taberna" se menciona de pasada mucho más adelante en la
+ * campaña, cuando ya no hay ninguna elección de arranque en juego.
+ */
+const TABLON_DESTINATION_CUES = [/\btabl[oó]n(es)?\b/i, /\banuncios?\b/i];
+const TABERNA_DESTINATION_CUES = [/\btaberna\b/i];
+
+function villageDestinationMismatchNudge(
+    lastPlayerMessage: string,
+    appliedMapId: string | null,
+    messageCount: number,
+): string | null {
+  if (messageCount <= 1 || messageCount > VILLAGE_START_MAX_MESSAGES || appliedMapId === null) {
+    return null;
+  }
+  const choseTablon = TABLON_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage));
+  const choseTaberna = !choseTablon && TABERNA_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage));
+  if (!choseTablon && !choseTaberna) {
+    return null;
+  }
+  const expectedMapId = choseTablon ? 'tablonAnuncios' : 'tabernaMercenarios';
+  if (appliedMapId === expectedMapId) {
+    return null;
+  }
+  return `El jugador ha elegido con claridad ${choseTablon ? 'el tablón de anuncios' : 'la taberna'} en su ` +
+      `último mensaje, pero has aplicado con set_battle_map el mapId "${appliedMapId}", que no corresponde a esa ` +
+      `elección. Vuelve a llamar a set_battle_map con el mapId correcto ("${expectedMapId}") y ajusta tu ` +
+      'narración para describir el destino que el jugador realmente pidió, no otro distinto.';
+}
 
 function narrativeSuggestsLocationChange(text: string): boolean {
   const hasExit = LOCATION_EXIT_CUES.some((p) => p.test(text));
@@ -659,26 +703,34 @@ export async function runDmTurn(
       // no coinciden con lo narrado); 3) playerRequestedMapNudge (también
       // determinista: el jugador pidió el mapa explícitamente y no se tocó
       // ninguna tool -- muy grave porque el DM puede llegar a mentir diciendo
-      // que "ya se está mostrando"); 4) combate resuelto sin NINGUNA tool;
-      // 5) checkCombatStateNudge (un hecho verificable contra el HP real vía
-      // get_game_state); 6) protocolNudge (heurísticos de texto sobre
-      // mapas/colocación a partir de la NARRACIÓN del DM, el más leve de
-      // todos porque depende de cómo el propio DM elija contarlo).
+      // que "ya se está mostrando"); 4) villageDestinationMismatchNudge
+      // (también determinista: se aplicó un mapa de arranque, pero es el
+      // mapId equivocado para lo que el jugador pidió -- distinto de
+      // protocolNudge, que solo comprueba que SE TOCÓ algún mapa, nunca cuál);
+      // 5) combate resuelto sin NINGUNA tool; 6) checkCombatStateNudge (un
+      // hecho verificable contra el HP real vía get_game_state);
+      // 7) protocolNudge (heurísticos de texto sobre mapas/colocación a
+      // partir de la NARRACIÓN del DM, el más leve de todos porque depende de
+      // cómo el propio DM elija contarlo).
       const gameStart = gameStartNudge(initialMessageCount, response.message.content ?? '');
       const staleEncounterNudge = gameStart ? null : staleEncounterConflictNudge(failedStartCombatMessage);
       const mapRequestNudge = (gameStart || staleEncounterNudge)
           ? null
           : playerRequestedMapNudge(calledTools, lastPlayerMessageText(messages));
-      const noToolsNudge = (gameStart || staleEncounterNudge || mapRequestNudge)
+      const destinationMismatchNudge = (gameStart || staleEncounterNudge || mapRequestNudge)
+          ? null
+          : villageDestinationMismatchNudge(lastPlayerMessageText(messages), appliedMapId, initialMessageCount);
+      const noToolsNudge = (gameStart || staleEncounterNudge || mapRequestNudge || destinationMismatchNudge)
           ? null
           : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = (gameStart || staleEncounterNudge || mapRequestNudge || noToolsNudge)
+      const combatStateNudge = (gameStart || staleEncounterNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
           gameStart ??
           staleEncounterNudge ??
           mapRequestNudge ??
+          destinationMismatchNudge ??
           noToolsNudge ??
           combatStateNudge ??
           protocolNudge(

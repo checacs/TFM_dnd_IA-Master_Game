@@ -598,6 +598,45 @@ const maps = [
       { name: 'Pequeño Despacho del Molinero', cells: [{ rowStart: 16, rowEnd: 27, colStart: 8, colEnd: 20 }] },
     ],
   },
+  {
+    _id: 'pantano-rey',
+    name: 'Guarida del Rey del Pantano (planta completa)',
+    description: 'Complejo de cuevas y ruinas anegadas en un pantano: dos vestíbulos de entrada (norte y sur), ' +
+        'un pasillo de raíces, una zona de cría de monstruos, el antiguo templo sumergido, una cloaca de ' +
+        'desagüe, la sala del tesoro oculta, el bosque de árboles muertos, un nido de harpías, la prisión de ' +
+        'pantano, un laboratorio de alquimia de barro, la guarida de la bestia, un pasaje secreto y la sala del ' +
+        'trono del Rey del Pantano.',
+    tags: ['exterior', 'interior', 'pantano', 'mazmorra', 'multisala', 'cueva'],
+    // Calibrado a pixel: imagen real 847x1264, ratio 0.6701 -- mismo rows=30/
+    // cols=20 que sotanoTaberna/molino (mismo precedente que cripta-multisala).
+    // Esta imagen trae los nombres y NÚMEROS de sala en español dibujados
+    // encima (1 a 13, más "Pasaje Secreto" sin número) -- verificado con
+    // overlay sobre la imagen real que las 14 zonas de abajo encajan con cada
+    // sala numerada. El número "1" (Vestíbulo de Entrada) aparece dos veces en
+    // la imagen (norte y sur, dos accesos distintos al mismo complejo) -- de
+    // ahí que existan dos zonas distintas "Vestíbulo de Entrada Norte" y
+    // "Vestíbulo de Entrada Sur" con ese mismo nombre base para no romper la
+    // unicidad de nombres de zona que exige place_participant.
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap19-Pantano.png',
+    zones: [
+      { name: 'Vestíbulo de Entrada Norte', cells: [{ rowStart: 2, rowEnd: 8, colStart: 0, colEnd: 7 }] },
+      { name: 'Pasillo de las Raíces', cells: [{ rowStart: 2, rowEnd: 9, colStart: 7, colEnd: 13 }] },
+      { name: 'Zona de Cría de Monstruos', cells: [{ rowStart: 2, rowEnd: 9, colStart: 13, colEnd: 20 }] },
+      { name: 'Antiguo Templo Sumergido', cells: [{ rowStart: 9, rowEnd: 14, colStart: 0, colEnd: 7 }] },
+      { name: 'Cloaca de Desagüe', cells: [{ rowStart: 8, rowEnd: 13, colStart: 9, colEnd: 13 }] },
+      { name: 'Sala del Tesoro Oculta', cells: [{ rowStart: 9, rowEnd: 13, colStart: 13, colEnd: 20 }] },
+      { name: 'Bosque de Árboles Muertos', cells: [{ rowStart: 14, rowEnd: 17, colStart: 0, colEnd: 7 }] },
+      { name: 'Nido de Harpías', cells: [{ rowStart: 12, rowEnd: 16, colStart: 11, colEnd: 17 }] },
+      { name: 'Prisión de Pantano', cells: [{ rowStart: 13, rowEnd: 17, colStart: 17, colEnd: 20 }] },
+      { name: 'Laboratorio de Alquimia de Barro', cells: [{ rowStart: 16, rowEnd: 20, colStart: 9, colEnd: 20 }] },
+      { name: 'Guarda de la Bestia', cells: [{ rowStart: 17, rowEnd: 19, colStart: 0, colEnd: 5 }] },
+      { name: 'Sala del Trono del Rey del Pantano', cells: [{ rowStart: 19, rowEnd: 23, colStart: 0, colEnd: 11 }] },
+      { name: 'Pasaje Secreto', cells: [{ rowStart: 20, rowEnd: 23, colStart: 12, colEnd: 18 }] },
+      { name: 'Vestíbulo de Entrada Sur', cells: [{ rowStart: 24, rowEnd: 29, colStart: 3, colEnd: 17 }] },
+    ],
+  },
 ];
 
 async function seed() {
