@@ -1,0 +1,114 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(
+    private readonly tools: McpToolInfo[] = [],
+    private readonly results: Record<string, unknown> = {},
+  ) {}
+  async listTools(): Promise<McpToolInfo[]> { return this.tools; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  // Caso 1: el jugador elige el tablón de anuncios. El DM llama a describe_map
+  // y set_battle_map (mapId "tablonAnuncios") pero NUNCA a place_participant --
+  // eso es el comportamiento CORRECTO ahora (a petición del usuario: esa
+  // imagen es solo una ilustración, no debe mostrar marcadores). No debe
+  // dispararse ningún aviso de "aplicaste el mapa pero no colocaste a nadie".
+  const chat1 = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"mapId":"tablonAnuncios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant',
+        content: 'Os acercáis al tablón de anuncios. Hay varios contratos colgados: "Limpieza de ruinas", ' +
+            '"Escolta de una caravana", "Caza de un monstruo del bosque". ¿Cuál os interesa?',
+      },
+    },
+  ]);
+  const toolCaller1 = new FakeToolCaller([], {
+    describe_map: { mapId: 'tablonAnuncios', rows: 21, cols: 20, zones: [] },
+    set_battle_map: undefined,
+  });
+  const history1: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    { role: 'assistant', content: '¿Entráis en la taberna o os acercáis al tablón de anuncios?' },
+    { role: 'user', content: 'Nos acercamos al tablón' },
+  ];
+  const result1 = await runDmTurn(chat1, toolCaller1, history1, 'g1');
+  console.log('CASO 1 (tablón sin place_participant) -> narrativa final:', result1.narrative);
+  console.log('CASO 1 -> llamadas al modelo:', chat1.receivedCalls.length);
+  if (chat1.receivedCalls.length !== 3) {
+    throw new Error('FALLO CASO 1: se disparó un aviso correctivo innecesario tras aplicar tablonAnuncios sin place_participant');
+  }
+
+  // Caso 2: control -- el jugador elige la TABERNA (sí tiene zonas reales) y
+  // el DM aplica el mapa pero se olvida de colocar participantes. Este SÍ
+  // debe seguir disparando el aviso existente (no debe haberse roto la
+  // excepción al generalizarla).
+  const chat2 = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"tabernaMercenarios"}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant', content: null,
+        tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"mapId":"tabernaMercenarios"}' } }],
+      },
+    },
+    { message: { role: 'assistant', content: 'Entráis en la taberna, cálida y ruidosa.' } },
+  ]);
+  const toolCaller2 = new FakeToolCaller([], {
+    describe_map: { mapId: 'tabernaMercenarios', rows: 27, cols: 27, zones: [{ name: 'Salón Principal' }] },
+    set_battle_map: undefined,
+  });
+  const history2: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    { role: 'assistant', content: '¿Entráis en la taberna o os acercáis al tablón de anuncios?' },
+    { role: 'user', content: 'Entramos en la taberna' },
+  ];
+  const result2 = await runDmTurn(chat2, toolCaller2, history2, 'g1');
+  console.log('CASO 2 (control, taberna sin place_participant) -> llamadas al modelo:', chat2.receivedCalls.length);
+  if (chat2.receivedCalls.length !== 4) {
+    throw new Error('FALLO CASO 2: no se disparó el aviso de "aplicaste el mapa pero no colocaste a nadie" para un mapa CON zonas reales');
+  }
+  const msgs2 = chat2.receivedCalls[3].messages;
+  const correction2 = msgs2[msgs2.length - 1];
+  if (!String(correction2.content).includes('no has colocado a ningún participante')) {
+    throw new Error('FALLO CASO 2: el aviso disparado no es el esperado');
+  }
+
+  console.log('OK: tablonAnuncios no exige place_participant, pero el resto de mapas con zonas reales sí.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

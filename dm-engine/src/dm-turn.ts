@@ -295,6 +295,7 @@ function protocolNudge(
     placedParticipantIds: Set<string>,
     narrativeText: string,
     messageCount: number,
+    appliedMapId: string | null,
 ): string | null {
   // Se comprobó en partida real que el DM narraba salir de una localización
   // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
@@ -312,8 +313,9 @@ function protocolNudge(
     return 'Tu narración menciona la taberna o el tablón de anuncios (la elección de arranque de la partida), ' +
         'pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del arranque: llama a ' +
         'describe_map con el mapId correspondiente ("tabernaMercenarios" o "tablonAnuncios"), luego a ' +
-        'set_battle_map, y coloca a los jugadores con place_participant (salvo en tablonAnuncios, que no tiene ' +
-        'zonas que validar) antes de dar la escena por buena.';
+        'set_battle_map -- y si es la taberna, coloca a los jugadores con place_participant en la zona real que ' +
+        'vayas a narrar; si es el tablón de anuncios, NO llames a place_participant en absoluto (esa imagen no ' +
+        'muestra marcadores de personajes) y pasa directamente a describir los contratos disponibles.';
   }
   if (!touchedMapSystem && narrativeSuggestsLocationChange(narrativeText)) {
     return 'Tu narración de este turno suena a que el grupo ha cambiado de localización (salís de un sitio y ' +
@@ -341,7 +343,11 @@ function protocolNudge(
         '(gameId y mapId) y coloca a los participantes con place_participant; si ninguno encaja, llama a ' +
         'clear_battle_map para no dejar en pantalla el mapa de la escena anterior.';
   }
-  if (mapApplied && !placedParticipant) {
+  // tablonAnuncios es una excepción a propósito: es solo una ilustración de
+  // calle sin marcadores de personajes (ver dm-system-prompt.ts), así que
+  // nunca lleva place_participant -- sin esta excepción, este aviso obligaría
+  // al DM a colocar jugadores donde la UI ni siquiera los va a pintar.
+  if (mapApplied && !placedParticipant && appliedMapId !== 'tablonAnuncios') {
     return 'Has aplicado un mapa con set_battle_map pero no has colocado a ningún participante. Llama a ' +
         'place_participant para cada jugador (y enemigo si hay combate) antes de narrar.';
   }
@@ -513,6 +519,14 @@ export async function runDmTurn(
   const combatEnemyIds = new Set<string>();
   const attackedEnemyIds = new Set<string>();
   let failedStartCombatMessage: string | null = null;
+  // mapId del último set_battle_map aplicado con éxito en este turno -- se usa
+  // solo para saber si es "tablonAnuncios" (nunca lleva place_participant, ver
+  // dm-system-prompt.ts) y así no disparar el aviso de "aplicaste el mapa
+  // pero no colocaste a nadie" en ese caso concreto. El resultado de la tool
+  // (mapa_aplicado) no trae el mapId de vuelta -- SetBattleMapUseCase no
+  // devuelve nada -- así que se lee directamente del argumento con el que el
+  // propio DM llamó a la tool.
+  let appliedMapId: string | null = null;
   const systemPrompt = buildDmSystemPrompt(gameId);
   const withSystem = (): ChatMessage[] => [{ role: 'system', content: systemPrompt }, ...messages];
 
@@ -565,6 +579,9 @@ export async function runDmTurn(
         }
 
         if (!failed) {
+          if (call.function.name === 'set_battle_map' && typeof args['mapId'] === 'string') {
+            appliedMapId = args['mapId'] as string;
+          }
           if (call.function.name === 'place_participant' && typeof args['participantId'] === 'string') {
             placedParticipantIds.add(args['participantId'] as string);
           }
@@ -623,7 +640,7 @@ export async function runDmTurn(
           combatStateNudge ??
           protocolNudge(
               calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '',
-              messages.length,
+              messages.length, appliedMapId,
           );
       if (nudge) {
         correctionUsed = true;

@@ -34,7 +34,18 @@ function cellToPercent(position: BoardPosition, board: Board) {
 }
 
 export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }: BoardPanelProps) {
+  // El tablonAnuncios (y cualquier otro mapa sin salas catalogadas) es solo
+  // una ilustración de calle en primer plano para simular que el grupo está
+  // delante del tablón -- no una planta con cuadrícula real, así que no
+  // tiene sentido pintar marcadores de personajes encima (el DM ni siquiera
+  // llama a place_participant ahí, ver dm-system-prompt.ts). zones.length===0
+  // con imagen ya aplicada es la señal: todo mapa real del catálogo trae al
+  // menos una zona, así que esta combinación identifica de forma fiable a
+  // este tipo de mapa "solo ilustración" sin necesitar un flag nuevo.
+  const showMarkers = board.zones.length > 0;
+
   const positionedMarkers = useMemo(() => {
+    if (!showMarkers) return [];
     const result: PositionedMarker[] = [];
     players.forEach((p) => {
       if (p.position) result.push({ type: 'player', label: p.name[0].toUpperCase(), position: p.position });
@@ -43,7 +54,7 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
       if (e.position) result.push({ type: 'enemy', label: e.name[0].toUpperCase(), position: e.position });
     });
     return result;
-  }, [players, enemies]);
+  }, [players, enemies, showMarkers]);
 
   return (
     <div className="board-panel">

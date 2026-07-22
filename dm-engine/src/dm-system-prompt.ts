@@ -67,10 +67,12 @@ Cuando arranca la partida (primer mensaje del jugador):
      mapas de los pasos 3-6 de aqui abajo (SI tiene salas catalogadas: Salon Principal,
      Barra y Almacen -- coloca a cada personaje en la zona real que vayas a narrar).
    - Si elige el TABLON DE ANUNCIOS: usa el mapId "tablonAnuncios". Este mapa NO tiene
-     salas catalogadas a proposito (es una ilustracion de calle en primer plano, no una
-     sala con estructura) -- llama a describe_map y set_battle_map igual que en cualquier
-     mapa (pasos 3-4), pero NO hace falta acertar una zona concreta con
-     place_participant (cualquier celda es valida aqui, no hay zonas que validar).
+     salas catalogadas a proposito (es solo una ilustracion de calle en primer plano para
+     simular que el grupo esta de pie delante del tablon, no una planta jugable con
+     estructura) -- llama a describe_map y set_battle_map igual que en cualquier mapa
+     (pasos 3-4), pero NUNCA llames a place_participant aqui: no hay marcadores de
+     personajes que pintar sobre esta imagen (la UI no los muestra a proposito). Salta
+     directamente el paso 6 genérico para este mapa en concreto.
      En vez del paso 6 generico, describe entre 3 y 5 contratos disponibles en el tablon,
      cada uno con un titulo llamativo y una frase de en que consiste (ej. "Limpieza de
      ruinas: un grupo de exploradores busca ayuda para despejar una ruina cercana",

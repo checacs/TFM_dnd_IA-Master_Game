@@ -1,0 +1,96 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(
+    private readonly tools: McpToolInfo[] = [],
+    private readonly results: Record<string, unknown> = {},
+  ) {}
+  async listTools(): Promise<McpToolInfo[]> { return this.tools; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  // Caso 1: EXACTAMENTE el bug real reportado -- sale de la taberna, entra en
+  // la cripta, sin llamar a ninguna tool de mapa. Debe disparar el aviso.
+  const chat1 = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant',
+        content:
+          'Sales de la taberna al aire frío de la noche. El pueblo de Piedra Hundida duerme. Bajas con cuidado, ' +
+          'contando los peldaños: doce, quince, veinte. El pasillo se abre a una sala cuadrada.',
+      },
+    },
+    { message: { role: 'assistant', content: 'Tras revisar el mapa de la cripta, continúa la escena.' } },
+  ]);
+  const toolCaller1 = new FakeToolCaller([], { get_battle_maps: [], clear_battle_map: { cleared: true } });
+  const result1 = await runDmTurn(chat1, toolCaller1, [], 'g1');
+  console.log('CASO 1 (bug real) -> narrativa final:', result1.narrative);
+  console.log('CASO 1 -> llamadas al modelo:', chat1.receivedCalls.length);
+  const msgs1 = chat1.receivedCalls[1].messages;
+  const correction1 = msgs1[msgs1.length - 1];
+  console.log('CASO 1 -> aviso correctivo incluye "tool de mapa":', String(correction1.content).includes('tool de mapa'));
+  if (chat1.receivedCalls.length !== 2) throw new Error('FALLO CASO 1: no se disparó el aviso correctivo esperado');
+
+  // Caso 2: control -- narrativa neutra sin tocar mapas, no debe disparar nada
+  // (regresión del test "si el turno no toca mapas para nada"). Historial de
+  // 3 mensajes (no 1 solo) para simular un turno YA avanzado de la partida --
+  // messages.length === 1 dispararía ahora gameStartNudge (ver ese chequeo
+  // más abajo en dm-turn.ts), que asume que un historial de un único mensaje
+  // es siempre el arranque real de la partida.
+  const chat2 = new FakeChatClient([{ message: { role: 'assistant', content: 'Miras alrededor, todo en calma.' } }]);
+  const toolCaller2 = new FakeToolCaller();
+  const history2: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    { role: 'assistant', content: '¿Entráis en la taberna o os acercáis al tablón de anuncios?' },
+    { role: 'user', content: 'Miro alrededor' },
+  ];
+  const result2 = await runDmTurn(chat2, toolCaller2, history2, 'g1');
+  console.log('CASO 2 (control neutro) -> llamadas al modelo:', chat2.receivedCalls.length);
+  if (chat2.receivedCalls.length !== 1) throw new Error('FALLO CASO 2: se disparó un aviso donde no debía');
+
+  // Caso 3: el DM SÍ resuelve el mapa (clear_battle_map) en el mismo turno --
+  // no debe disparar el nuevo aviso aunque el texto mencione salir/entrar.
+  const chat3 = new FakeChatClient([
+    {
+      message: {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'get_battle_maps', arguments: '{"tags":["cripta"]}' } }],
+      },
+    },
+    {
+      message: {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'clear_battle_map', arguments: '{"gameId":"g1"}' } }],
+      },
+    },
+    { message: { role: 'assistant', content: 'Sales de la taberna y desciendes a la cripta oscura.' } },
+  ]);
+  const toolCaller3 = new FakeToolCaller([], { get_battle_maps: [], clear_battle_map: { cleared: true } });
+  const result3 = await runDmTurn(chat3, toolCaller3, [], 'g1');
+  console.log('CASO 3 (mapa sí resuelto) -> llamadas al modelo:', chat3.receivedCalls.length);
+  if (chat3.receivedCalls.length !== 3) throw new Error('FALLO CASO 3: se disparó un aviso extra innecesario');
+
+  console.log('OK: el aviso de cambio de localizacion se dispara solo cuando corresponde.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
