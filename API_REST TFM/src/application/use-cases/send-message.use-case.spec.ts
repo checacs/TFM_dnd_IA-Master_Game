@@ -50,9 +50,29 @@ class FakeDmEngineClient implements DmEngineClient {
 }
 
 class FailingDmEngineClient implements DmEngineClient {
+  public attempts = 0;
   constructor(private readonly error: Error) {}
   async sendTurn(): Promise<DmEngineResult> {
+    this.attempts++;
     throw this.error;
+  }
+}
+
+/** Falla las primeras `failTimes` llamadas y luego responde con éxito -- simula
+ * un cold-start que se resuelve solo si se le da un par de intentos más. */
+class RecoveringDmEngineClient implements DmEngineClient {
+  public attempts = 0;
+  constructor(
+    private readonly failTimes: number,
+    private readonly error: Error,
+    private readonly result: DmEngineResult,
+  ) {}
+  async sendTurn(): Promise<DmEngineResult> {
+    this.attempts++;
+    if (this.attempts <= this.failTimes) {
+      throw this.error;
+    }
+    return this.result;
   }
 }
 
@@ -100,29 +120,66 @@ describe('SendMessageUseCase', () => {
     );
   });
 
-  it('si el dm-engine falla (timeout, cold-start de Render...), guarda un mensaje de fallback en vez de dejar la partida sin respuesta', async () => {
-    const games = new FakeGameRepository();
-    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
-    games.seed(game);
+  it('si el dm-engine falla SIEMPRE, reintenta el turno completo varias veces y solo entonces guarda el mensaje de fallback', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      const games = new FakeGameRepository();
+      const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+      games.seed(game);
 
-    const dmEngine = new FailingDmEngineClient(new Error('dm-engine no respondió en 45000ms'));
-    const useCase = new SendMessageUseCase(games, dmEngine);
+      const dmEngine = new FailingDmEngineClient(new Error('dm-engine no respondió en 45000ms'));
+      const useCase = new SendMessageUseCase(games, dmEngine);
 
-    const result = await useCase.execute({
-      gameId: game.id,
-      messages: [{ role: 'user', content: 'Abro la puerta' }],
-    });
+      const result = await useCase.execute({
+        gameId: game.id,
+        messages: [{ role: 'user', content: 'Abro la puerta' }],
+      });
 
-    // No debe rechazar: el jugador tiene que recibir SIEMPRE algo en el chat.
-    expect(result.narrative).toMatch(/no ha podido responder/i);
-    expect(result.events).toEqual([]);
+      // No debe rechazar: el jugador tiene que recibir SIEMPRE algo en el chat.
+      expect(result.narrative).toMatch(/no ha podido responder/i);
+      expect(result.events).toEqual([]);
+      // Se reintentó el turno completo (no se rindió al primer fallo).
+      expect(dmEngine.attempts).toBe(3);
 
-    const saved = await games.findById(game.id);
-    const log = saved!.toSnapshot().narrativeLog;
-    expect(log).toHaveLength(2);
-    expect(log[0]).toEqual(expect.objectContaining({ role: 'user', content: 'Abro la puerta' }));
-    expect(log[1].role).toBe('assistant');
-    expect(log[1].content).toMatch(/no ha podido responder/i);
+      const saved = await games.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log).toHaveLength(2);
+      expect(log[0]).toEqual(expect.objectContaining({ role: 'user', content: 'Abro la puerta' }));
+      expect(log[1].role).toBe('assistant');
+      expect(log[1].content).toMatch(/no ha podido responder/i);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('si el dm-engine falla las primeras veces pero se recupera (cold-start doble), el jugador nunca ve el mensaje de fallback', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      const games = new FakeGameRepository();
+      const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+      games.seed(game);
+
+      const dmEngine = new RecoveringDmEngineClient(2, new Error('dm-engine no respondió en 45000ms'), {
+        narrative: 'La puerta cruje al abrirse, por fin.',
+        events: [],
+      });
+      const useCase = new SendMessageUseCase(games, dmEngine);
+
+      const result = await useCase.execute({
+        gameId: game.id,
+        messages: [{ role: 'user', content: 'Abro la puerta' }],
+      });
+
+      expect(dmEngine.attempts).toBe(3);
+      expect(result.narrative).toBe('La puerta cruje al abrirse, por fin.');
+      expect(result.narrative).not.toMatch(/no ha podido responder/i);
+
+      const saved = await games.findById(game.id);
+      const log = saved!.toSnapshot().narrativeLog;
+      expect(log[1].content).toBe('La puerta cruje al abrirse, por fin.');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('lanza DomainError si la partida no existe, sin llegar a llamar al dm-engine', async () => {

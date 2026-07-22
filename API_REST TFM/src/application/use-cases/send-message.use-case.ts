@@ -8,6 +8,24 @@ export interface SendMessageInput {
   messages: DmEngineChatMessage[];
 }
 
+/**
+ * HttpDmEngineClient ya reintenta UNA vez internamente ante fallos "de
+ * arranque" (cold start / timeout) o un 503 explícito (NoMutationYetError:
+ * dm-engine falló antes de llamar a ninguna tool ese turno). Aun así, se
+ * siguió viendo el mensaje de fallback en el primer turno de una partida
+ * nueva: un cold start "doble" (esta misma API y dm-engine dormidos a la
+ * vez) puede tardar más que ese presupuesto interno. En vez de obligar al
+ * jugador a darse cuenta del error y reescribir su acción a mano, esta capa
+ * reintenta el turno COMPLETO (mismo gameId, mismos messages -- el jugador
+ * no repite nada) unas veces más antes de rendirse y guardar el mensaje de
+ * fallback. No hay timeout en el cliente HTTP del móvil/ui-web para esta
+ * llamada, así que alargar la espera aquí es seguro: el jugador solo ve el
+ * indicador de "pensando" un poco más, en vez de un error que le obliga a
+ * actuar.
+ */
+const MAX_SEND_ATTEMPTS = 3;
+const SEND_RETRY_DELAY_MS = 5_000;
+
 @Injectable()
 export class SendMessageUseCase {
   constructor(
@@ -29,18 +47,33 @@ export class SendMessageUseCase {
       await this.games.save(game);
     }
 
-    let result: DmEngineResult;
-    try {
-      result = await this.dmEngine.sendTurn(input.gameId, input.messages);
-    } catch (error) {
-      // dm-engine puede fallar por un cold-start de Render, un timeout o un
-      // corte de red. Antes esto dejaba el turno del jugador sin ninguna
-      // respuesta ni error visible: el mensaje del jugador quedaba guardado
-      // (arriba) pero el chat se congelaba para siempre sin que apareciera
-      // nada más. En vez de reventar el turno entero, se guarda un mensaje de
-      // fallback legible para que el jugador sepa que puede reintentar.
-      const reason = error instanceof Error ? error.message : String(error);
-      console.error(`[SendMessageUseCase] dm-engine falló para la partida ${input.gameId}: ${reason}`);
+    let result: DmEngineResult | null = null;
+    for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+      try {
+        result = await this.dmEngine.sendTurn(input.gameId, input.messages);
+        break;
+      } catch (error) {
+        // dm-engine puede fallar por un cold-start de Render, un timeout o un
+        // corte de red. Antes esto dejaba el turno del jugador sin ninguna
+        // respuesta ni error visible: el mensaje del jugador quedaba guardado
+        // (arriba) pero el chat se congelaba para siempre sin que apareciera
+        // nada más.
+        const reason = error instanceof Error ? error.message : String(error);
+        const isLastAttempt = attempt === MAX_SEND_ATTEMPTS;
+        console.error(
+          `[SendMessageUseCase] dm-engine falló (intento ${attempt}/${MAX_SEND_ATTEMPTS}) para la partida ` +
+            `${input.gameId}: ${reason}`,
+        );
+        if (!isLastAttempt) {
+          await sleep(SEND_RETRY_DELAY_MS);
+        }
+      }
+    }
+
+    if (!result) {
+      // Se agotaron todos los reintentos: en vez de reventar el turno entero,
+      // se guarda un mensaje de fallback legible para que el jugador sepa que
+      // puede reintentar.
       result = {
         narrative:
           'El DM-IA no ha podido responder ahora mismo (puede que el servicio esté arrancando tras estar inactivo, o haya un problema de conexión). Vuelve a intentar tu acción en unos segundos.',
@@ -64,4 +97,8 @@ export class SendMessageUseCase {
 
     return result;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -1,0 +1,93 @@
+import { Game } from './src/domain/entities/game.entity';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from './src/domain/ports/dm-engine.port';
+import { SendMessageUseCase } from './src/application/use-cases/send-message.use-case';
+
+class FakeGameRepository implements GameRepository {
+  private readonly snapshots = new Map<string, ReturnType<Game['toSnapshot']>>();
+  seed(game: Game): void { this.snapshots.set(game.id, game.toSnapshot()); }
+  async findById(id: string): Promise<Game | null> {
+    const snapshot = this.snapshots.get(id);
+    return snapshot ? Game.reconstitute(id, structuredClone(snapshot)) : null;
+  }
+  async findByUserId(): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.snapshots.set(game.id, game.toSnapshot()); }
+}
+
+class RecoveringDmEngineClient implements DmEngineClient {
+  public attempts = 0;
+  constructor(private readonly failTimes: number, private readonly result: DmEngineResult) {}
+  async sendTurn(_gameId: string, _messages: DmEngineChatMessage[]): Promise<DmEngineResult> {
+    this.attempts++;
+    if (this.attempts <= this.failTimes) {
+      throw new Error(`dm-engine no respondio (fallo simulado ${this.attempts})`);
+    }
+    return this.result;
+  }
+}
+
+class AlwaysFailingDmEngineClient implements DmEngineClient {
+  public attempts = 0;
+  async sendTurn(): Promise<DmEngineResult> {
+    this.attempts++;
+    throw new Error('dm-engine no respondio (fallo simulado permanente)');
+  }
+}
+
+async function main() {
+  // Escenario real reportado: cold-start doble en la primera escena de una
+  // partida nueva -- falla dos veces (agotando ya el reintento interno de
+  // HttpDmEngineClient) pero a la tercera dm-engine ya esta despierto.
+  {
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+    const dmEngine = new RecoveringDmEngineClient(2, {
+      narrative: 'La puerta cruje al abrirse, por fin.',
+      events: [],
+    });
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    const result = await useCase.execute({
+      gameId: game.id,
+      messages: [{ role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' }],
+    });
+
+    console.log(`Intentos hasta recuperarse: ${dmEngine.attempts}`);
+    console.log(`Narrativa devuelta: ${result.narrative}`);
+    if (dmEngine.attempts !== 3) {
+      throw new Error('FALLO: deberia haber reintentado hasta el 3er intento');
+    }
+    if (result.narrative.match(/no ha podido responder/i)) {
+      throw new Error('FALLO: el jugador no deberia ver el fallback si al final se recupera');
+    }
+  }
+
+  // Escenario de agotamiento: falla siempre -> debe seguir devolviendo el
+  // mensaje de fallback (nunca dejar el turno sin respuesta), pero solo tras
+  // agotar los 3 intentos, no al primer fallo.
+  {
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+    const dmEngine = new AlwaysFailingDmEngineClient();
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    const result = await useCase.execute({
+      gameId: game.id,
+      messages: [{ role: 'user', content: 'Abro la puerta' }],
+    });
+
+    console.log(`Intentos antes de rendirse: ${dmEngine.attempts}`);
+    if (dmEngine.attempts !== 3) {
+      throw new Error('FALLO: deberia haber intentado exactamente 3 veces antes del fallback');
+    }
+    if (!result.narrative.match(/no ha podido responder/i)) {
+      throw new Error('FALLO: deberia mostrar el fallback tras agotar los reintentos');
+    }
+  }
+
+  console.log('OK: SendMessageUseCase reintenta el turno completo antes de rendirse al mensaje de fallback.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
