@@ -40,7 +40,7 @@ describe('EndPlayerTurnUseCase', () => {
 
     const saved = await repo.findById(game.id);
     const encounter = saved?.toSnapshot().activeEncounter;
-    expect(encounter?.turnClaim).toBeNull();
+    expect(encounter?.turnClaims).toEqual([]);
     expect(encounter?.actedThisRound).toEqual(['char-1']);
     // único jugador vivo del combate -> al actuar, la fase pasa a 'enemigos'
     expect(encounter?.roundPhase).toBe('enemigos');

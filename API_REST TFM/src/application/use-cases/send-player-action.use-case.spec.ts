@@ -75,6 +75,32 @@ describe('SendPlayerActionUseCase', () => {
     });
 
     it(
+        'antepone el nombre del personaje al contenido enviado al DM (ej. "**Elyndra:** ...") -- antes el ' +
+        'chat de ui-web mostraba cualquier acción de cualquier jugador bajo la misma etiqueta genérica ' +
+        '"Jugador", sin forma de saber quién había escrito qué',
+        async () => {
+          const { game, games } = buildGameInCombat();
+          game.claimTurn('char-1');
+          await games.save(game);
+          const dmEngine = new FakeDmEngineClient('El goblin retrocede.');
+          const sendMessage = new SendMessageUseCase(games, dmEngine);
+          const useCase = new SendPlayerActionUseCase(games, sendMessage);
+
+          await useCase.execute({
+            gameId: game.id,
+            requestingUserId: 'user-1',
+            characterId: 'char-1',
+            content: 'Ataco al goblin con mi daga',
+          });
+
+          expect(dmEngine.receivedMessages[dmEngine.receivedMessages.length - 1]).toEqual({
+            role: 'user',
+            content: '**Elyndra:** Ataco al goblin con mi daga',
+          });
+        },
+    );
+
+    it(
         'NO libera el turno automáticamente tras enviar la acción — antes lo hacía ' +
         'incondicionalmente (Game.releaseTurnAfterAction en cada mensaje), lo que en partidas ' +
         'de 1 jugador bloqueaba para siempre al único jugador en cuanto el DM respondía con una ' +
@@ -101,7 +127,7 @@ describe('SendPlayerActionUseCase', () => {
           // El turno sigue reclamado por char-1: puede responder la pregunta del
           // DM en un segundo mensaje sin que nadie más pueda colarse ni quedarse
           // bloqueado esperando "a los demás" (que ni siquiera existen, en solo).
-          expect(encounter?.turnClaim).toBe('char-1');
+          expect(encounter?.turnClaims).toEqual(['char-1']);
           expect(encounter?.actedThisRound).toEqual([]);
           expect(encounter?.roundPhase).toBe('jugadores');
 

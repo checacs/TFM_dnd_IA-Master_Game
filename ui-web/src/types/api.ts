@@ -143,13 +143,15 @@ export type RoundPhase = 'jugadores' | 'enemigos';
 /**
  * Modelo de rondas (sustituye a la iniciativa 1d20+destreza entre
  * jugadores): roundPhase indica si toca actuar a los jugadores o al DM-IA
- * (enemigos); turnClaim es el characterId que tiene el turno reclamado desde
- * el móvil ("Mi turno"), o null si está libre; actedThisRound son los
- * characterId que ya actuaron en la ronda de jugadores actual.
+ * (enemigos); turnClaims son los characterId que tienen el turno reclamado
+ * desde el móvil ("Mi turno") -- YA NO es exclusivo de uno solo, varios
+ * jugadores pueden reclamarlo a la vez sin bloquearse entre ellos;
+ * actedThisRound son los characterId que ya actuaron en la ronda de
+ * jugadores actual.
  */
 export interface ActiveEncounter {
   roundPhase: RoundPhase;
-  turnClaim: string | null;
+  turnClaims: string[];
   actedThisRound: string[];
   enemies: EncounterEnemy[];
   log: string[];

@@ -121,7 +121,7 @@ El `dm-engine` intercepta cada `tool_call`/resultado del bucle y lo traduce a un
 
 ## 5. Quién dispara `runDmTurn`
 
-**Ya no hay iniciativa ni "siguiente turno" calculado por el backend.** Tras revisar el diseño con la experiencia real de partidas de mesa, se sustituyó por un modelo de rondas simple (`Game.roundPhase`/`turnClaim`/`actedThisRound`, ver `01-especificacion-funcional.md` y `02-modelo-datos-mongodb.md`):
+**Ya no hay iniciativa ni "siguiente turno" calculado por el backend.** Tras revisar el diseño con la experiencia real de partidas de mesa, se sustituyó por un modelo de rondas simple (`Game.roundPhase`/`turnClaims`/`actedThisRound`, ver `01-especificacion-funcional.md` y `02-modelo-datos-mongodb.md`). `turnClaims` ya no es un candado exclusivo de un solo jugador: varios pueden reclamar turno a la vez sin bloquearse entre ellos:
 
 - **Acción de un jugador en combate** → el jugador reclama el candado con "Mi turno" (`POST /games/:id/claim-turn`) y, cuando quiere actuar, escribe su acción (`POST /games/:id/player-action`). Ese endpoint es el que dispara `runDmTurn` — el DM-IA narra la acción de ESE jugador, y solo cuando `roundPhase` pasa a "enemigos" (todos los jugadores vivos ya actuaron) el DM-IA resuelve él mismo, en ese mismo turno, los ataques de los enemigos con `resolve_attack` y termina llamando a `advance_to_player_round`.
 - **Mensaje del capitán fuera de combate** (HU2) → mismo endpoint `player-action`, pero solo lo puede llamar el jugador marcado como capitán (`Game.captainUserId`) — evita que varios jugadores narren a la vez cuando no hay pelea.

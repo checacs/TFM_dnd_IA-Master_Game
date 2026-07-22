@@ -105,7 +105,7 @@ export function GameScreen() {
                 <EnemyPanel
                   enemies={game.activeEncounter!.enemies}
                   roundPhase={game.activeEncounter!.roundPhase}
-                  turnClaim={game.activeEncounter!.turnClaim}
+                  turnClaims={game.activeEncounter!.turnClaims}
                   players={game.players}
                 />
               )

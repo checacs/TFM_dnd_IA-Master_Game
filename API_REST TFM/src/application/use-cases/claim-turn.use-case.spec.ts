@@ -39,7 +39,7 @@ describe('ClaimTurnUseCase', () => {
     await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1' });
 
     const saved = await repo.findById(game.id);
-    expect(saved?.toSnapshot().activeEncounter?.turnClaim).toBe('char-1');
+    expect(saved?.toSnapshot().activeEncounter?.turnClaims).toEqual(['char-1']);
   });
 
   it('lanza DomainError si el characterId no pertenece al requestingUserId', async () => {
@@ -51,18 +51,26 @@ describe('ClaimTurnUseCase', () => {
     ).rejects.toThrow();
 
     const saved = await repo.findById(game.id);
-    expect(saved?.toSnapshot().activeEncounter?.turnClaim).toBeNull();
+    expect(saved?.toSnapshot().activeEncounter?.turnClaims).toEqual([]);
   });
 
-  it('lanza DomainError si otro jugador ya tiene el turno reclamado', async () => {
-    const { game, repo } = buildGameInCombat();
-    const useCase = new ClaimTurnUseCase(repo);
-    await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1' });
+  it(
+      'un jugador puede reclamar el turno aunque otro ya lo tenga reclamado -- ya no es un candado ' +
+      'exclusivo (bug real: bloqueaba a un jugador si la IA se dirigía a él sin haber liberado antes ' +
+      'el turno de otro jugador con end_player_turn)',
+      async () => {
+        const { game, repo } = buildGameInCombat();
+        const useCase = new ClaimTurnUseCase(repo);
+        await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1' });
 
-    await expect(
-      useCase.execute({ gameId: game.id, requestingUserId: 'user-2', characterId: 'char-2' }),
-    ).rejects.toThrow();
-  });
+        await expect(
+          useCase.execute({ gameId: game.id, requestingUserId: 'user-2', characterId: 'char-2' }),
+        ).resolves.not.toThrow();
+
+        const saved = await repo.findById(game.id);
+        expect(saved?.toSnapshot().activeEncounter?.turnClaims).toEqual(['char-1', 'char-2']);
+      },
+  );
 
   it('lanza DomainError si la partida no existe', async () => {
     const repo = new FakeGameRepository();

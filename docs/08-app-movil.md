@@ -28,7 +28,7 @@ Es la única pantalla que ve el jugador mientras la partida está en curso (`Cha
 ```
 GET  /characters/:id                     → ficha completa
 POST /characters/:id/assign-skill-point  → { attribute: 'int' }
-GET  /games/:id                          → estado de la partida (roundPhase, turnClaim, captainUserId...)
+GET  /games/:id                          → estado de la partida (roundPhase, turnClaims, captainUserId...)
 POST /games/:id/claim-turn               → { characterId }              — botón "Mi turno"
 POST /games/:id/player-action            → { characterId, content }    — campo de acción
 POST /games/:id/player-roll              → { notation? }               — botón "Tirar Dados" (por defecto "1d20")

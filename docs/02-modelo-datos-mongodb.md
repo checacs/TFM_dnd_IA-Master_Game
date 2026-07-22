@@ -90,19 +90,24 @@ interface Game {
   activeEncounter: {
     // Modelo de rondas (sustituyó a initiativeOrder/currentTurnIndex — ver
     // nota más abajo): roundPhase indica si toca actuar a los jugadores o al
-    // DM-IA (enemigos); turnClaim es el characterId con el turno reclamado
-    // desde el móvil ("Mi turno"); actedThisRound son los characterId que ya
-    // actuaron en la ronda de jugadores actual.
-    // null en DOS momentos distintos, no solo uno: antes de que arranque el
-    // primer combate de la partida, Y de nuevo cada vez que la tool MCP
-    // end_combat cierra uno ya resuelto (ver 04-servidor-mcp.md sección 10).
-    // Se detectó en partida real que, sin end_combat, esto se quedaba
-    // "atascado" con datos de un combate ya terminado — el panel de
-    // "Combate" y los marcadores de enemigos derrotados seguían
-    // mostrándose en el tablero aunque la narración ya hubiera avanzado
-    // a otra escena.
+    // DM-IA (enemigos); turnClaims son los characterId con el turno reclamado
+    // desde el móvil ("Mi turno") -- YA NO es un candado exclusivo de uno
+    // solo: varios jugadores pueden reclamarlo a la vez sin bloquearse entre
+    // ellos (antes, si la IA se dirigía a un jugador distinto del que tenía
+    // el turno reclamado sin haberlo liberado con end_player_turn, ese
+    // segundo jugador se quedaba bloqueado sin poder ni reclamar turno ni
+    // tirar dados — un punto muerto real detectado en partida); actedThisRound
+    // son los characterId que ya actuaron en la ronda de jugadores actual.
+    // activeEncounter es null en DOS momentos distintos, no solo uno: antes
+    // de que arranque el primer combate de la partida, Y de nuevo cada vez
+    // que la tool MCP end_combat cierra uno ya resuelto (ver
+    // 04-servidor-mcp.md sección 10). Se detectó en partida real que, sin
+    // end_combat, esto se quedaba "atascado" con datos de un combate ya
+    // terminado — el panel de "Combate" y los marcadores de enemigos
+    // derrotados seguían mostrándose en el tablero aunque la narración ya
+    // hubiera avanzado a otra escena.
     roundPhase: 'jugadores' | 'enemigos';
-    turnClaim: string | null;
+    turnClaims: string[];
     actedThisRound: string[];
     enemies: { instanceId: string; enemyRefId: string; name: string; currentHp: number }[];
     log: string[];
@@ -119,7 +124,7 @@ interface Game {
 
 **`narrativeLog` sí existe** (a pesar de lo que decía una versión anterior de este documento): el historial de conversación con el DM-IA se persiste en la propia partida, no solo en el cliente — así ui-web (de solo lectura) y el móvil de cada jugador ven la misma narración sin depender de qué dispositivo la disparó.
 
-**Ya no hay iniciativa entre jugadores.** El diseño original calculaba `1d20 + mod destreza` para jugadores y enemigos y fijaba un `currentTurnIndex`. Tras una revisión basada en la experiencia de partidas de rol de mesa, se sustituyó por el modelo de rondas de arriba: dentro de la fase "jugadores", cualquiera actúa en el orden que quiera (el candado `turnClaim` evita que dos lo hagan a la vez); los enemigos los resuelve el DM-IA libremente en la fase "enemigos", sin orden fijo tampoco.
+**Ya no hay iniciativa entre jugadores.** El diseño original calculaba `1d20 + mod destreza` para jugadores y enemigos y fijaba un `currentTurnIndex`. Tras una revisión basada en la experiencia de partidas de rol de mesa, se sustituyó por el modelo de rondas de arriba: dentro de la fase "jugadores", cualquiera actúa en el orden que quiera; `turnClaims` ya no es un candado exclusivo (varios jugadores pueden reclamar turno a la vez sin bloquearse entre ellos), solo evita que un mismo jugador actúe dos veces en la misma ronda (`actedThisRound`); los enemigos los resuelve el DM-IA libremente en la fase "enemigos", sin orden fijo tampoco.
 
 Índices: `{ name: 1 }` (único), `{ status: 1 }`.
 

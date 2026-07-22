@@ -66,7 +66,7 @@ export class PlayerRollUseCase {
     }
 
     if (snapshot.activeEncounter) {
-      if (snapshot.activeEncounter.turnClaim !== input.characterId) {
+      if (!snapshot.activeEncounter.turnClaims.includes(input.characterId)) {
         throw new DomainError('No tienes el turno reclamado en este combate');
       }
     } else if (snapshot.captainUserId !== input.requestingUserId) {

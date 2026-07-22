@@ -39,19 +39,25 @@ export interface EncounterEnemy {
 /**
  * Modelo de rondas simplificado (sustituye a la iniciativa 1d20+destreza
  * entre jugadores): dentro de una ronda de combate, la fase 'jugadores' deja
- * que cualquiera actúe en el orden que quiera —turnClaim es el candado que
- * evita que dos jugadores actúen a la vez (ver Game.claimTurn/
- * releaseTurnAfterAction)—. Cuando todos los jugadores vivos han actuado
- * (actedThisRound), la fase pasa a 'enemigos', que el DM-IA resuelve
- * libremente (resolve_attack, etc.) y luego reabre la ronda de jugadores
- * llamando a la tool MCP advance_to_player_round.
+ * que cualquiera actúe en el orden que quiera. turnClaims YA NO es un candado
+ * exclusivo (antes un string|null: solo un jugador a la vez podía tenerlo, y
+ * si el DM-IA se dirigía a un jugador distinto del que lo tenía reclamado sin
+ * haber liberado su turno con end_player_turn, ese otro jugador se quedaba
+ * bloqueado sin poder ni reclamar turno ni tirar dados -- un punto muerto
+ * real detectado en partida real cuando el DM resolvía la acción de un
+ * jugador y en el mismo mensaje le pedía la tirada a otro). Ahora cada
+ * personaje puede reclamar y actuar de forma independiente dentro de la
+ * misma ronda: el único bloqueo real es no poder actuar dos veces en la
+ * misma ronda (actedThisRound) -- el candado por partida de dm-engine (ver
+ * server.ts) ya serializa los turnos de la IA, así que no hay riesgo de que
+ * dos acciones se pisen aunque se reclamen "a la vez".
  */
 export interface ActiveEncounter {
   enemies: EncounterEnemy[];
   log: string[];
   roundPhase: RoundPhase;
-  /** characterId del jugador que tiene el turno reclamado ahora mismo, o null si está libre. */
-  turnClaim: string | null;
+  /** characterIds que han reclamado turno y aún no lo han cerrado con end_player_turn. */
+  turnClaims: string[];
   /** characterIds que ya han actuado en la ronda de jugadores actual. */
   actedThisRound: string[];
 }
@@ -133,7 +139,14 @@ export class Game {
         position: e.position ?? null,
       }));
       if (!props.activeEncounter.roundPhase) props.activeEncounter.roundPhase = 'jugadores';
-      if (props.activeEncounter.turnClaim === undefined) props.activeEncounter.turnClaim = null;
+      // Migración desde el shape anterior (turnClaim: string | null, candado
+      // exclusivo) a turnClaims: string[] (ver comentario de ActiveEncounter
+      // más arriba) -- partidas ya persistidas con el campo viejo no deben
+      // perder el turno que ya tuvieran reclamado al cargar.
+      const legacyTurnClaim = (props.activeEncounter as unknown as { turnClaim?: string | null }).turnClaim;
+      if (!props.activeEncounter.turnClaims) {
+        props.activeEncounter.turnClaims = legacyTurnClaim ? [legacyTurnClaim] : [];
+      }
       if (!props.activeEncounter.actedThisRound) props.activeEncounter.actedThisRound = [];
     }
     return new Game(id, props);
@@ -280,15 +293,17 @@ export class Game {
       enemies: input.enemies.map((enemy) => ({ ...enemy, conditions: enemy.conditions ?? [], position: null })),
       log: [],
       roundPhase: 'jugadores',
-      turnClaim: null,
+      turnClaims: [],
       actedThisRound: [],
     };
   }
 
   /**
-   * Un jugador reclama el turno durante la fase de jugadores de una ronda de
-   * combate — candado simple para que no dos jugadores actúen a la vez desde
-   * sus móviles. Reclamar dos veces el mismo jugador es idempotente (retry-safe).
+   * Un jugador reclama su turno durante la fase de jugadores de una ronda de
+   * combate. YA NO es exclusivo -- varios jugadores pueden tener el turno
+   * reclamado a la vez, cada uno el suyo, sin bloquearse entre ellos (ver
+   * comentario de ActiveEncounter más arriba). Reclamar dos veces el mismo
+   * jugador es idempotente (retry-safe).
    */
   claimTurn(characterId: string): void {
     const encounter = this.requireActiveEncounter();
@@ -301,23 +316,23 @@ export class Game {
     if (encounter.actedThisRound.includes(characterId)) {
       throw new DomainError('Ese jugador ya ha actuado en esta ronda');
     }
-    if (encounter.turnClaim && encounter.turnClaim !== characterId) {
-      throw new DomainError('Otro jugador ya tiene el turno reclamado');
+    if (!encounter.turnClaims.includes(characterId)) {
+      encounter.turnClaims.push(characterId);
     }
-    encounter.turnClaim = characterId;
   }
 
   /**
    * Se llama tras enviar la acción del jugador al DM (SendPlayerActionUseCase):
-   * libera el candado, lo marca como actuado, y si ya actuaron todos los
-   * jugadores vivos, pasa la fase a 'enemigos' para que el DM-IA la resuelva.
+   * libera SU candado (el de este personaje, no el de los demás -- ya no es
+   * exclusivo), lo marca como actuado, y si ya actuaron todos los jugadores
+   * vivos, pasa la fase a 'enemigos' para que el DM-IA la resuelva.
    */
   releaseTurnAfterAction(characterId: string): void {
     const encounter = this.requireActiveEncounter();
-    if (encounter.turnClaim !== characterId) {
+    if (!encounter.turnClaims.includes(characterId)) {
       throw new DomainError('Ese jugador no tiene el turno reclamado');
     }
-    encounter.turnClaim = null;
+    encounter.turnClaims = encounter.turnClaims.filter((id) => id !== characterId);
     if (!encounter.actedThisRound.includes(characterId)) {
       encounter.actedThisRound.push(characterId);
     }
@@ -331,7 +346,7 @@ export class Game {
   reopenPlayerRound(): void {
     const encounter = this.requireActiveEncounter();
     encounter.roundPhase = 'jugadores';
-    encounter.turnClaim = null;
+    encounter.turnClaims = [];
     encounter.actedThisRound = [];
   }
 

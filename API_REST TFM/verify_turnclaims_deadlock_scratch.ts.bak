@@ -1,0 +1,66 @@
+import { Game } from './src/domain/entities/game.entity';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from './src/domain/ports/dm-engine.port';
+import { SendMessageUseCase } from './src/application/use-cases/send-message.use-case';
+import { SendPlayerActionUseCase } from './src/application/use-cases/send-player-action.use-case';
+import { PlayerRollUseCase } from './src/application/use-cases/player-roll.use-case';
+import { DiceRoller } from './src/domain/ports/dice-roller.port';
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void { this.games.set(game.id, game); }
+  async findById(id: string): Promise<Game | null> { return this.games.get(id) ?? null; }
+  async findByUserId(): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.games.set(game.id, game); }
+}
+
+class FakeDmEngineClient implements DmEngineClient {
+  async sendTurn(_gameId: string, _messages: DmEngineChatMessage[]): Promise<DmEngineResult> {
+    return { narrative: 'ok', events: [] };
+  }
+}
+
+class FixedDiceRoller implements DiceRoller {
+  roll(): number { return 15; }
+  rollD20(): number { return 15; }
+}
+
+async function main() {
+  // Reproduce EXACTAMENTE el escenario del bug real: Sandra (char-1) reclama
+  // turno y envía una acción conjunta sin que la IA cierre su turno todavía
+  // (end_player_turn no llamado) -- Checa (char-2) debe poder reclamar SU
+  // turno y tirar dados igualmente, sin quedar bloqueada.
+  const game = Game.create({ name: 'Test', hostUserId: 'host-1', maxPlayers: 4 });
+  game.addPlayer({ userId: 'user-sandra', characterId: 'char-1', name: 'Sandra', class: 'mago', currentHp: 10 });
+  game.addPlayer({ userId: 'user-checa', characterId: 'char-2', name: 'Checa', class: 'guerrero', currentHp: 14 });
+  game.assignCaptain('host-1', 'user-sandra');
+  game.launch('host-1');
+  game.startEncounter({ enemies: [{ instanceId: 'e1', enemyRefId: 'enemy-1', name: 'Hombre de la Marca Negra', currentHp: 9, ac: 15 }] });
+
+  const games = new FakeGameRepository();
+  games.seed(game);
+  const dmEngine = new FakeDmEngineClient();
+  const sendMessage = new SendMessageUseCase(games, dmEngine);
+  const sendAction = new SendPlayerActionUseCase(games, sendMessage);
+  const playerRoll = new PlayerRollUseCase(games, new FixedDiceRoller(), sendMessage);
+
+  // Sandra reclama turno y envía su acción conjunta (sin que el DM cierre su turno)
+  game.claimTurn('char-1');
+  await games.save(game);
+  await sendAction.execute({ gameId: game.id, requestingUserId: 'user-sandra', characterId: 'char-1', content: 'Checa lanza su daga y sandra dispara misil magico' });
+
+  // Checa (char-2) debe poder reclamar turno AHORA MISMO, sin que Sandra lo bloquee
+  game.claimTurn('char-2');
+  await games.save(game);
+  console.log('turnClaims tras que ambas reclamen:', game.toSnapshot().activeEncounter?.turnClaims);
+
+  // Checa debe poder tirar dados sin error
+  const result = await playerRoll.execute({ gameId: game.id, requestingUserId: 'user-checa', characterId: 'char-2' });
+  console.log('Tirada de Checa:', result.notation, result.result);
+  console.log('ÉXITO: Checa pudo reclamar turno y tirar dados sin que el turno de Sandra la bloqueara.');
+}
+
+main().catch((e) => {
+  console.error('FALLO:', e);
+  process.exit(1);
+});

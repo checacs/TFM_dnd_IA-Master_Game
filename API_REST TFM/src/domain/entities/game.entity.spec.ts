@@ -449,7 +449,7 @@ describe('Game', () => {
 
       const encounter = game.toSnapshot().activeEncounter;
       expect(encounter?.roundPhase).toBe('jugadores');
-      expect(encounter?.turnClaim).toBeNull();
+      expect(encounter?.turnClaims).toEqual([]);
       expect(encounter?.actedThisRound).toEqual([]);
     });
   });
@@ -475,14 +475,21 @@ describe('Game', () => {
     it('un jugador reclama el turno libremente', () => {
       const game = buildGameInCombat();
       game.claimTurn('char-1');
-      expect(game.toSnapshot().activeEncounter?.turnClaim).toBe('char-1');
+      expect(game.toSnapshot().activeEncounter?.turnClaims).toEqual(['char-1']);
     });
 
-    it('lanza DomainError si otro jugador ya tiene el turno', () => {
-      const game = buildGameInCombat();
-      game.claimTurn('char-1');
-      expect(() => game.claimTurn('char-2')).toThrow(DomainError);
-    });
+    it(
+        'dos jugadores pueden reclamar el turno a la vez, cada uno el suyo, sin bloquearse entre ellos -- ' +
+        'ya no es un candado exclusivo (bug real: el DM-IA podía resolver la acción de un jugador y pedirle la ' +
+        'tirada a otro en el mismo mensaje sin haber liberado el turno del primero con end_player_turn, dejando ' +
+        'al segundo bloqueado sin poder ni reclamar turno ni tirar dados)',
+        () => {
+          const game = buildGameInCombat();
+          game.claimTurn('char-1');
+          expect(() => game.claimTurn('char-2')).not.toThrow();
+          expect(game.toSnapshot().activeEncounter?.turnClaims).toEqual(['char-1', 'char-2']);
+        },
+    );
 
     it('reclamar el turno dos veces el mismo jugador no lanza error (idempotente)', () => {
       const game = buildGameInCombat();
@@ -502,14 +509,23 @@ describe('Game', () => {
       expect(() => game.claimTurn('char-1')).toThrow(DomainError);
     });
 
-    it('releaseTurnAfterAction libera el candado y marca al jugador como actuado', () => {
+    it('releaseTurnAfterAction libera el candado de ESE jugador y lo marca como actuado', () => {
       const game = buildGameInCombat();
       game.claimTurn('char-1');
       game.releaseTurnAfterAction('char-1');
 
       const encounter = game.toSnapshot().activeEncounter;
-      expect(encounter?.turnClaim).toBeNull();
+      expect(encounter?.turnClaims).toEqual([]);
       expect(encounter?.actedThisRound).toEqual(['char-1']);
+    });
+
+    it('releaseTurnAfterAction de un jugador no afecta al turno reclamado de otro', () => {
+      const game = buildGameInCombat();
+      game.claimTurn('char-1');
+      game.claimTurn('char-2');
+      game.releaseTurnAfterAction('char-1');
+
+      expect(game.toSnapshot().activeEncounter?.turnClaims).toEqual(['char-2']);
     });
 
     it('lanza DomainError si se libera un turno que no se tiene', () => {
@@ -570,7 +586,7 @@ describe('Game', () => {
 
       const encounter = game.toSnapshot().activeEncounter;
       expect(encounter?.roundPhase).toBe('jugadores');
-      expect(encounter?.turnClaim).toBeNull();
+      expect(encounter?.turnClaims).toEqual([]);
       expect(encounter?.actedThisRound).toEqual([]);
     });
   });

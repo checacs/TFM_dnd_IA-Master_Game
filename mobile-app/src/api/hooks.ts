@@ -38,7 +38,7 @@ export function useGame(gameId: string | undefined) {
     // toda acción en curso la disparaba este mismo cliente e invalidaba la
     // query a mano. Ahora "Mi turno"/la acción de otro jugador puede llegar
     // desde OTRO móvil, así que hay que seguir sondeando durante 'en_curso'
-    // para ver roundPhase/turnClaim/narrativeLog cambiar en tiempo real.
+    // para ver roundPhase/turnClaims/narrativeLog cambiar en tiempo real.
     refetchInterval: (query) => (query.state.data?.status === 'finalizada' ? false : 3000),
   });
 }

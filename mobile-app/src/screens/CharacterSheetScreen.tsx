@@ -139,14 +139,20 @@ export function CharacterSheetScreen({ route }: Props) {
   const encounter = game?.activeEncounter ?? null;
   const inCombat = !!encounter;
   const hasActed = encounter?.actedThisRound.includes(characterId) ?? false;
-  const isMyTurn = !!encounter && encounter.turnClaim === characterId;
-  const turnHolder = encounter?.turnClaim
-    ? game?.players.find((p) => p.characterId === encounter.turnClaim)
-    : undefined;
+  const isMyTurn = !!encounter && encounter.turnClaims.includes(characterId);
+  // Varios jugadores pueden tener el turno reclamado a la vez (ya no es un
+  // candado exclusivo -- ver comentario de ActiveEncounter en game.entity.ts):
+  // esta lista es solo informativa, para mostrar quién más está actuando.
+  const otherTurnHolders = (encounter?.turnClaims ?? [])
+    .filter((id) => id !== characterId)
+    .map((id) => game?.players.find((p) => p.characterId === id))
+    .filter((p): p is NonNullable<typeof p> => !!p);
   const isCaptain = !!userId && !!game && game.captainUserId === userId;
   const otherPlayers = game?.players.filter((p) => p.userId !== userId) ?? [];
-  const canClaimTurn =
-    inCombat && encounter!.roundPhase === 'jugadores' && !hasActed && !isMyTurn && !encounter!.turnClaim;
+  // Ya no exige que el turno esté "libre" (encounter.turnClaims vacío):
+  // reclamar turno es independiente por jugador, así que uno puede pulsar
+  // "Mi turno" aunque otro ya lo tenga reclamado.
+  const canClaimTurn = inCombat && encounter!.roundPhase === 'jugadores' && !hasActed && !isMyTurn;
   const canAct = inCombat ? isMyTurn : isCaptain;
 
   const handleClaimTurn = () => {
@@ -187,8 +193,8 @@ export function CharacterSheetScreen({ route }: Props) {
     combatStatusText = 'Ya has actuado en esta ronda. Esperando a los demás...';
   } else if (encounter!.roundPhase === 'enemigos') {
     combatStatusText = 'El DM está resolviendo el turno de los enemigos...';
-  } else if (turnHolder) {
-    combatStatusText = `Turno de: ${turnHolder.name}`;
+  } else if (otherTurnHolders.length > 0) {
+    combatStatusText = `Turno de: ${otherTurnHolders.map((p) => p.name).join(', ')} -- pulsa "Mi turno" cuando quieras actuar también.`;
   } else {
     combatStatusText = 'Ronda de jugadores -- pulsa "Mi turno" cuando quieras actuar.';
   }
@@ -262,6 +268,10 @@ export function CharacterSheetScreen({ route }: Props) {
             </Text>
           )}
           {claimTurn.error && <Text style={styles.error}>{claimTurn.error.message}</Text>}
+          {/* Antes, si "Tirar Dados" fallaba (ej. 403 del backend), no se veía
+              nada en pantalla -- el jugador solo notaba que "no pasaba nada"
+              al pulsar el botón, sin ninguna pista de por qué. */}
+          {playerRoll.error && <Text style={styles.error}>{playerRoll.error.message}</Text>}
         </View>
 
         {isCaptain && otherPlayers.length > 0 && (

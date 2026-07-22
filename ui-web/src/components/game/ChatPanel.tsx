@@ -45,6 +45,25 @@ function stripMarkdownForSpeech(content: string): string {
   return content.replace(/\*\*/g, '');
 }
 
+/**
+ * SendPlayerActionUseCase antepone el nombre del personaje que actúa (ej.
+ * "**Sandra:** Ataco al goblin con mi daga") -- antes, cualquier acción de
+ * cualquier jugador se veía bajo la misma etiqueta genérica "Jugador", sin
+ * forma de saber quién había escrito qué (más confuso aún ahora que varios
+ * jugadores pueden tener el turno reclamado a la vez). Si el mensaje trae
+ * ese prefijo, se usa como etiqueta y se retira del cuerpo para no duplicar
+ * el nombre; si no (ej. tiradas de dados, que ya llevan el nombre en negrita
+ * dentro del propio texto, o partidas/mensajes antiguos sin este prefijo),
+ * se cae de vuelta a la etiqueta genérica "Jugador".
+ */
+function extractPlayerLabel(content: string): { label: string; body: string } {
+  const match = content.match(/^\*\*([^*]+):\*\*\s*/);
+  if (match) {
+    return { label: match[1], body: content.slice(match[0].length) };
+  }
+  return { label: 'Jugador', body: content };
+}
+
 export function ChatPanel({ messages, isLoading, errorMessage }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const synthesizeSpeech = useSynthesizeSpeech();
@@ -96,25 +115,30 @@ export function ChatPanel({ messages, isLoading, errorMessage }: ChatPanelProps)
     <div className="chat-panel">
       <h3 className="chat-panel-title">Partida</h3>
       <div className="chat-messages">
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-message ${m.role}`}>
-            <span className="chat-message-role">
-              {m.role === 'user' ? 'Jugador' : 'DM'}
-              {m.role === 'assistant' && (
-                <button
-                  type="button"
-                  className="chat-speak-btn"
-                  onClick={() => handleToggleSpeak(i, m.content)}
-                  disabled={synthesizeSpeech.isPending && speakingIndex !== i}
-                  title="Escuchar con Amazon Polly"
-                >
-                  {speakingIndex === i ? '⏹' : '🔊'}
-                </button>
-              )}
-            </span>
-            {renderFormattedContent(m.content)}
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          const { label, body } = m.role === 'user'
+            ? extractPlayerLabel(m.content)
+            : { label: 'DM', body: m.content };
+          return (
+            <div key={i} className={`chat-message ${m.role}`}>
+              <span className="chat-message-role">
+                {label}
+                {m.role === 'assistant' && (
+                  <button
+                    type="button"
+                    className="chat-speak-btn"
+                    onClick={() => handleToggleSpeak(i, m.content)}
+                    disabled={synthesizeSpeech.isPending && speakingIndex !== i}
+                    title="Escuchar con Amazon Polly"
+                  >
+                    {speakingIndex === i ? '⏹' : '🔊'}
+                  </button>
+                )}
+              </span>
+              {renderFormattedContent(body)}
+            </div>
+          );
+        })}
         {isLoading && (
           <div className="chat-message assistant pending">
             <span className="chat-message-role">DM</span>

@@ -82,7 +82,7 @@ describe('StartCombatUseCase', () => {
     const encounter = saved?.toSnapshot().activeEncounter;
     expect(encounter).not.toBeNull();
     expect(encounter?.roundPhase).toBe('jugadores');
-    expect(encounter?.turnClaim).toBeNull();
+    expect(encounter?.turnClaims).toEqual([]);
     expect(encounter?.actedThisRound).toEqual([]);
 
     expect(encounter?.enemies).toHaveLength(1);

@@ -43,7 +43,7 @@ describe('AdvanceRoundUseCase', () => {
     const saved = await repo.findById(game.id);
     const encounter = saved?.toSnapshot().activeEncounter;
     expect(encounter?.roundPhase).toBe('jugadores');
-    expect(encounter?.turnClaim).toBeNull();
+    expect(encounter?.turnClaims).toEqual([]);
     expect(encounter?.actedThisRound).toEqual([]);
   });
 

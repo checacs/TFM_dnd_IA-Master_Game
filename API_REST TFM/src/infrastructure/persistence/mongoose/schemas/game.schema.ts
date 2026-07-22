@@ -58,10 +58,12 @@ const activeEncounterSchema = new Schema(
     // Modelo de rondas (sustituye a initiativeOrder/currentTurnIndex, ver
     // Game.startEncounter/claimTurn/releaseTurnAfterAction en el dominio):
     // roundPhase indica si toca actuar a jugadores o al DM-IA (enemigos),
-    // turnClaim es el candado de "Mi turno" del móvil, actedThisRound son
-    // los characterId que ya actuaron en la ronda de jugadores actual.
+    // turnClaims son los characterId que han reclamado "Mi turno" del móvil
+    // y aún no lo han cerrado (YA NO es un candado exclusivo de uno solo,
+    // ver comentario de ActiveEncounter en game.entity.ts), actedThisRound
+    // son los characterId que ya actuaron en la ronda de jugadores actual.
     roundPhase: { type: String, required: true, enum: ['jugadores', 'enemigos'] },
-    turnClaim: { type: String, default: null },
+    turnClaims: { type: [String], default: [] },
     actedThisRound: { type: [String], default: [] },
     enemies: { type: [encounterEnemySchema], required: true },
     log: { type: [String], required: true },

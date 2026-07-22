@@ -90,11 +90,13 @@ interface Game {
   activeEncounter: {
     // Modelo de rondas (sustituyó a initiativeOrder/currentTurnIndex — ver
     // nota más abajo): roundPhase indica si toca actuar a los jugadores o al
-    // DM-IA (enemigos); turnClaim es el characterId con el turno reclamado
-    // desde el móvil ("Mi turno"); actedThisRound son los characterId que ya
-    // actuaron en la ronda de jugadores actual.
+    // DM-IA (enemigos); turnClaims son los characterId con turno reclamado
+    // desde el móvil ("Mi turno") -- YA NO es un candado exclusivo, varios
+    // jugadores pueden reclamarlo a la vez sin bloquearse entre ellos;
+    // actedThisRound son los characterId que ya actuaron en la ronda de
+    // jugadores actual.
     roundPhase: 'jugadores' | 'enemigos';
-    turnClaim: string | null;
+    turnClaims: string[];
     actedThisRound: string[];
     enemies: { instanceId: string; enemyRefId: string; name: string; currentHp: number }[];
     log: string[];
@@ -111,7 +113,7 @@ interface Game {
 
 **`narrativeLog` sí existe** (a pesar de lo que decía una versión anterior de este documento): el historial de conversación con el DM-IA se persiste en la propia partida, no solo en el cliente — así ui-web (de solo lectura) y el móvil de cada jugador ven la misma narración sin depender de qué dispositivo la disparó.
 
-**Ya no hay iniciativa entre jugadores.** El diseño original calculaba `1d20 + mod destreza` para jugadores y enemigos y fijaba un `currentTurnIndex`. Tras una revisión basada en la experiencia de partidas de rol de mesa, se sustituyó por el modelo de rondas de arriba: dentro de la fase "jugadores", cualquiera actúa en el orden que quiera (el candado `turnClaim` evita que dos lo hagan a la vez); los enemigos los resuelve el DM-IA libremente en la fase "enemigos", sin orden fijo tampoco.
+**Ya no hay iniciativa entre jugadores.** El diseño original calculaba `1d20 + mod destreza` para jugadores y enemigos y fijaba un `currentTurnIndex`. Tras una revisión basada en la experiencia de partidas de rol de mesa, se sustituyó por el modelo de rondas de arriba: dentro de la fase "jugadores", cualquiera actúa en el orden que quiera (`turnClaims` ya no es un candado exclusivo, solo evita repetir turno en la misma ronda vía `actedThisRound`); los enemigos los resuelve el DM-IA libremente en la fase "enemigos", sin orden fijo tampoco.
 
 Índices: `{ name: 1 }` (único), `{ status: 1 }`.
 

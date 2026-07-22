@@ -1,0 +1,64 @@
+import { Game } from './src/domain/entities/game.entity';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from './src/domain/ports/dm-engine.port';
+import { SendMessageUseCase } from './src/application/use-cases/send-message.use-case';
+import { SendPlayerActionUseCase } from './src/application/use-cases/send-player-action.use-case';
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void { this.games.set(game.id, game); }
+  async findById(id: string): Promise<Game | null> { return this.games.get(id) ?? null; }
+  async findByUserId(): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.games.set(game.id, game); }
+}
+
+class FakeDmEngineClient implements DmEngineClient {
+  async sendTurn(_gameId: string, _messages: DmEngineChatMessage[]): Promise<DmEngineResult> {
+    return { narrative: 'El DM responde.', events: [] };
+  }
+}
+
+// Misma regex que ChatPanel.tsx (extractPlayerLabel) -- replicada aquí porque
+// ese archivo es un componente React, no ejecutable directamente con ts-node.
+function extractPlayerLabel(content: string): { label: string; body: string } {
+  const match = content.match(/^\*\*([^*]+):\*\*\s*/);
+  if (match) {
+    return { label: match[1], body: content.slice(match[0].length) };
+  }
+  return { label: 'Jugador', body: content };
+}
+
+async function main() {
+  const game = Game.create({ name: 'Test', hostUserId: 'host-1', maxPlayers: 4 });
+  game.addPlayer({ userId: 'user-sandra', characterId: 'char-1', name: 'Sandra', class: 'mago', currentHp: 10 });
+  game.assignCaptain('host-1', 'user-sandra');
+  game.launch('host-1');
+  game.startEncounter({ enemies: [{ instanceId: 'e1', enemyRefId: 'enemy-1', name: 'Goblin', currentHp: 7, ac: 15 }] });
+  game.claimTurn('char-1');
+
+  const games = new FakeGameRepository();
+  games.seed(game);
+  const dmEngine = new FakeDmEngineClient();
+  const sendMessage = new SendMessageUseCase(games, dmEngine);
+  const useCase = new SendPlayerActionUseCase(games, sendMessage);
+
+  await useCase.execute({ gameId: game.id, requestingUserId: 'user-sandra', characterId: 'char-1', content: 'Ataco con mi daga' });
+
+  const saved = await games.findById(game.id);
+  const lastEntry = saved!.toSnapshot().narrativeLog.filter((e) => e.role === 'user').slice(-1)[0];
+  console.log('Entrada guardada:', JSON.stringify(lastEntry));
+
+  const { label, body } = extractPlayerLabel(lastEntry.content);
+  console.log('Etiqueta extraída:', label);
+  console.log('Cuerpo mostrado:', body);
+
+  if (label !== 'Sandra' || body !== 'Ataco con mi daga') {
+    throw new Error('FALLO: la etiqueta/cuerpo no coinciden con lo esperado');
+  }
+  console.log('ÉXITO: el chat mostraría "Sandra" en vez de "Jugador".');
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

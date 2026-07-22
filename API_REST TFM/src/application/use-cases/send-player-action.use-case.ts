@@ -25,8 +25,8 @@ export interface SendPlayerActionInput {
  *   pasaba a 'enemigos' con un único jugador vivo, sin ninguna forma de
  *   volver a reclamar turno. Ahora es el DM-IA quien decide, vía la tool
  *   MCP end_player_turn (ver EndPlayerTurnUseCase), cuándo ha resuelto de
- *   verdad la acción del jugador — el turnClaim se mantiene entre mensajes
- *   sucesivos del mismo jugador hasta entonces.
+ *   verdad la acción del jugador — su turno se mantiene reclamado (en
+ *   turnClaims) entre mensajes sucesivos del mismo jugador hasta entonces.
  * - Fuera de combate: solo puede escribir el capitán (Game.captainUserId) —
  *   evita que varios jugadores narren a la vez fuera de pelea.
  * Reconstruye el historial desde narrativeLog y delega el turno del DM en
@@ -54,7 +54,7 @@ export class SendPlayerActionUseCase {
     }
 
     if (snapshot.activeEncounter) {
-      if (snapshot.activeEncounter.turnClaim !== input.characterId) {
+      if (!snapshot.activeEncounter.turnClaims.includes(input.characterId)) {
         throw new DomainError('No tienes el turno reclamado en este combate');
       }
     } else if (snapshot.captainUserId !== input.requestingUserId) {
@@ -65,7 +65,15 @@ export class SendPlayerActionUseCase {
       role: entry.role,
       content: entry.content,
     }));
-    history.push({ role: 'user', content: input.content });
+    // Antepone el nombre del personaje (ej. "**Sandra:** ...") en vez de
+    // dejar el texto a secas -- antes, en el chat de ui-web, cualquier acción
+    // de cualquier jugador se veía bajo la misma etiqueta genérica "Jugador",
+    // sin forma de saber quién había escrito qué. Con varios jugadores
+    // reclamando turno a la vez (ver Game.claimTurn, ya no es exclusivo) esto
+    // era aún más confuso. ChatPanel (ui-web) ya sabe extraer este prefijo y
+    // usarlo como etiqueta en vez de "Jugador".
+    const actingPlayer = snapshot.players.find((p) => p.characterId === input.characterId)!;
+    history.push({ role: 'user', content: `**${actingPlayer.name}:** ${input.content}` });
 
     // Ya no se libera aquí el turno tras el intercambio: eso ahora lo decide
     // el propio DM-IA llamando a la tool end_player_turn cuando haya resuelto
