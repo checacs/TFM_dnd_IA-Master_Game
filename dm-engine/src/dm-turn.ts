@@ -93,6 +93,15 @@ const LOCATION_ENTRY_CUES = [
  *    dura fácilmente 3-4 turnos de ida y vuelta, y a partir del segundo
  *    turno el umbral ya se había superado y el chequeo dejaba de aplicar
  *    justo cuando aún hacía falta.
+ *
+ * Un tercer ajuste, encontrado al escribir el test de gameStartNudge (más
+ * abajo): el PROPIO turno 1 (el mensaje sintético de arranque, messageCount
+ * === 1) menciona LEGÍTIMAMENTE tanto "taberna" como "tablón" en su
+ * narración -- el paso 1 del arranque exige ofrecer la elección entre AMBOS
+ * destinos sin llamar a ninguna tool de mapa todavía (eso llega en el turno
+ * siguiente, cuando el jugador responda). Sin excluir messageCount === 1,
+ * este chequeo forzaría al DM a aplicar un mapa al azar (sin saber aún qué
+ * eligió el jugador) justo en el turno donde debe limitarse a preguntar.
  */
 const VILLAGE_START_MAX_MESSAGES = 10;
 const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i];
@@ -182,6 +191,44 @@ function combatWithoutToolsNudge(calledTools: Set<string>, narrativeText: string
 }
 
 /**
+ * Se detectó en partida real un fallo en el PRIMERÍSIMO turno de una partida
+ * nueva: el mensaje que dispara el arranque ("La partida ha comenzado.
+ * Describe la escena inicial.", enviado por la UI con role:'user' -- ver
+ * GameScreen.tsx, es un aviso sintético, NUNCA algo que un jugador haya
+ * escrito de verdad) fue tratado como si fuera una decisión real de un
+ * jugador, y el DM respondió: "¡Bien! Me acerco al tablón de anuncios. Vamos
+ * a ver que hay." Eso viola el paso 1 del arranque en dos frentes a la vez:
+ * (a) decidió el destino POR los jugadores en vez de ofrecerles la elección
+ * explícita entre taberna y tablón, y (b) habló en PRIMERA PERSONA ("me
+ * acerco") como si el propio DM (o un PNJ suelto) fuera quien actúa, en vez
+ * de narrar en segunda/tercera persona dirigiéndose al grupo de jugadores.
+ * El turno 1 de CUALQUIER partida nueva es siempre exactamente este mismo
+ * mensaje sintético (se puede reconocer con total fiabilidad: es el único
+ * mensaje del historial, messageCount === 1, no hay ninguna respuesta previa
+ * de ningún jugador todavía) -- por eso esta señal es determinista, a
+ * diferencia de narrativeSuggestsLocationChange.
+ */
+function gameStartNudge(messageCount: number, narrativeText: string): string | null {
+  if (messageCount !== 1) {
+    return null;
+  }
+  const firstPersonCues = /\b(me acerco|me dirijo|voy a|vamos a ver|entro en|me adentro)\b/i.test(narrativeText);
+  const mentionsTaberna = /\btaberna\b/i.test(narrativeText);
+  const mentionsTablon = /\btabl[oó]n\b/i.test(narrativeText);
+  if (!firstPersonCues && mentionsTaberna && mentionsTablon) {
+    return null;
+  }
+  return 'Este es el primerísimo turno de la partida: el mensaje que lo disparó es un aviso interno del ' +
+      'sistema para que arranques la escena, NO una decisión real de ningún jugador todavía -- ningún jugador ha ' +
+      'escrito nada aún. Sigue el paso 1 del arranque tal cual: describe brevemente el pueblo (2-3 frases), narra ' +
+      'SIEMPRE en segunda/tercera persona dirigiéndote al grupo (nunca en primera persona como si tú mismo o un ' +
+      'PNJ fuerais quien actúa -- nada de "me acerco", "voy a", "entro en"), y ofrece EXPLÍCITAMENTE la elección ' +
+      'entre entrar en la taberna o acercarse al tablón de anuncios, terminando con una pregunta directa. NO ' +
+      'decidas tú el destino ni actúes como si el grupo ya hubiera elegido -- espera su respuesta real antes de ' +
+      'aplicar ningún mapa.';
+}
+
+/**
  * Se detectó en partida real un bug distinto de todos los anteriores: el
  * jugador escribió explícitamente "Muéstranos el mapa" y el DM respondió
  * "Veo que el mapa ya está mostrándose en el tablero", inventando posiciones
@@ -260,7 +307,7 @@ function protocolNudge(
       calledTools.has('get_battle_maps') || calledTools.has('describe_map') ||
       calledTools.has('set_battle_map') || calledTools.has('clear_battle_map') ||
       calledTools.has('start_combat');
-  if (!touchedMapSystem && messageCount <= VILLAGE_START_MAX_MESSAGES &&
+  if (!touchedMapSystem && messageCount > 1 && messageCount <= VILLAGE_START_MAX_MESSAGES &&
       VILLAGE_DESTINATION_CUES.some((cue) => cue.test(narrativeText))) {
     return 'Tu narración menciona la taberna o el tablón de anuncios (la elección de arranque de la partida), ' +
         'pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del arranque: llama a ' +
@@ -542,28 +589,34 @@ export async function runDmTurn(
     }
 
     if (!correctionUsed) {
-      // Orden de prioridad: 1) staleEncounterConflictNudge (señal 100%
-      // determinista: start_combat rechazado por un combate huérfano ya
-      // activo -- el fallo más grave, porque implica engañar al jugador con
-      // enemigos que no coinciden con lo narrado); 2) playerRequestedMapNudge
-      // (también determinista: el jugador pidió el mapa explícitamente y no
-      // se tocó ninguna tool -- muy grave porque el DM puede llegar a mentir
-      // diciendo que "ya se está mostrando"); 3) combate resuelto sin NINGUNA
-      // tool; 4) checkCombatStateNudge (un hecho verificable contra el HP
-      // real vía get_game_state); 5) protocolNudge (heurísticos de texto
-      // sobre mapas/colocación a partir de la NARRACIÓN del DM, el más leve
-      // de todos porque depende de cómo el propio DM elija contarlo).
-      const staleEncounterNudge = staleEncounterConflictNudge(failedStartCombatMessage);
-      const mapRequestNudge = staleEncounterNudge
+      // Orden de prioridad: 1) gameStartNudge (señal 100% determinista: el
+      // turno 1 se reconoce por messageCount === 1, y es el fallo más
+      // temprano posible en cualquier partida -- si el arranque ya sale mal,
+      // nada de lo que compruebe el resto de nudges importa todavía);
+      // 2) staleEncounterConflictNudge (señal 100% determinista: start_combat
+      // rechazado por un combate huérfano ya activo -- el fallo más grave de
+      // partida en curso, porque implica engañar al jugador con enemigos que
+      // no coinciden con lo narrado); 3) playerRequestedMapNudge (también
+      // determinista: el jugador pidió el mapa explícitamente y no se tocó
+      // ninguna tool -- muy grave porque el DM puede llegar a mentir diciendo
+      // que "ya se está mostrando"); 4) combate resuelto sin NINGUNA tool;
+      // 5) checkCombatStateNudge (un hecho verificable contra el HP real vía
+      // get_game_state); 6) protocolNudge (heurísticos de texto sobre
+      // mapas/colocación a partir de la NARRACIÓN del DM, el más leve de
+      // todos porque depende de cómo el propio DM elija contarlo).
+      const gameStart = gameStartNudge(messages.length, response.message.content ?? '');
+      const staleEncounterNudge = gameStart ? null : staleEncounterConflictNudge(failedStartCombatMessage);
+      const mapRequestNudge = (gameStart || staleEncounterNudge)
           ? null
           : playerRequestedMapNudge(calledTools, lastPlayerMessageText(messages));
-      const noToolsNudge = (staleEncounterNudge || mapRequestNudge)
+      const noToolsNudge = (gameStart || staleEncounterNudge || mapRequestNudge)
           ? null
           : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = (staleEncounterNudge || mapRequestNudge || noToolsNudge)
+      const combatStateNudge = (gameStart || staleEncounterNudge || mapRequestNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
+          gameStart ??
           staleEncounterNudge ??
           mapRequestNudge ??
           noToolsNudge ??
