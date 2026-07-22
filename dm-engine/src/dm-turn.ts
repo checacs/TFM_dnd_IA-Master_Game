@@ -84,6 +84,36 @@ function narrativeSuggestsEnemyDefeated(text: string): boolean {
   return ENEMY_DEFEAT_CUES.some((p) => p.test(text));
 }
 
+/**
+ * Se detectó en partida real un bug grave y distinto de todos los anteriores:
+ * el DM narró un Cocodrilo Gigante (singular) en el Túmulo del Héroe Caído,
+ * pero al decir "nos preparamos para luchar" el tablero cambió de golpe al
+ * mapa "Cripta de los Ecos" con DOS cocodrilos normales. Causa raíz: un turno
+ * anterior (probablemente duplicado por un reintento de red que no cancela el
+ * trabajo del servidor -- ver el candado por partida en server.ts) había
+ * dejado un activeEncounter huérfano, nunca mostrado al jugador. Cuando el DM
+ * intentó start_combat para el enemigo real, Game.startEncounter() lo
+ * rechazó con 'Ya hay un combate activo' -- y en vez de tratar eso como una
+ * anomalía, el modelo improvisó una narración para encajar los enemigos
+ * viejos con la escena nueva, mintiendo al jugador sobre cuántos enemigos
+ * hay. Esta señal es 100% determinista (el propio mensaje de error de la
+ * tool, no un heurístico de texto): si start_combat falla por este motivo
+ * exacto, se fuerza a cerrar el combate huérfano con end_combat y arrancar
+ * uno nuevo de verdad con los enemigos que el DM mismo acaba de narrar.
+ */
+function staleEncounterConflictNudge(failedStartCombatMessage: string | null): string | null {
+  if (!failedStartCombatMessage || !/ya hay un combate activo/i.test(failedStartCombatMessage)) {
+    return null;
+  }
+  return 'Has intentado iniciar un combate nuevo con start_combat, pero el sistema responde que YA HAY UN ' +
+      'COMBATE ACTIVO con otros enemigos -- casi seguro un encuentro huérfano de un turno anterior que nunca se ' +
+      'cerró, no algo que tú hayas narrado. NUNCA improvises una narración para encajar esos enemigos viejos (ni ' +
+      'su número, ni su tipo, ni el mapa) con lo que acabas de describir: eso le muestra al jugador enemigos ' +
+      'distintos a los que le narraste, y es un engaño grave que rompe su confianza en la partida. Llama primero ' +
+      'a end_combat para cerrar ese combate huérfano, y LUEGO a start_combat otra vez con los enemigos reales que ' +
+      'tu propia narración acaba de presentar -- nunca falsees el número de enemigos.';
+}
+
 /** Tools que, si se llamó a alguna, indican que este turno SÍ tocó el sistema de combate real. */
 const COMBAT_MECHANIC_TOOLS = ['start_combat', 'resolve_attack', 'cast_spell', 'grant_xp', 'end_combat'];
 
@@ -328,6 +358,7 @@ export async function runDmTurn(
   const placedParticipantIds = new Set<string>();
   const combatEnemyIds = new Set<string>();
   const attackedEnemyIds = new Set<string>();
+  let failedStartCombatMessage: string | null = null;
   const systemPrompt = buildDmSystemPrompt(gameId);
   const withSystem = (): ChatMessage[] => [{ role: 'system', content: systemPrompt }, ...messages];
 
@@ -372,6 +403,13 @@ export async function runDmTurn(
           events.push(event);
         }
 
+        if (failed && call.function.name === 'start_combat') {
+          const message = (result as { message?: unknown } | null)?.message;
+          if (typeof message === 'string') {
+            failedStartCombatMessage = message;
+          }
+        }
+
         if (!failed) {
           if (call.function.name === 'place_participant' && typeof args['participantId'] === 'string') {
             placedParticipantIds.add(args['participantId'] as string);
@@ -397,15 +435,22 @@ export async function runDmTurn(
     }
 
     if (!correctionUsed) {
-      // Orden de prioridad: 1) combate resuelto sin NINGUNA tool (el fallo más
-      // grave, cero mecánica real de por medio); 2) checkCombatStateNudge (un
-      // hecho verificable contra el HP real vía get_game_state); 3) protocolNudge
-      // (heurísticos de texto sobre mapas/colocación, el más leve de los tres).
-      const noToolsNudge = combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = noToolsNudge
+      // Orden de prioridad: 1) staleEncounterConflictNudge (señal 100%
+      // determinista: start_combat rechazado por un combate huérfano ya
+      // activo -- el fallo más grave, porque implica engañar al jugador con
+      // enemigos que no coinciden con lo narrado); 2) combate resuelto sin
+      // NINGUNA tool; 3) checkCombatStateNudge (un hecho verificable contra
+      // el HP real vía get_game_state); 4) protocolNudge (heurísticos de
+      // texto sobre mapas/colocación, el más leve de todos).
+      const staleEncounterNudge = staleEncounterConflictNudge(failedStartCombatMessage);
+      const noToolsNudge = staleEncounterNudge
+          ? null
+          : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
+      const combatStateNudge = (staleEncounterNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
+          staleEncounterNudge ??
           noToolsNudge ??
           combatStateNudge ??
           protocolNudge(calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '');

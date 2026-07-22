@@ -749,4 +749,85 @@ describe('runDmTurn', () => {
       expect(chatClient.receivedCalls).toHaveLength(2); // 1 con el tool_call + 1 con la narrativa final, SIN corrección
     });
   });
+
+  describe(
+      'start_combat rechazado por un combate huérfano ya activo (bug real: DM narra un Cocodrilo Gigante en el ' +
+      'Túmulo del Héroe Caído, pero el tablero cambia de golpe a 2 cocodrilos normales en otro mapa nunca narrado)',
+      () => {
+        /** start_combat falla la primera vez (combate huérfano ya activo) y
+         * tiene éxito a partir de la segunda (tras cerrarlo con end_combat). */
+        class OrphanEncounterToolCaller implements ToolCaller {
+          public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+          private startCombatAttempts = 0;
+          async listTools(): Promise<McpToolInfo[]> { return []; }
+          async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+            this.calls.push({ name, args });
+            if (name === 'start_combat') {
+              this.startCombatAttempts += 1;
+              if (this.startCombatAttempts === 1) {
+                throw new Error('Ya hay un combate activo');
+              }
+              return { enemies: [{ instanceId: 'giant-croc-1' }] };
+            }
+            if (name === 'end_combat') return { combatEnded: true };
+            if (name === 'place_participant') return { placed: true };
+            return {};
+          }
+        }
+
+        it('si start_combat falla con "Ya hay un combate activo", se fuerza a cerrar el huérfano con end_combat y arrancar de nuevo con los enemigos reales', async () => {
+          const chatClient = new FakeChatClient([
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } }],
+              },
+            },
+            { message: { role: 'assistant', content: 'El sistema dice que ya hay un combate activo con otros enemigos.' } },
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [
+                  { id: 'c2', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
+                  { id: 'c3', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } },
+                  { id: 'c4', type: 'function' as const, function: { name: 'place_participant', arguments: '{"gameId":"g1","participantId":"giant-croc-1","row":0,"col":0}' } },
+                ],
+              },
+            },
+            { message: { role: 'assistant', content: 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.' } },
+          ]);
+          const toolCaller = new OrphanEncounterToolCaller();
+
+          const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Nos preparamos para luchar' }], 'g1');
+
+          expect(result.narrative).toBe('Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.');
+          expect(toolCaller.calls.map((c) => c.name)).toEqual(['start_combat', 'end_combat', 'start_combat', 'place_participant']);
+          expect(chatClient.receivedCalls).toHaveLength(4);
+          const correctionCall = chatClient.receivedCalls[2];
+          const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+          expect(lastMessage.content).toMatch(/end_combat/);
+          expect(lastMessage.content).toMatch(/combate activo/i);
+        });
+
+        it('si start_combat falla por otro motivo distinto (no "ya hay un combate activo"), no se dispara este aviso específico', async () => {
+          const chatClient = new FakeChatClient([
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["enemigo-inexistente"]}' } }],
+              },
+            },
+            { message: { role: 'assistant', content: 'Sigo narrando pese al fallo, sin combate real.' } },
+          ]);
+          const toolCaller = new FakeToolCaller([], {}, { start_combat: 'Enemigo enemigo-inexistente no encontrado en el catálogo' });
+
+          const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Ataco' }], 'g1');
+
+          // Este texto no menciona ninguna muerte/derrota, así que tampoco debería
+          // disparar combatWithoutToolsNudge -- ningún aviso en absoluto.
+          expect(result.narrative).toBe('Sigo narrando pese al fallo, sin combate real.');
+          expect(chatClient.receivedCalls).toHaveLength(2);
+        });
+      },
+  );
 });

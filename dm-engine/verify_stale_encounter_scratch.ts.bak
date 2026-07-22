@@ -1,0 +1,88 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class OrphanEncounterToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  private startCombatAttempts = 0;
+  async listTools(): Promise<McpToolInfo[]> { return []; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    if (name === 'start_combat') {
+      this.startCombatAttempts += 1;
+      if (this.startCombatAttempts === 1) {
+        throw new Error('Ya hay un combate activo');
+      }
+      return { enemies: [{ instanceId: 'giant-croc-1' }] };
+    }
+    if (name === 'end_combat') return { combatEnded: true };
+    if (name === 'place_participant') return { placed: true };
+    return {};
+  }
+}
+
+async function main() {
+  // Escenario real: DM narra un Cocodrilo Gigante, intenta start_combat, pero
+  // hay un combate huerfano (2 cocodrilos, otro mapa) ya activo -- debe
+  // cerrarlo con end_combat y arrancar de nuevo con el enemigo real, sin
+  // engañar al jugador con el numero/tipo de enemigos.
+  {
+    const chatClient = new FakeChatClient([
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } }],
+        },
+      },
+      { message: { role: 'assistant', content: 'El sistema dice que ya hay un combate activo con otros enemigos.' } },
+      {
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [
+            { id: 'c2', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
+            { id: 'c3', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } },
+            { id: 'c4', type: 'function' as const, function: { name: 'place_participant', arguments: '{"gameId":"g1","participantId":"giant-croc-1","row":0,"col":0}' } },
+          ],
+        },
+      },
+      { message: { role: 'assistant', content: 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.' } },
+    ]);
+    const toolCaller = new OrphanEncounterToolCaller();
+
+    const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Nos preparamos para luchar' }], 'g1');
+
+    console.log('Narrativa final:', result.narrative);
+    console.log('Tools llamadas:', toolCaller.calls.map((c) => c.name).join(', '));
+
+    if (result.narrative !== 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.') {
+      throw new Error('FALLO: narrativa final incorrecta');
+    }
+    const calledNames = toolCaller.calls.map((c) => c.name);
+    if (JSON.stringify(calledNames) !== JSON.stringify(['start_combat', 'end_combat', 'start_combat', 'place_participant'])) {
+      throw new Error(`FALLO: secuencia de tools incorrecta: ${calledNames.join(', ')}`);
+    }
+    if (chatClient.receivedCalls.length !== 4) {
+      throw new Error(`FALLO: se esperaban 4 llamadas al modelo, hubo ${chatClient.receivedCalls.length}`);
+    }
+    const correctionCall = chatClient.receivedCalls[2];
+    const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+    if (!/end_combat/.test(String(lastMessage.content)) || !/combate activo/i.test(String(lastMessage.content))) {
+      throw new Error('FALLO: el aviso correctivo no menciona end_combat / combate activo');
+    }
+  }
+
+  console.log('OK: el combate huérfano se cierra y se arranca uno nuevo con los enemigos reales, sin engañar al jugador.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

@@ -81,6 +81,13 @@ Reglas innegociables:
   activeEncounter no existe, resolve_attack/grant_xp/end_combat no tienen ningun
   combate sobre el que operar, y el panel de "Combate" del jugador nunca aparece
   aunque tu texto ya este describiendo una pelea.
+  Si start_combat falla con el error "Ya hay un combate activo", NUNCA lo trates
+  como algo normal ni improvises una narracion para encajar los enemigos/mapa que
+  ya estuvieran ahi (probablemente un combate huerfano de un turno anterior que
+  nunca se cerro, no algo que tu hayas narrado): eso le mostraria al jugador un
+  numero o tipo de enemigo distinto al que le acabas de describir, un engaño grave.
+  Llama primero a end_combat para cerrar ese combate huerfano, y LUEGO a
+  start_combat otra vez con los enemigos reales de tu narracion.
 - Si no tienes el estado actual de la partida en el contexto reciente, llama a
   get_game_state (con este gameId) antes de narrar — no asumas el estado a partir
   de la conversacion.

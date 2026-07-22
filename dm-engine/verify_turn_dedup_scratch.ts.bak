@@ -1,0 +1,93 @@
+/**
+ * server.ts necesita variables de entorno reales (DEEPSEEK_API_KEY, etc.) y
+ * un servidor MCP vivo, así que no se puede levantar el Express real aquí.
+ * Este script reproduce EXACTAMENTE la misma lógica del Map<gameId, Promise>
+ * que se añadió a server.ts (mismo patrón: reutilizar la promesa en curso en
+ * vez de arrancar una segunda ejecución en paralelo) contra una función de
+ * trabajo simulada, para verificar el comportamiento de deduplicación antes
+ * de confiar en ello en producción.
+ */
+
+let executionCount = 0;
+
+async function fakeRunDmTurn(gameId: string, delayMs: number): Promise<{ narrative: string; executionId: number }> {
+  const executionId = ++executionCount;
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  return { narrative: `resultado de ${gameId} (ejecución ${executionId})`, executionId };
+}
+
+const turnsInFlight = new Map<string, Promise<{ narrative: string; executionId: number }>>();
+
+async function handleTurn(gameId: string, delayMs: number): Promise<{ narrative: string; executionId: number }> {
+  let turnPromise = turnsInFlight.get(gameId);
+  if (!turnPromise) {
+    turnPromise = fakeRunDmTurn(gameId, delayMs);
+    turnsInFlight.set(gameId, turnPromise);
+    turnPromise.finally(() => {
+      if (turnsInFlight.get(gameId) === turnPromise) {
+        turnsInFlight.delete(gameId);
+      }
+    });
+  }
+  return turnPromise;
+}
+
+async function main() {
+  // Escenario 1: dos peticiones "concurrentes" para la MISMA partida (como un
+  // cliente que reintenta tras un timeout mientras el turno original sigue
+  // corriendo) deben compartir la MISMA ejecución -- nunca duplicar el trabajo.
+  {
+    executionCount = 0;
+    const [first, retry] = await Promise.all([
+      handleTurn('game-A', 50),
+      handleTurn('game-A', 50), // "reintento" que llega mientras el primero sigue en curso
+    ]);
+    console.log('Escenario 1:', first, retry);
+    if (first.executionId !== retry.executionId) {
+      throw new Error('FALLO: las dos peticiones concurrentes para la misma partida ejecutaron runDmTurn por separado');
+    }
+    if (executionCount !== 1) {
+      throw new Error(`FALLO: se esperaba exactamente 1 ejecución real, hubo ${executionCount}`);
+    }
+  }
+
+  // Escenario 2: dos partidas DISTINTAS concurrentes deben ejecutarse cada
+  // una por su lado, sin bloquearse entre sí.
+  {
+    executionCount = 0;
+    const [a, b] = await Promise.all([
+      handleTurn('game-B', 30),
+      handleTurn('game-C', 30),
+    ]);
+    console.log('Escenario 2:', a, b);
+    if (a.executionId === b.executionId) {
+      throw new Error('FALLO: dos partidas distintas compartieron la misma ejecución');
+    }
+    if (executionCount !== 2) {
+      throw new Error(`FALLO: se esperaban 2 ejecuciones reales (una por partida), hubo ${executionCount}`);
+    }
+  }
+
+  // Escenario 3: tras resolverse una ejecución, una petición POSTERIOR (no
+  // concurrente) para la misma partida debe arrancar una ejecución NUEVA --
+  // el candado no debe quedarse "pegado" para siempre.
+  {
+    executionCount = 0;
+    const firstTurn = await handleTurn('game-D', 10);
+    const secondTurnLater = await handleTurn('game-D', 10);
+    console.log('Escenario 3:', firstTurn, secondTurnLater);
+    if (firstTurn.executionId === secondTurnLater.executionId) {
+      throw new Error('FALLO: un turno posterior reutilizó la ejecución de uno ya terminado');
+    }
+    if (executionCount !== 2) {
+      throw new Error(`FALLO: se esperaban 2 ejecuciones reales (secuenciales), hubo ${executionCount}`);
+    }
+    if (turnsInFlight.size !== 0) {
+      throw new Error('FALLO: quedaron entradas huérfanas en el mapa tras resolverse los turnos');
+    }
+  }
+
+  console.log('OK: la deduplicación por gameId evita ejecuciones duplicadas sin bloquear partidas distintas ni quedarse pegada.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
