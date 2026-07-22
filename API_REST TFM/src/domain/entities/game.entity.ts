@@ -233,13 +233,31 @@ export class Game {
     if (this.props.players.length < MIN_PLAYERS_TO_LAUNCH) {
       throw new DomainError(`Se necesita al menos ${MIN_PLAYERS_TO_LAUNCH} jugador`);
     }
-    this.props.status = 'en_curso';
-    // Sin capitán todavía no hay quien pueda hablar con el DM fuera de
-    // combate (ver sendPlayerAction/assignCaptain) — el host es el capitán
-    // por defecto, el propio host puede reasignarlo luego con assignCaptain.
+
+    // Sin capitán no hay quien pueda hablar con el DM-IA fuera de combate
+    // (SendPlayerActionUseCase exige ser jugador Y capitán a la vez). El host
+    // NO tiene por qué ser jugador de esta partida -- es un rol aparte (ver
+    // assignCaptain) -- así que asumirlo como capitán por defecto a ciegas
+    // podía lanzar una partida con un capitán "fantasma": nadie (ni el host,
+    // que no es jugador; ni ningún jugador real, cuyo userId no coincide)
+    // podía entonces hablar nunca con el DM fuera de combate, dejando la
+    // partida inservible desde el minuto uno sin ningún error visible. Ahora:
+    // si ya se asignó un capitán a mano (assignCaptain, típicamente desde la
+    // sala de espera), se respeta tal cual; si no, el host solo puede asumirlo
+    // por defecto si TAMBIÉN es jugador de la partida -- si no lo es, se
+    // bloquea el lanzamiento hasta que se asigne uno de verdad.
     if (!this.props.captainUserId) {
+      const hostIsPlayer = this.props.players.some((p) => p.userId === this.props.hostUserId);
+      if (!hostIsPlayer) {
+        throw new DomainError(
+          'No se puede iniciar la partida sin un capitán asignado: el host no es jugador de esta partida, así ' +
+              'que no puede asumir el rol por defecto. Asigna un capitán con assignCaptain antes de lanzar.',
+        );
+      }
       this.props.captainUserId = this.props.hostUserId;
     }
+
+    this.props.status = 'en_curso';
   }
 
   /**

@@ -623,19 +623,33 @@ describe('Game', () => {
       expect(game.toSnapshot().captainUserId).toBeNull();
     });
 
-    it('al lanzar la partida, el host se convierte en capitán por defecto', () => {
+    it('al lanzar la partida, el host se convierte en capitán por defecto SI TAMBIÉN es jugador de la partida', () => {
       const game = buildGame();
-      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'host-1', characterId: 'char-host', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.launch('host-1');
       expect(game.toSnapshot().captainUserId).toBe('host-1');
     });
 
-    it('el host puede asignar a otro jugador como capitán', () => {
+    it(
+        'lanza DomainError al intentar lanzar si el host NO es jugador de la partida y nadie asignó capitán antes ' +
+        '-- bug real: una partida lanzaba con un capitán "fantasma" que ningún usuario real podía encarnar, y ' +
+        'nadie podía hablar nunca con el DM fuera de combate',
+        () => {
+          const game = buildGame();
+          game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+
+          expect(() => game.launch('host-1')).toThrow(DomainError);
+          expect(game.toSnapshot().status).toBe('configuracion'); // no se lanzó
+          expect(game.toSnapshot().captainUserId).toBeNull();
+        },
+    );
+
+    it('el host puede asignar a un jugador como capitán ANTES de lanzar (sala de espera), y launch lo respeta', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
-      game.launch('host-1');
 
       game.assignCaptain('host-1', 'user-1');
+      game.launch('host-1');
 
       expect(game.toSnapshot().captainUserId).toBe('user-1');
     });
@@ -643,17 +657,19 @@ describe('Game', () => {
     it('lanza DomainError si quien asigna no es el host ni el capitán actual', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 12 });
+      game.assignCaptain('host-1', 'user-1'); // capitán válido asignado antes de lanzar
       game.launch('host-1');
 
-      expect(() => game.assignCaptain('user-1', 'user-1')).toThrow(DomainError);
+      expect(() => game.assignCaptain('user-2', 'user-1')).toThrow(DomainError);
     });
 
     it('el capitán actual puede pasarle el testigo a otro jugador (aunque no sea el host)', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 12 });
+      game.assignCaptain('host-1', 'user-1'); // capitán válido asignado antes de lanzar
       game.launch('host-1');
-      game.assignCaptain('host-1', 'user-1'); // user-1 es ahora el capitán
 
       game.assignCaptain('user-1', 'user-2');
 
@@ -663,6 +679,7 @@ describe('Game', () => {
     it('lanza DomainError si se asigna a alguien que no es jugador de la partida', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.assignCaptain('host-1', 'user-1'); // capitán válido asignado antes de lanzar
       game.launch('host-1');
 
       expect(() => game.assignCaptain('host-1', 'user-no-existe')).toThrow(DomainError);

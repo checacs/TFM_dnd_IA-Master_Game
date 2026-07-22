@@ -58,6 +58,7 @@ describe('StartCombatUseCase', () => {
 
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
     game.launch('host-1');
     games.seed(game);
 
@@ -98,6 +99,7 @@ describe('StartCombatUseCase', () => {
 
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
     game.launch('host-1');
     games.seed(game);
 
@@ -121,6 +123,7 @@ describe('StartCombatUseCase', () => {
 
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 9 });
+    game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
     game.launch('host-1');
     games.seed(game);
 
@@ -161,6 +164,7 @@ describe('StartCombatUseCase', () => {
 
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
     game.launch('host-1');
     games.seed(game);
 

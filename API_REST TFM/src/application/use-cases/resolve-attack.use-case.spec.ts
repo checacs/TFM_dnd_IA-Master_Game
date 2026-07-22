@@ -36,6 +36,7 @@ function buildGameWithActiveEnemy(): { game: Game; repo: FakeGameRepository } {
   const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
   game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
   game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+  game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
   game.launch('host-1');
   game.startEncounter({
     enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],

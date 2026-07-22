@@ -1,0 +1,62 @@
+import { Game } from './src/domain/entities/game.entity';
+import { DomainError } from './src/domain/errors/domain-error';
+
+function expectThrows(fn: () => void, label: string) {
+  try {
+    fn();
+    throw new Error(`FALLO: ${label} -- debería haber lanzado DomainError`);
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+    console.log(`OK (lanzó DomainError esperado): ${label} -> ${err.message}`);
+  }
+}
+
+function main() {
+  // 1) Host NO es jugador, nadie asignó capitán -> launch() debe BLOQUEAR.
+  {
+    const game = Game.create({ name: 'Partida 1', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Sandra', class: 'mago', currentHp: 9 });
+    expectThrows(() => game.launch('host-1'), 'host no es jugador y sin capitán asignado');
+    if (game.toSnapshot().status !== 'configuracion') {
+      throw new Error('FALLO: el status no debería haber cambiado tras el intento fallido de lanzar');
+    }
+    if (game.toSnapshot().captainUserId !== null) {
+      throw new Error('FALLO: no debería haberse asignado ningún capitán');
+    }
+  }
+
+  // 2) Host SÍ es jugador (juega su propio personaje) -> launch() debe
+  // funcionar y asignarlo como capitán por defecto, sin pasos extra.
+  {
+    const game = Game.create({ name: 'Partida 2', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'host-1', characterId: 'char-host', name: 'Checa', class: 'guerrero', currentHp: 14 });
+    game.launch('host-1');
+    if (game.toSnapshot().status !== 'en_curso') {
+      throw new Error('FALLO: debería haberse lanzado correctamente');
+    }
+    if (game.toSnapshot().captainUserId !== 'host-1') {
+      throw new Error('FALLO: el host (jugador) debería ser el capitán por defecto');
+    }
+    console.log('OK: host también jugador -> lanza y se autoasigna capitán.');
+  }
+
+  // 3) Host NO es jugador, pero SÍ se asignó capitán a mano antes de lanzar
+  // (flujo real de la sala de espera) -> launch() debe respetar ese capitán.
+  {
+    const game = Game.create({ name: 'Partida 3', hostUserId: 'host-1', maxPlayers: 4 });
+    game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Sandra', class: 'mago', currentHp: 9 });
+    game.assignCaptain('host-1', 'user-1');
+    game.launch('host-1');
+    if (game.toSnapshot().status !== 'en_curso') {
+      throw new Error('FALLO: debería haberse lanzado correctamente tras asignar capitán a mano');
+    }
+    if (game.toSnapshot().captainUserId !== 'user-1') {
+      throw new Error('FALLO: el capitán asignado a mano debería respetarse');
+    }
+    console.log('OK: capitán asignado a mano antes de lanzar -> se respeta y lanza correctamente.');
+  }
+
+  console.log('OK GENERAL: siempre hay un capitán válido, o la partida no se lanza.');
+}
+
+main();
