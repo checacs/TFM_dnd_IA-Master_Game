@@ -1,7 +1,18 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { GameMcpTools } from './game-mcp-tools';
+import { withGameLock } from '../../domain/services/game-lock';
 
+// Todas las tools que mutan la partida (toman gameId y acaban llamando a
+// GameRepository.save() por debajo) pasan por withGameLock(gameId, ...) --
+// ver domain/services/game-lock.ts para la explicación completa del bug real
+// que esto corrige: el DM-engine puede encadenar varias llamadas MCP
+// seguidas dentro de un mismo turno (resolve_attack, place_participant,
+// grant_xp...) mientras el móvil dispara sus propias peticiones REST
+// (claim-turn, player-roll...) sobre la MISMA partida -- sin este candado,
+// la escritura que termina último pisaba por completo la del otro sin
+// ningún error visible (turnos reclamados que desaparecían, HP que no se
+// actualizaba tras un ataque ya resuelto).
 export function registerGameTools(server: McpServer, tools: GameMcpTools): void {
   server.tool(
     'roll_dice',
@@ -34,7 +45,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
           .describe('Solo para ataques de un JUGADOR: el d20 en bruto que ya tiró con "Tirar Dados" (léelo del chat).'),
     },
     async (input) => ({
-      content: [{ type: 'text', text: JSON.stringify(await tools.resolveAttackTool(input)) }],
+      content: [{ type: 'text', text: JSON.stringify(await withGameLock(input.gameId, () => tools.resolveAttackTool(input))) }],
     }),
   );
 
@@ -55,7 +66,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       // colocarlos luego con place_participant — devolver solo {started:true}
       // (como antes) le ocultaba esos IDs y el protocolNudge de dm-turn.ts no
       // podía comprobar cuáles faltaban por colocar.
-      const result = await tools.startCombatTool(input);
+      const result = await withGameLock(input.gameId, () => tools.startCombatTool(input));
       return { content: [{ type: 'text', text: JSON.stringify({ started: true, ...result }) }] };
     },
   );
@@ -94,7 +105,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'entran en otro) si encuentras en get_battle_maps un mapId que encaje con el sitio nuevo.',
     { gameId: z.string(), mapId: z.string() },
     async ({ gameId, mapId }) => {
-      await tools.setBattleMapTool(gameId, mapId);
+      await withGameLock(gameId, () => tools.setBattleMapTool(gameId, mapId));
       return { content: [{ type: 'text', text: JSON.stringify({ applied: true }) }] };
     },
   );
@@ -106,7 +117,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'nuevo: nunca dejes en pantalla la imagen de una escena anterior que ya no corresponde a lo narrado.',
     { gameId: z.string() },
     async ({ gameId }) => {
-      await tools.clearBattleMapTool(gameId);
+      await withGameLock(gameId, () => tools.clearBattleMapTool(gameId));
       return { content: [{ type: 'text', text: JSON.stringify({ cleared: true }) }] };
     },
   );
@@ -140,7 +151,11 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'con get_battle_maps para no repetir siempre el mismo escenario en partidas largas.',
     { gameId: z.string() },
     async ({ gameId }) => ({
-      content: [{ type: 'text', text: JSON.stringify(await tools.gameStateTool(gameId)) }],
+      // De solo lectura, pero pasa por el mismo candado que las tools que
+      // mutan: así nunca puede leer un estado "a medias" mientras otra
+      // petición para esta misma partida está en mitad de su propio
+      // find->mutar->save (ver domain/services/game-lock.ts).
+      content: [{ type: 'text', text: JSON.stringify(await withGameLock(gameId, () => tools.gameStateTool(gameId))) }],
     }),
   );
 
@@ -225,7 +240,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'Valida contra el catálogo real — nunca apliques una condición inventada.',
     { gameId: z.string(), participantId: z.string(), conditionIndex: z.string() },
     async ({ gameId, participantId, conditionIndex }) => {
-      await tools.applyConditionTool(gameId, participantId, conditionIndex);
+      await withGameLock(gameId, () => tools.applyConditionTool(gameId, participantId, conditionIndex));
       return { content: [{ type: 'text', text: JSON.stringify({ applied: true }) }] };
     },
   );
@@ -235,7 +250,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
     'Quita una condición ya aplicada a un jugador o enemigo (porque expiró, fue curada, etc.).',
     { gameId: z.string(), participantId: z.string(), conditionIndex: z.string() },
     async ({ gameId, participantId, conditionIndex }) => {
-      await tools.removeConditionTool(gameId, participantId, conditionIndex);
+      await withGameLock(gameId, () => tools.removeConditionTool(gameId, participantId, conditionIndex));
       return { content: [{ type: 'text', text: JSON.stringify({ removed: true }) }] };
     },
   );
@@ -259,7 +274,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       zoneName: z.string().optional(),
     },
     async ({ gameId, participantId, row, col, zoneName }) => {
-      await tools.placeParticipantTool(gameId, participantId, row, col, zoneName);
+      await withGameLock(gameId, () => tools.placeParticipantTool(gameId, participantId, row, col, zoneName));
       return { content: [{ type: 'text', text: JSON.stringify({ placed: true }) }] };
     },
   );
@@ -285,7 +300,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'jugadores del móvil se quedan sin poder reclamar turno.',
     { gameId: z.string() },
     async ({ gameId }) => {
-      await tools.advanceToPlayerRoundTool(gameId);
+      await withGameLock(gameId, () => tools.advanceToPlayerRoundTool(gameId));
       return { content: [{ type: 'text', text: JSON.stringify({ advanced: true }) }] };
     },
   );
@@ -303,7 +318,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'todavía le estés preguntando algo. El characterId de cada jugador está en get_game_state.players[].characterId.',
     { gameId: z.string(), characterId: z.string() },
     async ({ gameId, characterId }) => {
-      await tools.endPlayerTurnTool(gameId, characterId);
+      await withGameLock(gameId, () => tools.endPlayerTurnTool(gameId, characterId));
       return { content: [{ type: 'text', text: JSON.stringify({ turnEnded: true }) }] };
     },
   );
@@ -321,7 +336,7 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'no hace falta llamar a advance_to_player_round ni end_player_turn para esa ronda.',
     { gameId: z.string() },
     async ({ gameId }) => {
-      await tools.endCombatTool(gameId);
+      await withGameLock(gameId, () => tools.endCombatTool(gameId));
       return { content: [{ type: 'text', text: JSON.stringify({ combatEnded: true }) }] };
     },
   );
@@ -350,7 +365,12 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
           .describe('instanceId del enemigo objetivo (get_game_state) -- solo si el hechizo hace daño.'),
     },
     async ({ gameId, casterCharacterId, spellId, targetId }) => ({
-      content: [{ type: 'text', text: JSON.stringify(await tools.castSpellTool(gameId, casterCharacterId, spellId, targetId)) }],
+      content: [{
+        type: 'text',
+        text: JSON.stringify(
+            await withGameLock(gameId, () => tools.castSpellTool(gameId, casterCharacterId, spellId, targetId)),
+        ),
+      }],
     }),
   );
 }

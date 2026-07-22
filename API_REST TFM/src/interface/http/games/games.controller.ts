@@ -26,6 +26,7 @@ import { ClaimTurnDto } from './dto/claim-turn.dto';
 import { PlayerActionDto } from './dto/player-action.dto';
 import { PlayerRollDto } from './dto/player-roll.dto';
 import { AssignCaptainDto } from './dto/assign-captain.dto';
+import { withGameLock } from '../../../domain/services/game-lock';
 
 @UseGuards(JwtAuthGuard)
 @Controller('games')
@@ -62,64 +63,72 @@ export class GamesController {
     return this.getGameState.execute({ gameId });
   }
 
+  // A partir de aquí, TODOS los endpoints que mutan la partida pasan por
+  // withGameLock(gameId, ...) -- ver domain/services/game-lock.ts para la
+  // explicación completa del bug real que esto corrige (lost updates entre
+  // peticiones concurrentes sobre el mismo documento de Game: turnos
+  // reclamados que desaparecían y HP que no se actualizaba).
+
   @Post(':gameId/join')
   join(@Param('gameId') gameId: string, @Body() dto: JoinGameDto, @CurrentUserId() userId: string) {
-    return this.joinGame.execute({ gameId, userId, ...dto });
+    return withGameLock(gameId, () => this.joinGame.execute({ gameId, userId, ...dto }));
   }
 
   @Post(':gameId/launch')
   launch(@Param('gameId') gameId: string, @CurrentUserId() requestingUserId: string) {
-    return this.launchGame.execute({ gameId, requestingUserId });
+    return withGameLock(gameId, () => this.launchGame.execute({ gameId, requestingUserId }));
   }
 
   @Post(':gameId/start-combat')
   startCombatAction(@Param('gameId') gameId: string, @Body() dto: StartCombatDto) {
-    return this.startCombat.execute({ gameId, enemyIds: dto.enemyIds, mapId: dto.mapId });
+    return withGameLock(gameId, () => this.startCombat.execute({ gameId, enemyIds: dto.enemyIds, mapId: dto.mapId }));
   }
 
   /** Turno de un enemigo (lo resuelve el DM-IA vía MCP) — parámetros explícitos, ver docs/04. */
   @Post(':gameId/attack')
   attack(@Param('gameId') gameId: string, @Body() dto: AttackDto) {
-    return this.resolveAttack.execute({ gameId, ...dto });
+    return withGameLock(gameId, () => this.resolveAttack.execute({ gameId, ...dto }));
   }
 
   /** Turno de un jugador — el modificador y el daño se derivan de su arma equipada. */
   @Post(':gameId/player-attack')
   playerAttack(@Param('gameId') gameId: string, @Body() dto: PlayerAttackDto, @CurrentUserId() requestingUserId: string) {
-    return this.resolvePlayerAttack.execute({ gameId, requestingUserId, ...dto });
+    return withGameLock(gameId, () => this.resolvePlayerAttack.execute({ gameId, requestingUserId, ...dto }));
   }
 
   @Post(':gameId/message')
   sendPlayerMessage(@Param('gameId') gameId: string, @Body() dto: SendMessageDto) {
-    return this.sendMessage.execute({ gameId, messages: dto.messages });
+    return withGameLock(gameId, () => this.sendMessage.execute({ gameId, messages: dto.messages }));
   }
 
   @Post(':gameId/cast-spell')
   castSpellAction(@Param('gameId') gameId: string, @Body() dto: CastSpellDto, @CurrentUserId() requestingUserId: string) {
-    return this.castSpell.execute({ gameId, requestingUserId, ...dto });
+    return withGameLock(gameId, () => this.castSpell.execute({ gameId, requestingUserId, ...dto }));
   }
 
   /** "Mi turno" desde el móvil — reclama el candado de turno en la ronda de jugadores en curso. */
   @Post(':gameId/claim-turn')
   claimTurnAction(@Param('gameId') gameId: string, @Body() dto: ClaimTurnDto, @CurrentUserId() requestingUserId: string) {
-    return this.claimTurn.execute({ gameId, requestingUserId, characterId: dto.characterId });
+    return withGameLock(gameId, () => this.claimTurn.execute({ gameId, requestingUserId, characterId: dto.characterId }));
   }
 
   /** Campo de texto del móvil — equivale a "responder al chat del DM" (en combate exige turno reclamado, fuera de combate exige ser el capitán). */
   @Post(':gameId/player-action')
   playerAction(@Param('gameId') gameId: string, @Body() dto: PlayerActionDto, @CurrentUserId() requestingUserId: string) {
-    return this.sendPlayerAction.execute({ gameId, requestingUserId, ...dto });
+    return withGameLock(gameId, () => this.sendPlayerAction.execute({ gameId, requestingUserId, ...dto }));
   }
 
   /** Botón "Tirar Dados" del móvil — se añade al narrativeLog atribuida al jugador para que se vea en el chat de ui-web (ver PlayerRollUseCase). */
   @Post(':gameId/player-roll')
   playerRoll(@Param('gameId') gameId: string, @Body() dto: PlayerRollDto, @CurrentUserId() requestingUserId: string) {
-    return this.playerRollUseCase.execute({ gameId, requestingUserId, characterId: dto.characterId, notation: dto.notation });
+    return withGameLock(gameId, () => this.playerRollUseCase.execute({
+      gameId, requestingUserId, characterId: dto.characterId, notation: dto.notation,
+    }));
   }
 
   /** Reasigna quién es el capitán del grupo — puede llamarlo el host o el capitán actual (Game.assignCaptain). */
   @Post(':gameId/assign-captain')
   assignCaptainAction(@Param('gameId') gameId: string, @Body() dto: AssignCaptainDto, @CurrentUserId() requestingUserId: string) {
-    return this.assignCaptain.execute({ gameId, requestingUserId, targetUserId: dto.targetUserId });
+    return withGameLock(gameId, () => this.assignCaptain.execute({ gameId, requestingUserId, targetUserId: dto.targetUserId }));
   }
 }

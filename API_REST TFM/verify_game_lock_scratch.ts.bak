@@ -1,0 +1,99 @@
+import { withGameLock } from './src/domain/services/game-lock';
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function main() {
+  // Caso 1: EXACTAMENTE el bug real -- dos "peticiones" concurrentes sobre la
+  // MISMA partida hacen read -> mutar en memoria -> "guardar" (aquí simulado
+  // con un objeto compartido `state`, igual que el documento de Mongo real).
+  // Sin el lock, la petición A (más lenta) pisaría el resultado de B al
+  // terminar de guardar después. Con withGameLock, A tiene que completarse
+  // por entero (incluido su "guardado") antes de que B ni siquiera empiece a
+  // leer -- así nunca hay una lectura de B basada en un estado a medio
+  // escribir por A.
+  const state: { turnClaims: string[]; hp: number } = { turnClaims: [], hp: 8 };
+  const order: string[] = [];
+
+  async function claimTurnLikeCall(characterId: string): Promise<void> {
+    // Simula ClaimTurnUseCase: lee el estado, espera un poco (como una
+    // llamada real a Mongo/red), y guarda el estado mutado.
+    const read = { ...state };
+    order.push(`A:read(${characterId})`);
+    await delay(30);
+    read.turnClaims = [...read.turnClaims, characterId];
+    order.push(`A:save(${characterId})`);
+    state.turnClaims = read.turnClaims;
+    state.hp = read.hp;
+  }
+
+  async function resolveAttackLikeCall(damage: number): Promise<void> {
+    // Simula ResolveAttackUseCase: lee el estado, espera MÁS que la otra
+    // llamada (como en el bug real, donde el turno del DM tarda más porque
+    // encadena varias tool calls), y guarda el estado mutado.
+    const read = { ...state };
+    order.push(`B:read(${damage})`);
+    await delay(60);
+    read.hp = read.hp - damage;
+    order.push(`B:save(${damage})`);
+    state.turnClaims = read.turnClaims;
+    state.hp = read.hp;
+  }
+
+  const gameId = 'g1';
+  await Promise.all([
+    withGameLock(gameId, () => claimTurnLikeCall('che')),
+    withGameLock(gameId, () => resolveAttackLikeCall(5)),
+  ]);
+
+  console.log('CASO 1 -> orden de ejecución:', order.join(' -> '));
+  console.log('CASO 1 -> estado final:', state);
+  if (!state.turnClaims.includes('che')) {
+    throw new Error('FALLO CASO 1: el turnClaims de Che se perdió (exactamente el bug real reportado)');
+  }
+  if (state.hp !== 3) {
+    throw new Error(`FALLO CASO 1: el HP no se aplicó correctamente (esperado 3, real ${state.hp})`);
+  }
+  // Con el lock, la segunda llamada en entrar a la cola no puede ni leer
+  // hasta que la primera haya terminado de guardar -- comprobamos que no hay
+  // ningún "B:read" antes de "A:save" ni viceversa (cero solapamiento).
+  const firstSaveIndex = order.findIndex((e) => e.includes(':save('));
+  const secondReadIndex = order.map((e) => e.includes(':read(')).lastIndexOf(true);
+  if (secondReadIndex < firstSaveIndex) {
+    throw new Error('FALLO CASO 1: hubo solapamiento -- una llamada leyó antes de que la otra terminara de guardar');
+  }
+
+  // Caso 2: control -- dos partidas DISTINTAS no deben bloquearse entre sí
+  // (el lock es por gameId, no un mutex global de todo el proceso).
+  const start = Date.now();
+  await Promise.all([
+    withGameLock('gameA', () => delay(50)),
+    withGameLock('gameB', () => delay(50)),
+  ]);
+  const elapsed = Date.now() - start;
+  console.log(`CASO 2 -> tiempo total con dos partidas distintas en paralelo: ${elapsed}ms`);
+  if (elapsed > 90) {
+    throw new Error('FALLO CASO 2: partidas distintas se están serializando entre sí (deberían ir en paralelo)');
+  }
+
+  // Caso 3: control -- un error en una tarea no deja el candado bloqueado
+  // para siempre; la siguiente tarea de la misma partida debe poder correr.
+  let secondRan = false;
+  await withGameLock('gameC', async () => {
+    throw new Error('fallo simulado');
+  }).catch(() => {
+    // se espera que rechace -- el error se propaga al llamador, como debe ser
+  });
+  await withGameLock('gameC', async () => {
+    secondRan = true;
+  });
+  console.log('CASO 3 -> la segunda tarea corrió tras el error de la primera:', secondRan);
+  if (!secondRan) {
+    throw new Error('FALLO CASO 3: un error en una tarea dejó el candado bloqueado para la partida');
+  }
+
+  console.log('OK: withGameLock serializa por gameId, no bloquea partidas distintas, y no se atasca tras un error.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
