@@ -254,12 +254,26 @@ export function CharacterSheetScreen({ route }: Props) {
               // igual que el campo de acción (canAct: en combate solo en tu
               // turno, fuera de combate solo el capitán) para que no se pueda
               // tirar cuando no toca.
+              //
+              // El "opacity: 0.4" de buttonDisabled apenas se notaba sobre la
+              // imagen de fondo a color de los dados (a diferencia del tile
+              // "Mi turno", que es un color plano y sí se ve claramente
+              // apagado) -- un jugador reportó no poder distinguir a simple
+              // vista si el botón estaba activo o no. Se añade una capa oscura
+              // encima de la imagen y se cambia el texto cuando está
+              // deshabilitado, para que el estado sea inequívoco igual que en
+              // "Mi turno".
               style={[styles.diceButton, (!canAct || playerRoll.isPending) && styles.buttonDisabled]}
               disabled={!canAct || playerRoll.isPending}
               onPress={handleRoll}
             >
-              <Image source={require('../../assets/boton-roll.jpg')} style={styles.diceButtonImage} resizeMode="cover" />
-              <Text style={styles.diceButtonText}>{playerRoll.isPending ? 'Tirando...' : 'Tirar Dados'}</Text>
+              <View style={styles.diceImageWrap}>
+                <Image source={require('../../assets/boton-roll.jpg')} style={styles.diceButtonImage} resizeMode="cover" />
+                {!canAct && !playerRoll.isPending && <View style={styles.diceButtonLockOverlay} />}
+              </View>
+              <Text style={styles.diceButtonText}>
+                {playerRoll.isPending ? 'Tirando...' : canAct ? 'Tirar Dados' : 'Espera tu turno'}
+              </Text>
             </Pressable>
           </View>
           {lastRoll && (
@@ -558,10 +572,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 10,
   },
-  diceButtonImage: {
+  diceImageWrap: {
     width: '100%',
     flex: 1,
     borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  diceButtonImage: {
+    width: '100%',
+    height: '100%',
+  },
+  diceButtonLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(20, 16, 26, 0.6)',
   },
   diceButtonText: {
     color: colors.ink,

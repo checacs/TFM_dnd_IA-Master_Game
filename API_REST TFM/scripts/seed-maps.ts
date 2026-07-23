@@ -606,7 +606,7 @@ const maps = [
         'desagüe, la sala del tesoro oculta, el bosque de árboles muertos, un nido de harpías, la prisión de ' +
         'pantano, un laboratorio de alquimia de barro, la guarida de la bestia, un pasaje secreto y la sala del ' +
         'trono del Rey del Pantano.',
-    tags: ['exterior', 'interior', 'pantano', 'mazmorra', 'multisala', 'cueva'],
+    tags: ['exterior', 'interior', 'pantano', 'mazmorra', 'multisala', 'cueva', 'ciénaga', 'cienaga', 'juncos'],
     // Calibrado a pixel: imagen real 847x1264, ratio 0.6701 -- mismo rows=30/
     // cols=20 que sotanoTaberna/molino (mismo precedente que cripta-multisala).
     // Esta imagen trae los nombres y NÚMEROS de sala en español dibujados
