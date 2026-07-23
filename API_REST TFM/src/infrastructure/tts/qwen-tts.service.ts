@@ -40,12 +40,18 @@ export class QwenTtsService {
     // (las API keys de cada región son distintas entre sí y no son intercambiables).
     this.baseUrl = process.env.QWEN_TTS_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1';
     this.model = process.env.QWEN_TTS_MODEL ?? 'qwen3-tts-flash';
-    // 'Sonrisa' (mujer latina, alegre) y 'Bodega' (hombre español) son las dos
-    // únicas voces de qwen3-tts-flash descritas explícitamente como
-    // hispanohablantes en el catálogo -- el resto son multilingües y también
-    // saben español, pero con acento menos marcado. Cambiar con
-    // QWEN_TTS_VOICE si se prefiere otra.
-    this.voice = process.env.QWEN_TTS_VOICE ?? 'Sonrisa';
+    // 'Bellona': "voz potente y clara que da vida a los personajes... con
+    // grandeza heroica" (descripción oficial) -- la más adecuada como voz de
+    // narrador/DM de las disponibles en qwen3-tts-flash. Otras alternativas
+    // "potentes" del mismo catálogo: 'Vincent' (voz rasgada y grave, "evoca
+    // ejércitos y gestas heroicas con una sola frase"), 'Ryan' (dramática,
+    // con tensión narrativa), 'Andre' (voz masculina serena y magnética).
+    // 'Sonrisa' (mujer latina alegre) y 'Bodega' (hombre español) son las dos
+    // únicas descritas explícitamente como hispanohablantes "de acento", pero
+    // el resto son igual de multilingües (todas listan español). Cambiar con
+    // QWEN_TTS_VOICE si se prefiere otra -- ver la lista completa en
+    // https://www.alibabacloud.com/help/en/model-studio/qwen-tts-voice-list
+    this.voice = process.env.QWEN_TTS_VOICE ?? 'Bellona';
     this.languageType = process.env.QWEN_TTS_LANGUAGE ?? 'Spanish';
   }
 
