@@ -55,8 +55,12 @@ export class QwenTtsService {
     this.languageType = process.env.QWEN_TTS_LANGUAGE ?? 'Spanish';
   }
 
-  /** Sintetiza texto en español a un audio y devuelve los bytes crudos. */
-  async synthesize(text: string): Promise<Buffer> {
+  /**
+   * Sintetiza texto en español a un audio y devuelve los bytes crudos.
+   * `voiceOverride` permite probar otra voz del catálogo puntualmente (ver
+   * SpeakDto.voice) sin tocar QWEN_TTS_VOICE ni redeployar.
+   */
+  async synthesize(text: string, voiceOverride?: string): Promise<Buffer> {
     if (!this.apiKey) {
       throw new Error(
         'Falta QWEN_TTS_API_KEY: crea una API key en Alibaba Cloud Model Studio ' +
@@ -74,7 +78,7 @@ export class QwenTtsService {
         model: this.model,
         input: {
           text,
-          voice: this.voice,
+          voice: voiceOverride ?? this.voice,
           language_type: this.languageType,
         },
       }),

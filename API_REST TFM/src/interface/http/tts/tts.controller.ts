@@ -17,7 +17,7 @@ export class TtsController {
 
   @Post('speak')
   async speak(@Body() dto: SpeakDto): Promise<{ audioBase64: string }> {
-    const audio = await this.tts.synthesize(dto.text);
+    const audio = await this.tts.synthesize(dto.text, dto.voice);
     return { audioBase64: audio.toString('base64') };
   }
 }
