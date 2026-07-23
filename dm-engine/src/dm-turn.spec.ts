@@ -14,6 +14,24 @@ class FakeChatClient implements ChatClient {
 }
 
 /**
+ * Historial largo (>10 mensajes, más allá de VILLAGE_START_MAX_MESSAGES) sin
+ * ninguna mención a taberna/tablón/primera persona, terminando en el mensaje
+ * real que se quiere probar. Se descubrió escribiendo los tests de
+ * staleEncounterConflictNudge que un array de UN solo mensaje hace que
+ * messages.length === 1 y dispara SIEMPRE gameStartNudge ("primerísimo turno
+ * de la partida") antes que cualquier otro aviso, dominando el bucle de
+ * correcciones por completo -- cualquier test de un aviso que no sea el de
+ * arranque necesita simular que la partida ya lleva un rato en marcha.
+ */
+function ongoingGameHistory(lastPlayerMessage: string): ChatMessage[] {
+  const filler: ChatMessage[] = [];
+  for (let i = 0; i < 12; i++) {
+    filler.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: `Mensaje de relleno ${i} sin pistas de arranque.` });
+  }
+  return [...filler, { role: 'user', content: lastPlayerMessage }];
+}
+
+/**
  * Simula fallos de chatClient.createCompletion en pasos concretos -- para
  * probar que runDmTurn distingue un fallo ANTES de llamar a cualquier tool
  * (NoMutationYetError, seguro reintentar) de un fallo DESPUÉS de que alguna
@@ -798,15 +816,78 @@ describe('runDmTurn', () => {
           ]);
           const toolCaller = new OrphanEncounterToolCaller();
 
-          const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Nos preparamos para luchar' }], 'g1');
+          // NOTA: se usa un historial largo (>1 mensaje, más allá de
+          // VILLAGE_START_MAX_MESSAGES) a propósito -- con un solo mensaje,
+          // messages.length sería 1 y gameStartNudge ("primerísimo turno de
+          // la partida") se disparaba SIEMPRE antes que este aviso, dominando
+          // por completo el bucle de correcciones y haciendo que este test en
+          // realidad nunca ejercitara staleEncounterConflictNudge.
+          const messages = ongoingGameHistory('Nos preparamos para luchar');
+          const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
 
           expect(result.narrative).toBe('Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.');
-          expect(toolCaller.calls.map((c) => c.name)).toEqual(['start_combat', 'end_combat', 'start_combat', 'place_participant']);
-          expect(chatClient.receivedCalls).toHaveLength(4);
-          const correctionCall = chatClient.receivedCalls[2];
-          const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
-          expect(lastMessage.content).toMatch(/end_combat/);
-          expect(lastMessage.content).toMatch(/combate activo/i);
+          // 'get_game_state' se cuela antes de end_combat: antes de asumir que
+          // es un huérfano, el aviso comprueba el estado real de la partida
+          // (ver staleEncounterConflictNudge) -- aquí devuelve {} (sin
+          // activeEncounter), así que no coincide con nada y se sigue tratando
+          // como huérfano, igual que antes.
+          const callNames = toolCaller.calls.map((c) => c.name);
+          expect(callNames.indexOf('get_game_state')).toBeLessThan(callNames.indexOf('end_combat'));
+          expect(callNames).toEqual(expect.arrayContaining(['start_combat', 'end_combat', 'start_combat', 'place_participant']));
+          const correctionCall = chatClient.receivedCalls.find((c) => {
+            const last = c.messages[c.messages.length - 1];
+            return typeof last.content === 'string' && /end_combat/.test(last.content) && /combate activo/i.test(last.content);
+          });
+          expect(correctionCall).toBeDefined();
+        });
+
+        it('si el combate ya activo tiene EXACTAMENTE los mismos enemigos que se intentó pasar a start_combat, no se cierra ni se reinicia (bug real: Giant Boar ya en combate, el DM vuelve a llamar a start_combat solo para fijar el mapa)', async () => {
+          class SameEncounterToolCaller implements ToolCaller {
+            public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+            async listTools(): Promise<McpToolInfo[]> { return []; }
+            async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+              this.calls.push({ name, args });
+              if (name === 'start_combat') {
+                throw new Error('Ya hay un combate activo');
+              }
+              if (name === 'get_game_state') {
+                return { activeEncounter: { enemies: [{ instanceId: 'giant-boar-1', enemyRefId: 'giant-boar', currentHp: 42 }] } };
+              }
+              if (name === 'set_battle_map') return { applied: true };
+              return {};
+            }
+          }
+          const chatClient = new FakeChatClient([
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-boar"],"mapId":"pantano-rey"}' } }],
+              },
+            },
+            {
+              message: {
+                role: 'assistant', content: null,
+                tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"gameId":"g1","mapId":"pantano-rey"}' } }],
+              },
+            },
+            { message: { role: 'assistant', content: 'El combate sigue en curso contra el Giant Boar, ahora en el pantano.' } },
+          ]);
+          const toolCaller = new SameEncounterToolCaller();
+
+          // Mismo motivo que en el test del huérfano real: historial largo
+          // para que gameStartNudge no domine el bucle de correcciones.
+          const messages = ongoingGameHistory('Si, lo lanzo');
+          const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+
+          expect(result.narrative).toBe('El combate sigue en curso contra el Giant Boar, ahora en el pantano.');
+          // NUNCA debe llamarse a end_combat: el combate no es huérfano, es el mismo.
+          expect(toolCaller.calls.some((c) => c.name === 'end_combat')).toBe(false);
+          expect(toolCaller.calls.map((c) => c.name)).toEqual(expect.arrayContaining(['start_combat', 'get_game_state', 'set_battle_map']));
+          const correctionCall = chatClient.receivedCalls.find((c) => {
+            const last = c.messages[c.messages.length - 1];
+            return typeof last.content === 'string' && /mismo combate|no.*cierres|set_battle_map/i.test(last.content);
+          });
+          expect(correctionCall).toBeDefined();
         });
 
         it('si start_combat falla por otro motivo distinto (no "ya hay un combate activo"), no se dispara este aviso específico', async () => {

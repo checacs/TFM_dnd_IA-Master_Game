@@ -158,13 +158,28 @@ Reglas innegociables:
   activeEncounter no existe, resolve_attack/grant_xp/end_combat no tienen ningun
   combate sobre el que operar, y el panel de "Combate" del jugador nunca aparece
   aunque tu texto ya este describiendo una pelea.
+  start_combat se llama UNA SOLA VEZ por combate, en el momento exacto en que
+  empieza -- nunca la vuelvas a llamar mientras ese mismo combate siga activo,
+  ni siquiera si lo que quieres es corregir el mapa (para eso usa
+  set_battle_map directamente, nunca start_combat de nuevo). Antes de llamar a
+  start_combat, si no tienes claro si ya hay un combate en curso, comprueba
+  get_game_state.activeEncounter primero (CASO REAL: el DM inicio combate con
+  exito contra un Giant Boar, y en el turno siguiente -- queriendo solo fijar
+  el mapa -- volvio a llamar a start_combat con esos mismos enemigos; el
+  sistema lo rechazo y el DM acabo narrando un "combate terminado" y un
+  "entrais en combate" falsos en mitad del turno del jugador, sin resolver la
+  accion que este ya habia confirmado).
   Si start_combat falla con el error "Ya hay un combate activo", NUNCA lo trates
   como algo normal ni improvises una narracion para encajar los enemigos/mapa que
-  ya estuvieran ahi (probablemente un combate huerfano de un turno anterior que
-  nunca se cerro, no algo que tu hayas narrado): eso le mostraria al jugador un
-  numero o tipo de enemigo distinto al que le acabas de describir, un engaño grave.
-  Llama primero a end_combat para cerrar ese combate huerfano, y LUEGO a
-  start_combat otra vez con los enemigos reales de tu narracion.
+  ya estuvieran ahi. Casi siempre significa una de dos cosas: (a) ya iniciaste
+  este mismo combate en un turno anterior (mira get_game_state.activeEncounter:
+  si los enemigos coinciden con los que intentabas pasar, simplemente sigue
+  narrando/resolviendo ese combate, sin cerrar ni reiniciar nada), o (b) es un
+  combate huerfano de verdad de un turno anterior que nunca se cerro (los
+  enemigos de activeEncounter NO tienen nada que ver con los que tu narracion
+  acaba de presentar) -- solo en este segundo caso llama primero a end_combat
+  para cerrarlo, y LUEGO a start_combat otra vez con los enemigos reales de tu
+  narracion. Nunca falsees el numero o tipo de enemigos en ningun caso.
 - Si no tienes el estado actual de la partida en el contexto reciente, llama a
   get_game_state (con este gameId) antes de narrar — no asumas el estado a partir
   de la conversacion.

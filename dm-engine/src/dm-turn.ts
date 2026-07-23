@@ -461,10 +461,68 @@ function playerImpersonationNudge(messages: ChatMessage[], narrativeText: string
  * exacto, se fuerza a cerrar el combate huérfano con end_combat y arrancar
  * uno nuevo de verdad con los enemigos que el DM mismo acaba de narrar.
  */
-function staleEncounterConflictNudge(failedStartCombatMessage: string | null): string | null {
+/**
+ * CASO REAL distinto detectado después (misma señal de error, causa distinta):
+ * el DM había iniciado combate con ÉXITO contra un Giant Boar en un turno
+ * anterior (el jugador ya estaba resolviendo su ataque contra él). En el
+ * turno SIGUIENTE, queriendo simplemente fijar el mapa (pantano-rey) del
+ * combate ya en curso, el DM volvió a llamar a start_combat con esos mismos
+ * enemigos -- start_combat lo rechazó con 'Ya hay un combate activo', y como
+ * el aviso de arriba SIEMPRE asumía un huérfano, se le dijo (correctamente
+ * según esa lógica, pero mal en este caso) que cerrase el combate con
+ * end_combat y lo volviera a abrir. El resultado visible para el jugador: un
+ * "🏳️ Combate terminado" y un "⚔️ ¡ENTRÁIS EN COMBATE!" completamente falsos
+ * e innecesarios en mitad de su propio turno, Y el turno se desperdició sin
+ * llegar a resolver la acción que el jugador acababa de confirmar (lanzar
+ * Misiles Mágicos).
+ *
+ * Ahora, antes de asumir que es un huérfano, se comprueba el estado REAL de
+ * la partida (get_game_state): si el combate activo ya tiene exactamente los
+ * mismos enemyRefId que el DM intentó pasar a start_combat, no es un
+ * huérfano -- es el mismo combate, y se le dice que lo deje tal cual (usando
+ * set_battle_map si lo que quería era corregir el mapa) en vez de cerrarlo.
+ * Solo se trata como huérfano (mismo texto de siempre, mismo fix) si los
+ * enemigos realmente no coinciden con lo que el propio DM intentó iniciar.
+ */
+async function staleEncounterConflictNudge(
+    toolCaller: ToolCaller,
+    gameId: string,
+    failedStartCombatMessage: string | null,
+    failedStartCombatEnemyIds: string[] | null,
+): Promise<string | null> {
   if (!failedStartCombatMessage || !/ya hay un combate activo/i.test(failedStartCombatMessage)) {
     return null;
   }
+
+  const attemptedEnemyIds = failedStartCombatEnemyIds ?? [];
+  if (attemptedEnemyIds.length > 0) {
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      const currentEnemyRefIds = (
+        (state as { activeEncounter?: { enemies?: EncounterEnemyState[] } } | null)?.activeEncounter?.enemies ?? []
+      )
+          .map((e) => e.enemyRefId)
+          .filter((id): id is string => typeof id === 'string');
+
+      const sameEncounter = currentEnemyRefIds.length === attemptedEnemyIds.length &&
+          attemptedEnemyIds.every((id) => currentEnemyRefIds.includes(id));
+
+      if (sameEncounter) {
+        return 'Has vuelto a llamar a start_combat, pero el combate YA está activo con exactamente los mismos ' +
+            'enemigos que has intentado pasar -- no es un combate huérfano, es el mismo combate que ya iniciaste ' +
+            'en un turno anterior (probablemente el jugador ya está resolviendo una acción dentro de él). NUNCA ' +
+            'lo cierres ni lo reinicies: eso le muestra al jugador un "combate terminado" y un "entráis en ' +
+            'combate" falsos, y además desperdicia el turno sin resolver la acción que el jugador ya confirmó. Si ' +
+            'necesitabas corregir el mapa del combate, llama directamente a set_battle_map con el mapId correcto ' +
+            '-- start_combat solo se llama UNA VEZ, al principio de cada combate, nunca de nuevo mientras siga activo.';
+      }
+    } catch {
+      // Si get_game_state falla, se degrada al comportamiento anterior
+      // (tratarlo como huérfano) -- más seguro que bloquear el turno entero
+      // por un chequeo que no se pudo hacer.
+    }
+  }
+
   return 'Has intentado iniciar un combate nuevo con start_combat, pero el sistema responde que YA HAY UN ' +
       'COMBATE ACTIVO con otros enemigos -- casi seguro un encuentro huérfano de un turno anterior que nunca se ' +
       'cerró, no algo que tú hayas narrado. NUNCA improvises una narración para encajar esos enemigos viejos (ni ' +
@@ -833,7 +891,7 @@ async function protocolNudge(
  * falsos positivos en combates con varios enemigos donde uno cae y otros
  * siguen en pie legítimamente sin que eso sea un error.
  */
-type EncounterEnemyState = { instanceId?: unknown; name?: unknown; currentHp?: unknown };
+type EncounterEnemyState = { instanceId?: unknown; enemyRefId?: unknown; name?: unknown; currentHp?: unknown };
 
 /**
  * Se comprobó en partida real un bug grave: el DM resolvía un ataque contra un
@@ -951,6 +1009,10 @@ export async function runDmTurn(
   const combatEnemyIds = new Set<string>();
   const attackedEnemyIds = new Set<string>();
   let failedStartCombatMessage: string | null = null;
+  // enemyIds que el DM intentó pasar en la llamada fallida a start_combat --
+  // se usa para distinguir un combate huérfano real de un reintento
+  // redundante sobre un combate que ya está activo (ver staleEncounterConflictNudge).
+  let failedStartCombatEnemyIds: string[] | null = null;
   // Igual que failedStartCombatMessage, pero para cualquier tool de mapas
   // (MAP_TOOLS) que falle este turno -- ver mapToolFailedNudge más arriba.
   // Solo se guarda el PRIMER fallo del turno (si varios fallan, el primero ya
@@ -1088,6 +1150,10 @@ export async function runDmTurn(
           if (typeof message === 'string') {
             failedStartCombatMessage = message;
           }
+          const enemyIds = args['enemyIds'];
+          if (Array.isArray(enemyIds)) {
+            failedStartCombatEnemyIds = enemyIds.filter((id): id is string => typeof id === 'string');
+          }
         }
         if (failed && !failedMapToolCall && MAP_TOOLS.includes(call.function.name)) {
           const message = (result as { message?: unknown } | null)?.message;
@@ -1160,7 +1226,7 @@ export async function runDmTurn(
           : playerImpersonationNudge(messages, response.message.content ?? '');
       const staleEncounterNudge = (gameStart || impersonationNudge)
           ? null
-          : staleEncounterConflictNudge(failedStartCombatMessage);
+          : await staleEncounterConflictNudge(toolCaller, gameId, failedStartCombatMessage, failedStartCombatEnemyIds);
       const mapFailedNudge = (gameStart || impersonationNudge || staleEncounterNudge)
           ? null
           : mapToolFailedNudge(failedMapToolCall);
