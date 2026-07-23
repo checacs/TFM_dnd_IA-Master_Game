@@ -40,18 +40,18 @@ export class QwenTtsService {
     // (las API keys de cada región son distintas entre sí y no son intercambiables).
     this.baseUrl = process.env.QWEN_TTS_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1';
     this.model = process.env.QWEN_TTS_MODEL ?? 'qwen3-tts-flash';
-    // 'Bellona': "voz potente y clara que da vida a los personajes... con
-    // grandeza heroica" (descripción oficial) -- la más adecuada como voz de
-    // narrador/DM de las disponibles en qwen3-tts-flash. Otras alternativas
-    // "potentes" del mismo catálogo: 'Vincent' (voz rasgada y grave, "evoca
-    // ejércitos y gestas heroicas con una sola frase"), 'Ryan' (dramática,
-    // con tensión narrativa), 'Andre' (voz masculina serena y magnética).
-    // 'Sonrisa' (mujer latina alegre) y 'Bodega' (hombre español) son las dos
-    // únicas descritas explícitamente como hispanohablantes "de acento", pero
-    // el resto son igual de multilingües (todas listan español). Cambiar con
-    // QWEN_TTS_VOICE si se prefiere otra -- ver la lista completa en
+    // 'Bodega' es la ÚNICA voz del catálogo descrita explícitamente como
+    // española de España ("a passionate Spanish man") -- el resto son
+    // multilingües pero con acento por defecto latinoamericano (ej.
+    // 'Sonrisa', "Latin American woman") o neutro/sin acento marcado (ej.
+    // 'Bellona', que sonaba con acento sudamericano en la práctica pese a no
+    // tener ninguna nacionalidad indicada en su descripción oficial). Si se
+    // prefiere una voz "potente" de narrador en vez de esta, hay que asumir
+    // que probablemente venga con acento latino/neutro: 'Vincent' (rasgada y
+    // grave), 'Ryan' (dramática), 'Andre' (serena y magnética) -- ver
+    // catálogo completo (con audio de muestra por voz) en
     // https://www.alibabacloud.com/help/en/model-studio/qwen-tts-voice-list
-    this.voice = process.env.QWEN_TTS_VOICE ?? 'Bellona';
+    this.voice = process.env.QWEN_TTS_VOICE ?? 'Bodega';
     this.languageType = process.env.QWEN_TTS_LANGUAGE ?? 'Spanish';
   }
 
