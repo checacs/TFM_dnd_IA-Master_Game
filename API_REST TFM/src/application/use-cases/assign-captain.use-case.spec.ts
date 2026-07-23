@@ -39,12 +39,24 @@ describe('AssignCaptainUseCase', () => {
     expect(saved?.toSnapshot().captainUserId).toBe('user-2');
   });
 
-  it('lanza DomainError si quien lo pide no es el host', async () => {
+  it('el capitán actual también puede reasignar el capitán (regla: host O capitán actual)', async () => {
     const { game, repo } = buildLaunchedGame();
     const useCase = new AssignCaptainUseCase(repo);
 
+    // user-1 es el capitán actual (asignado en buildLaunchedGame), no el host.
+    await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', targetUserId: 'user-2' });
+
+    const saved = await repo.findById(game.id);
+    expect(saved?.toSnapshot().captainUserId).toBe('user-2');
+  });
+
+  it('lanza DomainError si quien lo pide no es ni el host ni el capitán actual', async () => {
+    const { game, repo } = buildLaunchedGame();
+    const useCase = new AssignCaptainUseCase(repo);
+
+    // user-2 es jugador de la partida, pero ni host ni capitán (el capitán es user-1).
     await expect(
-      useCase.execute({ gameId: game.id, requestingUserId: 'user-1', targetUserId: 'user-2' }),
+      useCase.execute({ gameId: game.id, requestingUserId: 'user-2', targetUserId: 'user-2' }),
     ).rejects.toThrow();
   });
 

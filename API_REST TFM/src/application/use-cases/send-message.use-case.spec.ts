@@ -151,7 +151,9 @@ describe('SendMessageUseCase', () => {
     } finally {
       jest.useRealTimers();
     }
-  });
+    // Timeout explícito: los 2 sleeps de reintento (5s cada uno) avanzados con
+    // advanceTimers pueden superar los 5s por defecto de jest según la máquina.
+  }, 30_000);
 
   it('si el dm-engine falla las primeras veces pero se recupera (cold-start doble), el jugador nunca ve el mensaje de fallback', async () => {
     jest.useFakeTimers({ advanceTimers: true });
@@ -181,7 +183,9 @@ describe('SendMessageUseCase', () => {
     } finally {
       jest.useRealTimers();
     }
-  });
+    // Timeout explícito: los 2 sleeps de reintento (5s cada uno) avanzados con
+    // advanceTimers pueden superar los 5s por defecto de jest según la máquina.
+  }, 30_000);
 
   it('las tools MCP serializadas con withGameLock no se bloquean durante el turno (regresión del deadlock del candado)', async () => {
     // Bug real observado en producción: el controller envolvía TODO

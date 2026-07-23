@@ -39,6 +39,8 @@ describe('Game', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 9 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
@@ -237,6 +239,8 @@ describe('Game', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       expect(() =>
         game.addPlayer({ userId: 'user-3', characterId: 'char-3', name: 'Mira', class: 'guerrero', currentHp: 10 }),
@@ -261,6 +265,8 @@ describe('Game', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       expect(game.toSnapshot().status).toBe('en_curso');
     });
@@ -287,6 +293,8 @@ describe('Game', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
@@ -309,6 +317,8 @@ describe('Game', () => {
     function buildGameWithEncounter() {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
@@ -441,6 +451,8 @@ describe('Game', () => {
     it('empieza en fase de jugadores, sin candado y sin nadie que haya actuado', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
 
       game.startEncounter({
@@ -459,6 +471,8 @@ describe('Game', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
       game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
@@ -575,6 +589,8 @@ describe('Game', () => {
     it('vuelve a abrir la fase de jugadores, libera el candado y resetea quién ha actuado', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
@@ -604,6 +620,8 @@ describe('Game', () => {
     it('pone activeEncounter a null, cerrando el combate de verdad', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 0, ac: 15 }],
@@ -620,6 +638,8 @@ describe('Game', () => {
       // sobrescribir el anterior.
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
+      game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
       game.startEncounter({
         enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 0, ac: 15 }],

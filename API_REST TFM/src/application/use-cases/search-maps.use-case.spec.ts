@@ -81,7 +81,12 @@ describe('SearchMapsUseCase', () => {
     }
 
     it('prioriza los mapas con mas etiquetas coincidentes por encima de los que solo coinciden en una', async () => {
-      const pocoRelevante = buildMap('Cueva genérica', ['exterior', 'cueva']);
+      // La cueva coincide en UNA etiqueta ('bosque'); el claro, en DOS
+      // ('bosque' y 'ruinas'). Antes la cueva no compartía NINGUNA etiqueta
+      // con la búsqueda, así que el propio repo (real y fake filtran por
+      // "al menos una coincidencia") la excluía antes de llegar al scoring y
+      // el test nunca ejercitaba de verdad la priorización que da título al caso.
+      const pocoRelevante = buildMap('Cueva genérica', ['exterior', 'cueva', 'bosque']);
       const muyRelevante = buildMap('Claro sagrado del bosque', ['exterior', 'bosque', 'ruinas']);
       // Con IdentityShuffler el repo ya los devuelve en este orden (el "peor" primero) --
       // si el use case no reordenase por relevancia, el resultado se quedaría igual.

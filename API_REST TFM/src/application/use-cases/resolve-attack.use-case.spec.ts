@@ -79,10 +79,12 @@ describe('ResolveAttackUseCase', () => {
     // Nombre en negrita Markdown, igual que en PlayerRollUseCase, para
     // distinguirlo del resto del mensaje.
     expect(log[0].content).toContain('**Goblin explorador**');
-    expect(log[0].content).toContain('15');
-    expect(log[0].content).toContain('17');
+    // El mensaje muestra el TOTAL de la tirada (15 + 2 = **17**), no el d20
+    // crudo -- formato actual: "(1d20+2): **17** vs CA 17 → ¡IMPACTA! — Daño (1d6+2): **5**".
+    expect(log[0].content).toContain('**17**');
+    expect(log[0].content).toContain('CA 17');
     expect(log[0].content).toContain('1d6+2');
-    expect(log[0].content).toContain('5');
+    expect(log[0].content).toContain('**5**');
   });
 
   it('falla cuando la tirada no alcanza la CA y no modifica el HP del objetivo', async () => {
@@ -111,8 +113,10 @@ describe('ResolveAttackUseCase', () => {
     // que el registro de la tirada tampoco se guardaba nunca.
     const log = saved!.toSnapshot().narrativeLog;
     expect(log).toHaveLength(1);
-    expect(log[0].content).toContain('5');
-    expect(log[0].content).toContain('17');
+    // El mensaje muestra el TOTAL de la tirada (5 + 2 = **7**), no el d20
+    // crudo -- formato actual: "(1d20+2): **7** vs CA 17 → falla".
+    expect(log[0].content).toContain('**7**');
+    expect(log[0].content).toContain('CA 17');
     expect(log[0].content.toLowerCase()).toContain('falla');
   });
 
@@ -162,7 +166,9 @@ describe('ResolveAttackUseCase', () => {
 
       const saved = await repo.findById(game.id);
       const log = saved!.toSnapshot().narrativeLog;
-      expect(log[0].content).toContain('15');
+      // El mensaje muestra el TOTAL (15 + 2 = **17**), no el d20 crudo del
+      // jugador -- formato actual: "(1d20+2 (tirada del jugador)): **17** vs CA 17 → ...".
+      expect(log[0].content).toContain('**17**');
       expect(log[0].content.toLowerCase()).toContain('tirada del jugador');
     });
 
