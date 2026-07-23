@@ -1,0 +1,114 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+// Reproduce el bug real: "he seguido jugando un par de frases mas y no
+// acabado el combate, cuando debe acabar cuando mueren los enemigos". El
+// turno que mata al último enemigo puede no llamar a grant_xp (o llamarlo en
+// un turno posterior), y los turnos SIGUIENTES no vuelven a tocar ninguna
+// tool de combate porque el propio DM ya cree que terminó. Este script
+// simula exactamente ese turno "varias frases después": el modelo no llama a
+// NINGUNA tool de combate, pero get_game_state (consultado por el nuevo
+// seguro incondicional resolveStaleDefeatedEncounter) muestra el encuentro
+// con todos los enemigos a 0 HP real y sin end_combat nunca llamado.
+
+function fillerHistory(n: number): ChatMessage[] {
+  const history: ChatMessage[] = [];
+  for (let i = 0; i < n; i++) {
+    history.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: `Mensaje de relleno ${i} sin pistas de arranque.` });
+  }
+  return history;
+}
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    this.receivedCalls.push(params);
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+async function scenarioStaleDefeatedEncounter() {
+  class StaleDefeatedToolCaller implements ToolCaller {
+    public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+    async listTools(): Promise<McpToolInfo[]> { return []; }
+    async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+      this.calls.push({ name, args });
+      if (name === 'get_game_state') {
+        return {
+          activeEncounter: {
+            enemies: [
+              { instanceId: 'giant-rat-1', enemyRefId: 'giant-rat', name: 'Giant Rat', currentHp: 0 },
+              { instanceId: 'giant-bat-1', enemyRefId: 'giant-bat', name: 'Giant Bat', currentHp: 0 },
+            ],
+          },
+        };
+      }
+      if (name === 'end_combat') return { combatEnded: true };
+      return {};
+    }
+  }
+  // El modelo NO llama a ninguna tool de combate este turno -- solo narra,
+  // como en el bug real ("un par de frases mas" tras la victoria).
+  const chatClient = new FakeChatClient([
+    { message: { role: 'assistant', content: 'Guardáis las espadas y seguís explorando la cueva en silencio.' } },
+  ]);
+  const toolCaller = new StaleDefeatedToolCaller();
+  const messages = [...fillerHistory(12), { role: 'user' as const, content: 'Seguimos explorando' }];
+  const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+  console.log('--- Escenario combate ya derrotado pero end_combat nunca llamado ---');
+  console.log('narrative:', result.narrative);
+  console.log('events:', result.events.map((e) => e.type));
+  console.log('calls:', toolCaller.calls.map((c) => c.name));
+  const endCombatCalled = toolCaller.calls.some((c) => c.name === 'end_combat');
+  const hasEvent = result.events.some((e) => e.type === 'combate_terminado');
+  console.log('end_combat forzado por código:', endCombatCalled, '| evento combate_terminado presente:', hasEvent);
+  if (!endCombatCalled || !hasEvent) {
+    throw new Error('FALLO: el seguro no forzó end_combat pese a que todos los enemigos estaban a 0 HP.');
+  }
+  console.log('OK: el combate se cierra por código aunque el modelo no tocara ninguna tool de combate.');
+}
+
+async function scenarioStillAlive() {
+  class StillAliveToolCaller implements ToolCaller {
+    public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+    async listTools(): Promise<McpToolInfo[]> { return []; }
+    async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+      this.calls.push({ name, args });
+      if (name === 'get_game_state') {
+        return {
+          activeEncounter: {
+            enemies: [
+              { instanceId: 'giant-rat-1', enemyRefId: 'giant-rat', name: 'Giant Rat', currentHp: 0 },
+              { instanceId: 'giant-bat-1', enemyRefId: 'giant-bat', name: 'Giant Bat', currentHp: 5 },
+            ],
+          },
+        };
+      }
+      if (name === 'end_combat') return { combatEnded: true };
+      return {};
+    }
+  }
+  const chatClient = new FakeChatClient([
+    { message: { role: 'assistant', content: 'El murciélago sigue revoloteando, malherido pero vivo.' } },
+  ]);
+  const toolCaller = new StillAliveToolCaller();
+  const messages = [...fillerHistory(12), { role: 'user' as const, content: 'Ataco de nuevo' }];
+  const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+  console.log('--- Escenario control: un enemigo sigue vivo ---');
+  console.log('calls:', toolCaller.calls.map((c) => c.name));
+  const endCombatCalled = toolCaller.calls.some((c) => c.name === 'end_combat');
+  console.log('end_combat NO debe llamarse:', !endCombatCalled);
+  if (endCombatCalled) {
+    throw new Error('FALLO: end_combat se llamó pese a que un enemigo seguía vivo.');
+  }
+  console.log('OK: no se cierra el combate mientras quede algún enemigo vivo.');
+}
+
+(async () => {
+  await scenarioStaleDefeatedEncounter();
+  await scenarioStillAlive();
+})();

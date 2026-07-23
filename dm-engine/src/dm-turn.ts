@@ -954,18 +954,72 @@ async function checkCombatStateNudge(
         'normalmente (nunca declares una victoria por impresión narrativa: solo cuando su currentHp real llegue a 0).';
   }
 
-  // 2) Combate realmente terminado (todos los enemigos del encuentro a 0 HP
-  // real) pero end_combat no se ha llamado todavía -- sin esto, el combate se
-  // queda "fantasma" en el tablero para siempre.
-  const allDefeated = enemies.length > 0 && enemies.every((e) => typeof e.currentHp === 'number' && e.currentHp <= 0);
-  if (activeEncounter && allDefeated && !calledTools.has('end_combat')) {
-    return 'Todos los enemigos de este combate ya están a 0 HP real (según get_game_state), pero no has ' +
-        'llamado a end_combat. Llámala ahora para cerrar el combate de verdad -- si no, el panel de "Combate" y ' +
-        'los marcadores de los enemigos derrotados se quedan mostrándose en el tablero del jugador para siempre, ' +
-        'aunque sigas narrando otras escenas.';
+  return null;
+}
+
+/**
+ * Segundo bug relacionado, pero AHORA como seguro determinista incondicional
+ * en vez de aviso condicionado a grant_xp -- se comprobó en partida real que
+ * checkCombatStateNudge solo revisaba "combate terminado pero end_combat sin
+ * llamar" cuando el propio turno llamaba a grant_xp (calledTools.has('grant_xp')).
+ * Si el DM resolvía el golpe de gracia con resolve_attack, narraba la muerte
+ * correctamente, pero se olvidaba de grant_xp en ESE turno (o lo dejaba para
+ * más tarde), el chequeo nunca llegaba a evaluarse -- y en los turnos
+ * SIGUIENTES, sin ningún ataque nuevo que resolver, attackedEnemyIds volvía a
+ * estar vacío y el chequeo tampoco se disparaba nunca. El resultado: el
+ * jugador seguía jugando "un par de frases más" tras la victoria real, y el
+ * panel de "Combate" y los enemigos derrotados se quedaban en el tablero para
+ * siempre, sin que ningún aviso lo detectara.
+ *
+ * Este seguro no depende de qué tools se llamaron ESTE turno en absoluto (a
+ * diferencia de checkCombatStateNudge, que sí compara solo lo resuelto en el
+ * turno actual): se ejecuta SIEMPRE al final de cada turno, exactamente igual
+ * que resolveVillageStartFallback o el seguro anti-atasco de fase de
+ * enemigos, y si get_game_state muestra un combate activo con TODOS sus
+ * enemigos a 0 HP real, cierra el combate directamente por código -- no hace
+ * falta que el modelo narre nada nuevo para esto, es limpieza de estado, no
+ * contenido creativo.
+ */
+async function resolveStaleDefeatedEncounter(
+    toolCaller: ToolCaller,
+    gameId: string,
+    events: GameEvent[],
+    knownState?: unknown,
+): Promise<boolean> {
+  let state = knownState;
+  if (state === undefined) {
+    try {
+      state = await toolCaller.callTool('get_game_state', { gameId });
+    } catch {
+      return false;
+    }
   }
 
-  return null;
+  const activeEncounter =
+      (state as { activeEncounter?: { enemies?: EncounterEnemyState[] } } | null)?.activeEncounter ?? null;
+  const enemies = activeEncounter?.enemies ?? [];
+  const allDefeated = enemies.length > 0 && enemies.every((e) => typeof e.currentHp === 'number' && e.currentHp <= 0);
+
+  if (!activeEncounter || !allDefeated) {
+    return false;
+  }
+
+  try {
+    await toolCaller.callTool('end_combat', { gameId });
+  } catch (error) {
+    console.error(
+        '[dm-engine] Seguro de combate ya terminado: no se pudo forzar end_combat -- ' +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    return false;
+  }
+
+  events.push({ type: 'combate_terminado', payload: {} });
+  console.log(
+      '[dm-engine] Seguro de combate ya terminado activado: todos los enemigos estaban a 0 HP real pero ' +
+      'end_combat nunca se llamó -- forzado por código para no dejar el panel de combate fantasma.',
+  );
+  return true;
 }
 
 /**
@@ -1336,10 +1390,12 @@ export async function runDmTurn(
       calledTools.has('cast_spell') || calledTools.has('end_player_turn') ||
       calledTools.has('advance_to_player_round') || calledTools.has('end_combat');
   let stuckPhaseSuffix = '';
+  let cachedGameState: unknown;
   if (touchedCombatSystem) {
     try {
-      const state = await toolCaller.callTool('get_game_state', { gameId });
-      const phase = (state as { activeEncounter?: { roundPhase?: unknown } } | null)?.activeEncounter?.roundPhase;
+      cachedGameState = await toolCaller.callTool('get_game_state', { gameId });
+      const phase =
+          (cachedGameState as { activeEncounter?: { roundPhase?: unknown } } | null)?.activeEncounter?.roundPhase;
       if (phase === 'enemigos') {
         await toolCaller.callTool('advance_to_player_round', { gameId });
         events.push({ type: 'ronda_reabierta', payload: {} });
@@ -1355,6 +1411,28 @@ export async function runDmTurn(
           (error instanceof Error ? error.message : String(error)),
       );
     }
+  }
+
+  // Tercer seguro determinista de última instancia: combate con todos los
+  // enemigos ya a 0 HP real pero end_combat nunca llamado (ver
+  // resolveStaleDefeatedEncounter más arriba para el bug real que motivó
+  // esto). A propósito NO se gatea detrás de touchedCombatSystem como los dos
+  // anteriores: el bug reportado en partida real era precisamente que, tras
+  // la muerte del último enemigo, el jugador seguía jugando "un par de frases
+  // más" sin que NINGUNA tool de combate se volviera a tocar (el DM ya daba
+  // el combate por terminado en su narración, así que no llamaba a
+  // resolve_attack, end_player_turn ni nada más) -- si este chequeo dependiera
+  // de touchedCombatSystem, nunca se habría disparado en esos turnos
+  // siguientes y el panel de combate se habría quedado fantasma para
+  // siempre. Se reutiliza cachedGameState si ya se pidió arriba en este mismo
+  // turno para no duplicar la llamada a get_game_state.
+  try {
+    await resolveStaleDefeatedEncounter(toolCaller, gameId, events, cachedGameState);
+  } catch (error) {
+    console.error(
+        '[dm-engine] Seguro de combate ya terminado: fallo inesperado -- ' +
+        (error instanceof Error ? error.message : String(error)),
+    );
   }
 
   console.log(

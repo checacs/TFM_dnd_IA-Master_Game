@@ -1,4 +1,5 @@
 import { EnemyRepository, EnemySearchCriteria } from '../../domain/ports/enemy.repository.port';
+import { Shuffler } from '../../domain/ports/shuffler.port';
 import { Enemy } from '../../domain/entities/enemy.entity';
 import { SearchEnemiesUseCase } from './search-enemies.use-case';
 
@@ -17,6 +18,20 @@ class FakeEnemyRepository implements EnemyRepository {
       const matchesCr = criteria.maxChallengeRating === undefined || snapshot.challengeRating <= criteria.maxChallengeRating;
       return matchesTags && matchesCr;
     });
+  }
+}
+
+/** No desordena — para tests que verifican otra cosa (filtrado) sin ruido de aleatoriedad. */
+class IdentityShuffler implements Shuffler {
+  shuffle<T>(items: T[]): T[] {
+    return items;
+  }
+}
+
+/** Desordena de forma predecible (invierte) — para comprobar que el Shuffler inyectado SÍ se usa. */
+class ReverseShuffler implements Shuffler {
+  shuffle<T>(items: T[]): T[] {
+    return [...items].reverse();
   }
 }
 
@@ -39,7 +54,7 @@ function buildDragon() {
 describe('SearchEnemiesUseCase', () => {
   it('filtra por etiquetas', async () => {
     const repo = new FakeEnemyRepository([buildGoblin(), buildDragon()]);
-    const useCase = new SearchEnemiesUseCase(repo);
+    const useCase = new SearchEnemiesUseCase(repo, new IdentityShuffler());
 
     const results = await useCase.execute({ tags: ['goblinoide'] });
 
@@ -49,7 +64,7 @@ describe('SearchEnemiesUseCase', () => {
 
   it('filtra por dificultad máxima', async () => {
     const repo = new FakeEnemyRepository([buildGoblin(), buildDragon()]);
-    const useCase = new SearchEnemiesUseCase(repo);
+    const useCase = new SearchEnemiesUseCase(repo, new IdentityShuffler());
 
     const results = await useCase.execute({ maxChallengeRating: 1 });
 
@@ -59,7 +74,7 @@ describe('SearchEnemiesUseCase', () => {
 
   it('devuelve solo los campos relevantes para que la IA elija un encuentro, no las estadísticas completas', async () => {
     const repo = new FakeEnemyRepository([buildGoblin()]);
-    const useCase = new SearchEnemiesUseCase(repo);
+    const useCase = new SearchEnemiesUseCase(repo, new IdentityShuffler());
 
     const [result] = await useCase.execute({});
 
@@ -68,6 +83,48 @@ describe('SearchEnemiesUseCase', () => {
       name: 'Goblin explorador',
       description: 'Pequeño y huraño.',
       challengeRating: 0.25,
+    });
+  });
+
+  describe('variedad y catálogo nunca vacío (mismo principio que SearchMapsUseCase: "mapa primero, historia después")', () => {
+    it('si NINGÚN enemigo coincide con las etiquetas ni la dificultad, devuelve el catálogo completo (barajado) en vez de una lista vacía', async () => {
+      // Bug real de producción: la IA narró tres "hongos ambulantes"
+      // inventados (Honguito Azul, Hongazo, Micelio Errante) ANTES de mirar
+      // el catálogo. Al intentar iniciar el combate de verdad, buscó por
+      // etiquetas ("hongos"+"cueva", "planta"+"hongo"+"subterraneo", "bestia"
+      // con varias CR máximas) -- las CUATRO búsquedas devolvieron [], porque
+      // el catálogo no tiene monstruos-planta con esas etiquetas exactas.
+      // Tras cuatro intentos fallidos tuvo que llamar sin ningún filtro y
+      // elegir al azar de cientos de monstruos (un Giant Rat y un Giant Bat
+      // que no tienen nada que ver con "hongos"). Devolver el catálogo
+      // completo en la PRIMERA búsqueda evita esa cadena de reintentos y les
+      // da a elegir entre enemigos reales desde el principio.
+      const repo = new FakeEnemyRepository([buildGoblin(), buildDragon()]);
+      const useCase = new SearchEnemiesUseCase(repo, new ReverseShuffler());
+
+      const results = await useCase.execute({ tags: ['hongo', 'planta'] });
+
+      expect(results).toHaveLength(2);
+      // El fallback también pasa por el Shuffler (ReverseShuffler invierte).
+      expect(results.map((r) => r.name)).toEqual(['Dragón joven', 'Goblin explorador']);
+    });
+
+    it('el mismo fallback aplica cuando se filtra solo por dificultad máxima y no hay ningún enemigo por debajo', async () => {
+      const repo = new FakeEnemyRepository([buildGoblin(), buildDragon()]);
+      const useCase = new SearchEnemiesUseCase(repo, new IdentityShuffler());
+
+      const results = await useCase.execute({ maxChallengeRating: 0 });
+
+      expect(results).toHaveLength(2);
+    });
+
+    it('usa el Shuffler inyectado para variar el orden entre búsquedas sin filtros', async () => {
+      const repo = new FakeEnemyRepository([buildGoblin(), buildDragon()]);
+      const useCase = new SearchEnemiesUseCase(repo, new ReverseShuffler());
+
+      const results = await useCase.execute({});
+
+      expect(results.map((r) => r.name)).toEqual(['Dragón joven', 'Goblin explorador']);
     });
   });
 });

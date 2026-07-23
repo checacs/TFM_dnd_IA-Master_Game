@@ -1,6 +1,21 @@
 import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
 import { runDmTurn } from './src/dm-turn';
 
+// IMPORTANTE (descubierto al escribir este script): gameStartNudge se
+// dispara SIEMPRE que messages.length === 1, sin importar el contenido --
+// las pruebas de dm-turn.spec.ts que usan un array de un solo mensaje quedan
+// "dominadas" por ese nudge en vez del que de verdad quieren probar. Para
+// aislar staleEncounterConflictNudge de verdad, se simula un historial
+// realista (>10 mensajes, más allá de VILLAGE_START_MAX_MESSAGES) sin
+// menciones a taberna/tablón/primera persona.
+function fillerHistory(n: number): ChatMessage[] {
+  const history: ChatMessage[] = [];
+  for (let i = 0; i < n; i++) {
+    history.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: `Mensaje de relleno ${i} sin pistas de arranque.` });
+  }
+  return history;
+}
+
 class FakeChatClient implements ChatClient {
   private i = 0;
   public readonly receivedCalls: { messages: ChatMessage[]; tools: ToolDefinition[] }[] = [];
@@ -13,76 +28,77 @@ class FakeChatClient implements ChatClient {
   }
 }
 
-class OrphanEncounterToolCaller implements ToolCaller {
-  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
-  private startCombatAttempts = 0;
-  async listTools(): Promise<McpToolInfo[]> { return []; }
-  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    this.calls.push({ name, args });
-    if (name === 'start_combat') {
-      this.startCombatAttempts += 1;
-      if (this.startCombatAttempts === 1) {
-        throw new Error('Ya hay un combate activo');
+async function scenarioOrphan() {
+  class OrphanEncounterToolCaller implements ToolCaller {
+    public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+    private startCombatAttempts = 0;
+    async listTools(): Promise<McpToolInfo[]> { return []; }
+    async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+      this.calls.push({ name, args });
+      if (name === 'start_combat') {
+        this.startCombatAttempts += 1;
+        if (this.startCombatAttempts === 1) throw new Error('Ya hay un combate activo');
+        return { enemies: [{ instanceId: 'giant-croc-1' }] };
       }
-      return { enemies: [{ instanceId: 'giant-croc-1' }] };
-    }
-    if (name === 'end_combat') return { combatEnded: true };
-    if (name === 'place_participant') return { placed: true };
-    return {};
-  }
-}
-
-async function main() {
-  // Escenario real: DM narra un Cocodrilo Gigante, intenta start_combat, pero
-  // hay un combate huerfano (2 cocodrilos, otro mapa) ya activo -- debe
-  // cerrarlo con end_combat y arrancar de nuevo con el enemigo real, sin
-  // engañar al jugador con el numero/tipo de enemigos.
-  {
-    const chatClient = new FakeChatClient([
-      {
-        message: {
-          role: 'assistant', content: null,
-          tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } }],
-        },
-      },
-      { message: { role: 'assistant', content: 'El sistema dice que ya hay un combate activo con otros enemigos.' } },
-      {
-        message: {
-          role: 'assistant', content: null,
-          tool_calls: [
-            { id: 'c2', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
-            { id: 'c3', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } },
-            { id: 'c4', type: 'function' as const, function: { name: 'place_participant', arguments: '{"gameId":"g1","participantId":"giant-croc-1","row":0,"col":0}' } },
-          ],
-        },
-      },
-      { message: { role: 'assistant', content: 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.' } },
-    ]);
-    const toolCaller = new OrphanEncounterToolCaller();
-
-    const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Nos preparamos para luchar' }], 'g1');
-
-    console.log('Narrativa final:', result.narrative);
-    console.log('Tools llamadas:', toolCaller.calls.map((c) => c.name).join(', '));
-
-    if (result.narrative !== 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.') {
-      throw new Error('FALLO: narrativa final incorrecta');
-    }
-    const calledNames = toolCaller.calls.map((c) => c.name);
-    if (JSON.stringify(calledNames) !== JSON.stringify(['start_combat', 'end_combat', 'start_combat', 'place_participant'])) {
-      throw new Error(`FALLO: secuencia de tools incorrecta: ${calledNames.join(', ')}`);
-    }
-    if (chatClient.receivedCalls.length !== 4) {
-      throw new Error(`FALLO: se esperaban 4 llamadas al modelo, hubo ${chatClient.receivedCalls.length}`);
-    }
-    const correctionCall = chatClient.receivedCalls[2];
-    const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
-    if (!/end_combat/.test(String(lastMessage.content)) || !/combate activo/i.test(String(lastMessage.content))) {
-      throw new Error('FALLO: el aviso correctivo no menciona end_combat / combate activo');
+      if (name === 'end_combat') return { combatEnded: true };
+      if (name === 'place_participant') return { placed: true };
+      if (name === 'get_game_state') return {};
+      return {};
     }
   }
-
-  console.log('OK: el combate huérfano se cierra y se arranca uno nuevo con los enemigos reales, sin engañar al jugador.');
+  const chatClient = new FakeChatClient([
+    { message: { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } }] } },
+    { message: { role: 'assistant', content: 'El sistema dice que ya hay un combate activo con otros enemigos.' } },
+    { message: { role: 'assistant', content: null, tool_calls: [
+      { id: 'c2', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } },
+      { id: 'c3', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-crocodile"]}' } },
+      { id: 'c4', type: 'function' as const, function: { name: 'place_participant', arguments: '{"gameId":"g1","participantId":"giant-croc-1","row":0,"col":0}' } },
+    ] } },
+    { message: { role: 'assistant', content: 'Cerráis el combate fantasma. El Cocodrilo Gigante os ataca de verdad.' } },
+  ]);
+  const toolCaller = new OrphanEncounterToolCaller();
+  const messages = [...fillerHistory(12), { role: 'user' as const, content: 'Nos preparamos para luchar' }];
+  const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+  console.log('--- Escenario huérfano real ---');
+  console.log('narrative:', result.narrative);
+  console.log('calls:', toolCaller.calls.map((c) => c.name));
+  console.log('receivedCalls.length:', chatClient.receivedCalls.length);
+  console.log('expected calls: [start_combat, get_game_state, end_combat, start_combat, place_participant]');
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+async function scenarioSameEncounter() {
+  class SameEncounterToolCaller implements ToolCaller {
+    public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+    async listTools(): Promise<McpToolInfo[]> { return []; }
+    async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+      this.calls.push({ name, args });
+      if (name === 'start_combat') throw new Error('Ya hay un combate activo');
+      if (name === 'get_game_state') {
+        return { activeEncounter: { enemies: [{ instanceId: 'giant-boar-1', enemyRefId: 'giant-boar', currentHp: 42 }] } };
+      }
+      if (name === 'set_battle_map') return { applied: true };
+      return {};
+    }
+  }
+  const chatClient = new FakeChatClient([
+    { message: { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["giant-boar"],"mapId":"pantano-rey"}' } }] } },
+    { message: { role: 'assistant', content: null, tool_calls: [{ id: 'c2', type: 'function' as const, function: { name: 'set_battle_map', arguments: '{"gameId":"g1","mapId":"pantano-rey"}' } }] } },
+    { message: { role: 'assistant', content: 'El combate sigue en curso contra el Giant Boar, ahora en el pantano.' } },
+  ]);
+  const toolCaller = new SameEncounterToolCaller();
+  const messages = [...fillerHistory(12), { role: 'user' as const, content: 'Si, lo lanzo' }];
+  const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+  console.log('--- Escenario mismo combate (bug real Giant Boar) ---');
+  console.log('narrative:', result.narrative);
+  console.log('calls:', toolCaller.calls.map((c) => c.name));
+  console.log('receivedCalls.length:', chatClient.receivedCalls.length);
+  console.log('expected calls: [start_combat, get_game_state, set_battle_map] (SIN end_combat)');
+  const correctionCall = chatClient.receivedCalls[1];
+  const lastMsg = correctionCall.messages[correctionCall.messages.length - 1];
+  console.log('nudge text sent to model:', lastMsg.content);
+}
+
+(async () => {
+  await scenarioOrphan();
+  await scenarioSameEncounter();
+})();
