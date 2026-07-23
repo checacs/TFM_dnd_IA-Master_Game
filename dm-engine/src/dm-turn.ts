@@ -283,22 +283,82 @@ async function resolveVillageStartFallback(
     }
   }
 
-  // El texto del tablón LISTA contratos concretos a propósito (ligados a
-  // mapas reales del catálogo: pantano-rey, molino-piso1/2/3, sotanoTaberna)
-  // -- la primera versión solo decía "varios pergaminos... ¿cuál os
-  // interesa?" sin enumerar ninguno, y en partida real el siguiente turno
-  // del modelo, sin ninguna lista establecida en el historial, respondió
-  // suplantando al jugador ("San: Me interesa lo del pantano...") en vez de
-  // describir los trabajos. Con la lista ya establecida aquí, el modelo
-  // tiene material concreto sobre el que continuar como DM.
-  return expectedMapId === 'tablonAnuncios'
-      ? 'Os acercáis al tablón de anuncios. Entre los pergaminos clavados destacan tres contratos del gremio: ' +
-          '**"La bestia del pantano"** (un monstruo acecha en las ciénagas del este y el gremio paga bien por su ' +
-          'cabeza), **"El molino silencioso"** (el viejo molino de las afueras lleva días parado y nadie sabe ' +
-          'nada de sus molineros), y **"Ruidos en el sótano"** (el tabernero jura que algo se mueve de noche ' +
-          'bajo su taberna). ¿Cuál de los tres contratos os interesa?'
-      : 'Entráis en la taberna. El calor del fuego y el bullicio de las conversaciones os envuelven nada más ' +
-          'cruzar la puerta. ¿Qué hacéis?';
+  // El texto del tablón LISTA contratos concretos a propósito -- la primera
+  // versión solo decía "varios pergaminos... ¿cuál os interesa?" sin
+  // enumerar ninguno, y en partida real el siguiente turno del modelo, sin
+  // ninguna lista establecida en el historial, respondió suplantando al
+  // jugador ("San: Me interesa lo del pantano...") en vez de describir los
+  // trabajos. Con la lista ya establecida aquí, el modelo tiene material
+  // concreto sobre el que continuar como DM.
+  //
+  // Antes esta lista era SIEMPRE la misma (3 contratos fijos de ejemplo,
+  // copiados del propio system prompt) -- como este seguro se dispara casi
+  // en cada partida (el modelo falla la elección de mapa con más frecuencia
+  // de la esperada), el jugador veía literalmente los mismos 3 contratos en
+  // todas sus partidas, igual de repetitivo que si la IA los hubiera
+  // inventado sin variar. Ahora se leen mapas REALES del catálogo (mismo
+  // principio "mapa primero, historia después" que search-maps.use-case.ts)
+  // y se eligen 3 o 4 al azar en cada disparo, así que incluso el peor caso
+  // (la IA no sigue las instrucciones y el seguro tiene que intervenir) da
+  // contratos distintos entre partidas.
+  if (expectedMapId === 'tablonAnuncios') {
+    return buildTablonContractsText(await fetchRandomContractMaps(toolCaller));
+  }
+  return 'Entráis en la taberna. El calor del fuego y el bullicio de las conversaciones os envuelven nada más ' +
+      'cruzar la puerta. ¿Qué hacéis?';
+}
+
+/** mapIds que son sitios fijos del pueblo (arranque), nunca aventuras a ofrecer como contrato. */
+const VILLAGE_FIXTURE_MAP_IDS = new Set([
+  'tablonAnuncios', 'tabernaMercenarios', 'tavernaMercenarios', 'sotanoTaberna',
+]);
+
+/**
+ * Lee el catálogo real de mapas (get_battle_maps, sin etiquetas -- catálogo
+ * completo) y elige al azar 3 o 4, excluyendo los sitios fijos del pueblo.
+ * Si la tool falla o el catálogo tiene muy pocos mapas, se queda con lo que
+ * haya (nunca revienta el turno por esto -- es un seguro, no puede fallar).
+ */
+async function fetchRandomContractMaps(
+    toolCaller: ToolCaller,
+): Promise<Array<{ id: string; name: string; description: string }>> {
+  type CatalogMap = { id?: unknown; name?: unknown; description?: unknown };
+  let catalog: CatalogMap[] = [];
+  try {
+    const result = await toolCaller.callTool('get_battle_maps', {});
+    catalog = Array.isArray(result) ? (result as CatalogMap[]) : [];
+  } catch {
+    return [];
+  }
+  const eligible = catalog.filter(
+      (m): m is { id: string; name: string; description: string } =>
+        typeof m.id === 'string' && typeof m.name === 'string' && typeof m.description === 'string' &&
+        !VILLAGE_FIXTURE_MAP_IDS.has(m.id),
+  );
+  // Fisher-Yates -- get_battle_maps ya devuelve el catálogo barajado por su
+  // propio Shuffler, pero no depender de eso aquí evita acoplar este código
+  // al orden que decida devolver la tool en el futuro.
+  for (let i = eligible.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+  }
+  const count = eligible.length >= 4 && Math.random() < 0.5 ? 4 : Math.min(3, eligible.length);
+  return eligible.slice(0, count);
+}
+
+function buildTablonContractsText(maps: Array<{ id: string; name: string; description: string }>): string {
+  if (maps.length === 0) {
+    // Catálogo vacío o get_battle_maps falló -- degrada a un texto genérico
+    // sin inventar contratos que luego no correspondan a ningún mapa real.
+    return 'Os acercáis al tablón de anuncios. Varios contratos cuelgan de él, escritos con letras distintas. ' +
+        '¿Cuál os interesa mirar más de cerca?';
+  }
+  const items = maps
+      .map((m) => `**"${m.name}"** (${m.description})`)
+      .join(maps.length > 2 ? ', ' : ' y ')
+      .replace(/,([^,]*)$/, maps.length > 2 ? ' y$1' : ',$1');
+  return `Os acercáis al tablón de anuncios. Entre los pergaminos clavados destacan ${maps.length} contratos ` +
+      `del gremio: ${items}. ¿Cuál de los contratos os interesa?`;
 }
 
 function narrativeSuggestsLocationChange(text: string): boolean {

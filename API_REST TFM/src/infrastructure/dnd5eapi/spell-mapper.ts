@@ -78,7 +78,7 @@ export function mapSpell(spell: Dnd5eApiSpell): {
     description: buildDescription(spell),
     classes: spell.classes.map((c) => c.index),
     damageType: spell.damage?.damage_type?.name?.toLowerCase() ?? null,
-    damageAtSlotLevel: spell.damage?.damage_at_slot_level ?? null,
+    damageAtSlotLevel: normalizeDamageAtSlotLevel(spell.damage?.damage_at_slot_level),
     savingThrowAbility: spell.dc?.dc_type?.index ?? null,
     savingThrowSuccess: spell.dc?.dc_success ?? null,
     areaOfEffectType: spell.area_of_effect?.type ?? null,
@@ -90,4 +90,22 @@ function buildDescription(spell: Dnd5eApiSpell): string {
   const base = spell.desc.join(' ');
   const higher = spell.higher_level?.join(' ') ?? '';
   return higher ? `${base} ${higher}` : base;
+}
+
+/**
+ * dnd5eapi.co escribe el daño de algunos hechizos CON espacios alrededor del
+ * modificador -- ej. Magic Missile: damage_at_slot_level["1"] = "3d4 + 3"
+ * (a diferencia de damage_dice de monstruos/equipo, que suele venir sin
+ * espacios, ej. "1d6+2"). RandomDiceRoller nunca aceptó esos espacios.
+ *
+ * CASO REAL detectado en partida: cast_spell fallaba con "Notación de dado
+ * inválida: 3d4 + 3" al lanzar Misiles Mágicos -- y como el gasto de la
+ * ranura ocurría ANTES de tirar el daño (ver cast-spell.use-case.ts), el
+ * mago perdía sus ranuras de nivel 1 sin llegar a lanzar el hechizo ni una
+ * sola vez. Se normaliza aquí, en el punto donde el formato externo entra al
+ * catálogo, en vez de en cada sitio que luego lee damageAtSlotLevel.
+ */
+function normalizeDamageAtSlotLevel(raw: Record<string, string> | undefined): Record<string, string> | null {
+  if (!raw) return null;
+  return Object.fromEntries(Object.entries(raw).map(([level, notation]) => [level, notation.replace(/\s+/g, '')]));
 }

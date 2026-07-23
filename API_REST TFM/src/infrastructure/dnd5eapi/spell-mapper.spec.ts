@@ -85,4 +85,32 @@ describe('mapSpell', () => {
     expect(result.areaOfEffectSize).toBeNull();
     expect(result.description).toBe("You touch a willing creature who isn't wearing armor.");
   });
+
+  it('quita los espacios del daño por nivel de ranura (dnd5eapi.co real: Magic Missile trae "3d4 + 3")', () => {
+    // CASO REAL detectado en partida: RandomDiceRoller rechazaba "3d4 + 3"
+    // (con espacios) al lanzar Misiles Mágicos, y como cast-spell.use-case.ts
+    // gastaba la ranura antes de tirar el daño, el mago perdía sus ranuras
+    // sin llegar a lanzar el hechizo. El fix real está en cast-spell.use-case
+    // (reordenar) + aquí (normalizar en el punto de entrada del catálogo).
+    const result = mapSpell({
+      index: 'magic-missile',
+      name: 'Magic Missile',
+      desc: ['You create three glowing darts of magical force.'],
+      range: '120 feet',
+      components: ['V', 'S'],
+      ritual: false,
+      duration: 'Instantaneous',
+      concentration: false,
+      casting_time: '1 action',
+      level: 1,
+      damage: {
+        damage_type: { name: 'Force' },
+        damage_at_slot_level: { '1': '3d4 + 3', '2': '4d4 + 4', '3': '5d4 + 5' },
+      },
+      school: { index: 'evocation', name: 'Evocation' },
+      classes: [{ index: 'sorcerer', name: 'Sorcerer' }, { index: 'wizard', name: 'Wizard' }],
+    });
+
+    expect(result.damageAtSlotLevel).toEqual({ '1': '3d4+3', '2': '4d4+4', '3': '5d4+5' });
+  });
 });

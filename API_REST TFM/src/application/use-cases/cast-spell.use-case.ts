@@ -90,17 +90,16 @@ export class CastSpellUseCase {
       );
     }
     const slotLevel = spellSnapshot.level as 1 | 2;
-
-    character.consumeSpellSlot(slotLevel);
-    await this.characters.save(character);
-
     const casterName = character.toSnapshot().name;
 
     if (!spellSnapshot.damageType) {
-      // Hechizo utilitario (ej. Mage Armor) — consume ranura, sin efecto mecánico de daño.
+      // Hechizo utilitario (ej. Mage Armor) — sin tirada de daño que pueda
+      // fallar por datos, así que consumir la ranura de inmediato es seguro.
       // Se deja rastro en el chat igual que con resolve_attack: antes esto no
       // aparecía en narrativeLog, así que el jugador no veía ninguna
       // confirmación de que el hechizo se había lanzado de verdad.
+      character.consumeSpellSlot(slotLevel);
+      await this.characters.save(character);
       game.appendNarrativeEntry({ role: 'assistant', content: `✨ **${casterName}** lanza **${spellSnapshot.name}**.` });
       await this.games.save(game);
       return { spellName: spellSnapshot.name, damageDealt: 0, targetSavedThrow: null };
@@ -128,6 +127,15 @@ export class CastSpellUseCase {
     let targetSavedThrow: boolean | null = null;
     let dc: number | null = null;
 
+    // CASO REAL detectado en partida: antes, consumeSpellSlot() se llamaba
+    // justo después de validar que el personaje conoce el hechizo, ANTES de
+    // tirar el daño. Cuando la notación de dados del catálogo era inválida
+    // (ej. "3d4 + 3" con espacios, ver spell-mapper.ts), diceRoller.roll()
+    // lanzaba un error DESPUÉS de que la ranura ya se hubiera gastado y
+    // guardado -- el mago perdía sus ranuras de nivel 1 sin llegar a lanzar
+    // el hechizo ni una sola vez. Ahora la tirada de daño (lo único que puede
+    // fallar por datos/formato) ocurre primero, y solo si tiene éxito se
+    // consume la ranura.
     if (spellSnapshot.savingThrowAbility) {
       const casterAbility = SPELLCASTING_ABILITY_BY_CLASS[character.toSnapshot().class];
       dc = 8 + (casterAbility ? character.attributeModifier(casterAbility) : 0);
@@ -141,6 +149,9 @@ export class CastSpellUseCase {
     } else {
       damage = this.diceRoller.roll(damageDice);
     }
+
+    character.consumeSpellSlot(slotLevel);
+    await this.characters.save(character);
 
     game.applyDamageToParticipant(input.targetId, damage);
     game.appendNarrativeEntry({

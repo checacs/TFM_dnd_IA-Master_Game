@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DiceRoller } from '../../domain/ports/dice-roller.port';
 
-const DICE_NOTATION = /^(\d+)d(\d+)(?:\+(\d+))?$/;
+// Espacios opcionales alrededor de 'd' y del modificador -- dnd5eapi.co
+// devuelve algunos hechizos con espacios (ej. Magic Missile: "3d4 + 3"),
+// aunque el mapper ya los normaliza en el punto de entrada (ver
+// spell-mapper.ts). Se tolera aquí también como segunda red de seguridad,
+// y se admite modificador negativo ('-'), no solo positivo.
+const DICE_NOTATION = /^(\d+)\s*d\s*(\d+)\s*(?:([+-])\s*(\d+))?$/i;
 
 /**
  * Implementación real del puerto DiceRoller (docs/03-arquitectura-clean-api-nestjs.md).
@@ -19,10 +24,11 @@ export class RandomDiceRoller implements DiceRoller {
     if (!match) {
       throw new Error(`Notación de dado inválida: "${notation}"`);
     }
-    const [, countStr, sidesStr, modifierStr] = match;
+    const [, countStr, sidesStr, signStr, magnitudeStr] = match;
     const count = Number(countStr);
     const sides = Number(sidesStr);
-    const modifier = modifierStr ? Number(modifierStr) : 0;
+    const magnitude = magnitudeStr ? Number(magnitudeStr) : 0;
+    const modifier = signStr === '-' ? -magnitude : magnitude;
 
     let total = 0;
     for (let i = 0; i < count; i++) {

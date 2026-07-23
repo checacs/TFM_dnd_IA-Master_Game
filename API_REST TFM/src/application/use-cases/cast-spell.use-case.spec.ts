@@ -281,6 +281,50 @@ describe('CastSpellUseCase', () => {
     });
   });
 
+  describe('la ranura no se gasta si la tirada de daño falla por datos inválidos', () => {
+    // CASO REAL detectado en partida: dnd5eapi.co devuelve el daño de algunos
+    // hechizos con espacios (ej. Magic Missile: "3d4 + 3"). Antes,
+    // consumeSpellSlot() se llamaba ANTES de tirar el daño, así que un
+    // damageDice mal formado (o cualquier otro fallo de RandomDiceRoller)
+    // dejaba al conjurador sin su ranura pese a que el hechizo nunca llegó a
+    // surtir efecto. Este test usa un DiceRoller real (no el Fake) para
+    // reproducir el fallo de parseo real, sin mockear el síntoma.
+    it('si diceRoller.roll lanza (notación de dados inválida), la ranura sigue intacta', async () => {
+      const { game, games } = buildGameWithGoblin();
+      const characters = new FakeCharacterRepository();
+      characters.seed(buildMago());
+      // damageAtSlotLevel con espacios, tal cual lo devolvía dnd5eapi.co sin normalizar.
+      const brokenSpell = Spell.create({
+        name: 'Magic Missile', level: 1, school: 'Evocation', castingTime: '1 action', range: '120 feet',
+        duration: 'Instantaneous', concentration: false, ritual: false, components: ['V', 'S'], material: null,
+        description: '...', classes: ['wizard'], damageType: 'force', damageAtSlotLevel: { '1': '3d4 + 3' },
+        savingThrowAbility: null, savingThrowSuccess: null, areaOfEffectType: null, areaOfEffectSize: null,
+      }, 'magic-missile');
+      const spells = new FakeSpellRepository([brokenSpell]);
+      const enemies = new FakeEnemyRepository([buildGoblin()]);
+      class ThrowingDiceRoller implements DiceRoller {
+        rollD20(): number { return 10; }
+        roll(notation: string): number {
+          if (!/^\d+d\d+(\+\d+)?$/.test(notation)) {
+            throw new Error(`Notación de dado inválida: "${notation}"`);
+          }
+          return 6;
+        }
+      }
+      const useCase = new CastSpellUseCase(new ThrowingDiceRoller(), games, characters, spells, enemies);
+
+      await expect(
+        useCase.execute({
+          gameId: game.id, requestingUserId: 'user-1', casterCharacterId: 'char-1',
+          spellId: 'magic-missile', targetId: 'enc-1-goblin-a',
+        }),
+      ).rejects.toThrow();
+
+      const savedCaster = await characters.findById('char-1');
+      expect(savedCaster?.toSnapshot().spells?.slots.level1.used).toBe(0);
+    });
+  });
+
   it('lanza DomainError si el personaje no conoce el hechizo', async () => {
     const { game, games } = buildGameWithGoblin();
     const characters = new FakeCharacterRepository();
