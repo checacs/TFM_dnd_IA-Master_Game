@@ -142,6 +142,17 @@ const VILLAGE_DESTINATION_CUES = [/\btabl[oó]n\b/i, /\btaberna\b/i, /\banuncios
 const TABLON_DESTINATION_CUES = [/\btabl[oó]n(es)?\b/i, /\banuncios?\b/i];
 const TABERNA_DESTINATION_CUES = [/\btaberna\b/i];
 
+/** Detecta, por el texto del jugador, cuál de los dos destinos de arranque eligió (o null si ninguno). */
+function detectVillageStartChoice(lastPlayerMessage: string): 'tablonAnuncios' | 'tabernaMercenarios' | null {
+  if (TABLON_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage))) {
+    return 'tablonAnuncios';
+  }
+  if (TABERNA_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage))) {
+    return 'tabernaMercenarios';
+  }
+  return null;
+}
+
 function villageDestinationMismatchNudge(
     lastPlayerMessage: string,
     appliedMapId: string | null,
@@ -150,19 +161,111 @@ function villageDestinationMismatchNudge(
   if (messageCount <= 1 || messageCount > VILLAGE_START_MAX_MESSAGES || appliedMapId === null) {
     return null;
   }
-  const choseTablon = TABLON_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage));
-  const choseTaberna = !choseTablon && TABERNA_DESTINATION_CUES.some((cue) => cue.test(lastPlayerMessage));
-  if (!choseTablon && !choseTaberna) {
+  const expectedMapId = detectVillageStartChoice(lastPlayerMessage);
+  if (!expectedMapId || appliedMapId === expectedMapId) {
     return null;
   }
-  const expectedMapId = choseTablon ? 'tablonAnuncios' : 'tabernaMercenarios';
-  if (appliedMapId === expectedMapId) {
+  const destinationLabel = expectedMapId === 'tablonAnuncios' ? 'el tablón de anuncios' : 'la taberna';
+  return `El jugador ha elegido con claridad ${destinationLabel} en su último mensaje, pero has aplicado con ` +
+      `set_battle_map el mapId "${appliedMapId}", que no corresponde a esa elección. Vuelve a llamar a ` +
+      `set_battle_map con el mapId correcto ("${expectedMapId}") y ajusta tu narración para describir el ` +
+      'destino que el jugador realmente pidió, no otro distinto.';
+}
+
+/**
+ * Seguro determinista de última instancia (a petición del usuario, tras dos
+ * bugs reales seguidos con el mismo patrón): a veces el modelo ignora los
+ * avisos correctivos de arranque incluso agotando el presupuesto entero de
+ * MAX_TOTAL_CORRECTIONS -- se comprobó en partida real que, pese a DOS avisos
+ * idénticos pidiendo aplicar el mapa, el modelo simplemente inventó una
+ * aventura completa (arrancar un contrato, viajar a una mina) sin llamar a
+ * NINGUNA tool de mapa en todo el turno. Confiar en que el LLM "por fin
+ * obedezca" no es una garantía real -- el usuario pidió explícitamente un
+ * "seguro" para que esto no pueda pasar de largo.
+ *
+ * Esta función se llama SIEMPRE al final de runDmTurn (haya habido avisos o
+ * no) y comprueba, por código, si el jugador eligió con claridad un destino
+ * de arranque y el mapa aplicado de verdad (appliedMapId) no coincide. Si es
+ * así, en vez de confiar en un enésimo aviso al modelo, aplica el mapa
+ * correcto DIRECTAMENTE vía tool-calling determinista (sin pasar por el LLM),
+ * coloca a los jugadores reales de la partida en la primera zona del mapa
+ * (solo si tiene zonas -- tablonAnuncios no lleva, a propósito), y sustituye
+ * la narrativa de ese turno por una descripción fija y coherente con el mapa
+ * que de verdad se aplicó -- así el tablero y la narración nunca pueden
+ * quedar desincronizados, pase lo que pase con el modelo.
+ */
+async function resolveVillageStartFallback(
+    toolCaller: ToolCaller,
+    gameId: string,
+    lastPlayerMessage: string,
+    appliedMapId: string | null,
+    messageCount: number,
+    events: GameEvent[],
+): Promise<string | null> {
+  if (messageCount <= 1 || messageCount > VILLAGE_START_MAX_MESSAGES) {
     return null;
   }
-  return `El jugador ha elegido con claridad ${choseTablon ? 'el tablón de anuncios' : 'la taberna'} en su ` +
-      `último mensaje, pero has aplicado con set_battle_map el mapId "${appliedMapId}", que no corresponde a esa ` +
-      `elección. Vuelve a llamar a set_battle_map con el mapId correcto ("${expectedMapId}") y ajusta tu ` +
-      'narración para describir el destino que el jugador realmente pidió, no otro distinto.';
+  const expectedMapId = detectVillageStartChoice(lastPlayerMessage);
+  if (!expectedMapId || appliedMapId === expectedMapId) {
+    return null;
+  }
+
+  let describeResult: unknown = null;
+  try {
+    describeResult = await toolCaller.callTool('describe_map', { gameId, mapId: expectedMapId });
+  } catch {
+    // No crítico -- solo se usa para saber si hay zonas donde colocar jugadores.
+  }
+
+  try {
+    const setResult = await toolCaller.callTool('set_battle_map', { gameId, mapId: expectedMapId });
+    const event = toGameEvent('set_battle_map', setResult);
+    if (event) {
+      events.push(event);
+    }
+  } catch {
+    // Si ni siquiera el propio código puede aplicar el mapa, no hay nada más
+    // que forzar -- se deja la narrativa original del modelo tal cual.
+    return null;
+  }
+
+  type ZoneCell = { rowStart?: unknown; rowEnd?: unknown; colStart?: unknown; colEnd?: unknown };
+  type Zone = { name?: unknown; cells?: ZoneCell[] };
+  const zones = (describeResult as { zones?: Zone[] } | null)?.zones ?? [];
+  const firstZone = zones[0];
+  const firstCell = firstZone?.cells?.[0];
+  if (firstZone && typeof firstZone.name === 'string' && firstCell) {
+    const row = Math.floor(((Number(firstCell.rowStart) || 0) + (Number(firstCell.rowEnd) || 0)) / 2);
+    const col = Math.floor(((Number(firstCell.colStart) || 0) + (Number(firstCell.colEnd) || 0)) / 2);
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      const players = (state as { players?: Array<{ characterId?: unknown }> } | null)?.players ?? [];
+      for (const player of players) {
+        if (typeof player.characterId !== 'string') {
+          continue;
+        }
+        try {
+          const placeResult = await toolCaller.callTool('place_participant', {
+            gameId, participantId: player.characterId, row, col, zoneName: firstZone.name,
+          });
+          const event = toGameEvent('place_participant', placeResult);
+          if (event) {
+            events.push(event);
+          }
+        } catch {
+          // Best-effort por jugador -- si uno falla, seguimos con el resto.
+        }
+      }
+    } catch {
+      // Si get_game_state falla, al menos el mapa ya quedó aplicado bien.
+    }
+  }
+
+  return expectedMapId === 'tablonAnuncios'
+      ? 'Os acercáis al tablón de anuncios. Varios pergaminos cuelgan clavados, cada uno con un encargo ' +
+          'distinto del gremio de mercenarios. ¿Qué contrato os interesa?'
+      : 'Entráis en la taberna. El calor del fuego y el bullicio de las conversaciones os envuelven nada más ' +
+          'cruzar la puerta. ¿Qué hacéis?';
 }
 
 function narrativeSuggestsLocationChange(text: string): boolean {
@@ -859,10 +962,27 @@ export async function runDmTurn(
     break;
   }
 
+  // Seguro determinista de última instancia: si pese a todos los avisos
+  // anteriores el modelo nunca aplicó el mapa que corresponde a la elección
+  // de arranque del jugador, esto lo fuerza por código (ver
+  // resolveVillageStartFallback más arriba). Se ejecuta SIEMPRE al final,
+  // haya habido avisos o no -- es la última red de seguridad, no depende de
+  // que el modelo "por fin" obedezca.
+  const fallbackNarrative = await resolveVillageStartFallback(
+      toolCaller, gameId, lastPlayerMessageText(messages), appliedMapId, initialMessageCount, events,
+  );
+  if (fallbackNarrative) {
+    console.log(
+        '[dm-engine] Seguro de arranque activado: el modelo no aplicó el mapa correspondiente a la elección ' +
+        `del jugador tras agotar los avisos -- forzado por código. Narrativa del modelo descartada: ` +
+        `"${response.message.content ?? ''}"`,
+    );
+  }
+
   console.log(
       `[dm-engine] Turno terminado. Tools llamadas: [${[...calledTools].join(', ') || 'ninguna'}] — ` +
       `Eventos: [${events.map((e) => e.type).join(', ') || 'ninguno'}]`,
   );
 
-  return { narrative: response.message.content ?? '', events };
+  return { narrative: fallbackNarrative ?? response.message.content ?? '', events };
 }
