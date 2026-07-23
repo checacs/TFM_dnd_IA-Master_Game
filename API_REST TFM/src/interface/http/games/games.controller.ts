@@ -63,11 +63,25 @@ export class GamesController {
     return this.getGameState.execute({ gameId });
   }
 
-  // A partir de aquí, TODOS los endpoints que mutan la partida pasan por
-  // withGameLock(gameId, ...) -- ver domain/services/game-lock.ts para la
+  // A partir de aquí, los endpoints que mutan la partida DIRECTAMENTE pasan
+  // por withGameLock(gameId, ...) -- ver domain/services/game-lock.ts para la
   // explicación completa del bug real que esto corrige (lost updates entre
   // peticiones concurrentes sobre el mismo documento de Game: turnos
   // reclamados que desaparecían y HP que no se actualizaba).
+  //
+  // EXCEPCIÓN CRÍTICA: los tres endpoints que disparan un TURNO DEL DM-IA
+  // (sendPlayerMessage, playerAction, playerRoll) NO se envuelven aquí. Se
+  // detectó en producción un deadlock circular al hacerlo: el turno del DM
+  // (que corre dentro de execute()) invoca tools MCP (set_battle_map,
+  // place_participant, resolve_attack...) que piden este MISMO candado en
+  // mcp.server.ts -- la tool quedaba encolada detrás del propio turno que la
+  // estaba esperando, rompiéndose solo por el timeout de 15s del cliente MCP
+  // ("set_battle_map: Tiempo de espera agotado (15000ms)" x3 en un turno
+  // real, +45s de espera y el mapa apareciendo tarde). La protección contra
+  // lost-updates de esos tres flujos vive ahora DENTRO de
+  // SendMessageUseCase, que coge el candado solo en sus dos secciones
+  // críticas de lectura-modificación-escritura y lo suelta durante el turno
+  // del DM (ver el comentario de candados en send-message.use-case.ts).
 
   @Post(':gameId/join')
   join(@Param('gameId') gameId: string, @Body() dto: JoinGameDto, @CurrentUserId() userId: string) {
@@ -96,9 +110,11 @@ export class GamesController {
     return withGameLock(gameId, () => this.resolvePlayerAttack.execute({ gameId, requestingUserId, ...dto }));
   }
 
+  // SIN withGameLock a propósito: dispara un turno del DM (ver la EXCEPCIÓN
+  // CRÍTICA de arriba) -- el candado fino vive dentro de SendMessageUseCase.
   @Post(':gameId/message')
   sendPlayerMessage(@Param('gameId') gameId: string, @Body() dto: SendMessageDto) {
-    return withGameLock(gameId, () => this.sendMessage.execute({ gameId, messages: dto.messages }));
+    return this.sendMessage.execute({ gameId, messages: dto.messages });
   }
 
   @Post(':gameId/cast-spell')
@@ -112,18 +128,20 @@ export class GamesController {
     return withGameLock(gameId, () => this.claimTurn.execute({ gameId, requestingUserId, characterId: dto.characterId }));
   }
 
-  /** Campo de texto del móvil — equivale a "responder al chat del DM" (en combate exige turno reclamado, fuera de combate exige ser el capitán). */
+  /** Campo de texto del móvil — equivale a "responder al chat del DM" (en combate exige turno reclamado, fuera de combate exige ser el capitán).
+   * SIN withGameLock a propósito: dispara un turno del DM (ver la EXCEPCIÓN CRÍTICA de arriba). */
   @Post(':gameId/player-action')
   playerAction(@Param('gameId') gameId: string, @Body() dto: PlayerActionDto, @CurrentUserId() requestingUserId: string) {
-    return withGameLock(gameId, () => this.sendPlayerAction.execute({ gameId, requestingUserId, ...dto }));
+    return this.sendPlayerAction.execute({ gameId, requestingUserId, ...dto });
   }
 
-  /** Botón "Tirar Dados" del móvil — se añade al narrativeLog atribuida al jugador para que se vea en el chat de ui-web (ver PlayerRollUseCase). */
+  /** Botón "Tirar Dados" del móvil — se añade al narrativeLog atribuida al jugador para que se vea en el chat de ui-web (ver PlayerRollUseCase).
+   * SIN withGameLock a propósito: dispara un turno del DM (ver la EXCEPCIÓN CRÍTICA de arriba). */
   @Post(':gameId/player-roll')
   playerRoll(@Param('gameId') gameId: string, @Body() dto: PlayerRollDto, @CurrentUserId() requestingUserId: string) {
-    return withGameLock(gameId, () => this.playerRollUseCase.execute({
+    return this.playerRollUseCase.execute({
       gameId, requestingUserId, characterId: dto.characterId, notation: dto.notation,
-    }));
+    });
   }
 
   /** Reasigna quién es el capitán del grupo — puede llamarlo el host o el capitán actual (Game.assignCaptain). */

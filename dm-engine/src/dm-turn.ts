@@ -223,9 +223,16 @@ async function resolveVillageStartFallback(
     if (event) {
       events.push(event);
     }
-  } catch {
+  } catch (error) {
     // Si ni siquiera el propio código puede aplicar el mapa, no hay nada más
-    // que forzar -- se deja la narrativa original del modelo tal cual.
+    // que forzar -- se deja la narrativa original del modelo tal cual, pero
+    // SIEMPRE dejando rastro en el log (antes este catch era silencioso y en
+    // producción ocultó que el seguro lo había intentado y había fallado por
+    // el deadlock del candado de la API -- ver game-lock/mcp.server.ts).
+    console.error(
+        `[dm-engine] Seguro de arranque: set_battle_map("${expectedMapId}") falló también desde el propio ` +
+        `código -- ${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 

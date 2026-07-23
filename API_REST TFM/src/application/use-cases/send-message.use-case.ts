@@ -2,6 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { GameRepository, GAME_REPOSITORY } from '../../domain/ports/game.repository.port';
 import { DmEngineClient, DM_ENGINE_CLIENT, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
 import { DomainError } from '../../domain/errors/domain-error';
+import { withGameLock } from '../../domain/services/game-lock';
 
 export interface SendMessageInput {
   gameId: string;
@@ -33,19 +34,42 @@ export class SendMessageUseCase {
     @Inject(DM_ENGINE_CLIENT) private readonly dmEngine: DmEngineClient,
   ) {}
 
+  /**
+   * CANDADOS: este método NUNCA debe envolverse entero en withGameLock (ni
+   * aquí ni en el controller). Se detectó en producción un deadlock circular:
+   * el controller envolvía todo execute() -- turno del DM incluido -- en
+   * withGameLock(gameId), y las tools MCP que ese mismo turno invoca
+   * (set_battle_map, place_participant, resolve_attack...) también piden ese
+   * MISMO candado en mcp.server.ts. La tool quedaba encolada detrás del turno
+   * que la estaba esperando, y solo el timeout de 15s del cliente MCP rompía
+   * el círculo: "set_battle_map: Tiempo de espera agotado (15000ms)" tres
+   * veces seguidas en un turno real, +45s de espera, el mapa apareciendo
+   * tarde (las llamadas encoladas se ejecutaban al soltarse el candado, ya
+   * acabado el turno) y el DM narrando escenas inventadas al creer que el
+   * sistema de mapas estaba roto. En su lugar, el candado se coge SOLO en
+   * las dos secciones críticas de lectura-modificación-escritura de este use
+   * case (guardar el mensaje del jugador antes del turno, y guardar la
+   * narrativa después), dejando el turno del DM fuera: las tools MCP ya se
+   * serializan individualmente entre sí y contra los endpoints REST
+   * (claim-turn, etc.) con sus propios withGameLock, y dm-engine ya impide
+   * dos turnos simultáneos de la misma partida con su mapa turnsInFlight
+   * (ver dm-engine/src/server.ts).
+   */
   async execute(input: SendMessageInput): Promise<DmEngineResult> {
-    const game = await this.games.findById(input.gameId);
-    if (!game) {
-      throw new DomainError('Partida no encontrada');
-    }
+    await withGameLock(input.gameId, async () => {
+      const game = await this.games.findById(input.gameId);
+      if (!game) {
+        throw new DomainError('Partida no encontrada');
+      }
 
-    const lastUserMsg = input.messages.filter((m) => m.role === 'user').pop();
-    if (lastUserMsg) {
-      game.appendNarrativeEntry({ role: 'user', content: lastUserMsg.content });
-      // Se guarda ya (antes de llamar al dm-engine) para que el mensaje del
-      // jugador quede registrado aunque el turno del DM falle.
-      await this.games.save(game);
-    }
+      const lastUserMsg = input.messages.filter((m) => m.role === 'user').pop();
+      if (lastUserMsg) {
+        game.appendNarrativeEntry({ role: 'user', content: lastUserMsg.content });
+        // Se guarda ya (antes de llamar al dm-engine) para que el mensaje del
+        // jugador quede registrado aunque el turno del DM falle.
+        await this.games.save(game);
+      }
+    });
 
     let result: DmEngineResult | null = null;
     for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
@@ -86,16 +110,23 @@ export class SendMessageUseCase {
     // Si aquí siguiéramos usando la copia de `game` leída arriba (de antes del
     // turno), guardarla ahora sobrescribiría esos cambios y el tablero/posición
     // recién aplicados desaparecerían justo después de terminar el turno — hay
-    // que releer el estado fresco antes de anexar la narrativa y guardar.
-    const freshGame = await this.games.findById(input.gameId);
-    if (!freshGame) {
-      throw new DomainError('Partida no encontrada');
-    }
+    // que releer el estado fresco antes de anexar la narrativa y guardar. La
+    // relectura+guardado van dentro de withGameLock para que una mutación
+    // concurrente que siga en vuelo al terminar el turno (ej. un claim-turn
+    // del móvil serializado con su propio candado) no sea pisada por este
+    // save ni al revés (lost update) -- ver el comentario de candados arriba.
+    const finalResult = result;
+    return withGameLock(input.gameId, async () => {
+      const freshGame = await this.games.findById(input.gameId);
+      if (!freshGame) {
+        throw new DomainError('Partida no encontrada');
+      }
 
-    freshGame.appendNarrativeEntry({ role: 'assistant', content: result.narrative });
-    await this.games.save(freshGame);
+      freshGame.appendNarrativeEntry({ role: 'assistant', content: finalResult.narrative });
+      await this.games.save(freshGame);
 
-    return result;
+      return finalResult;
+    });
   }
 }
 

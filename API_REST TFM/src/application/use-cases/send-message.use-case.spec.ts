@@ -1,6 +1,7 @@
 import { GameRepository } from '../../domain/ports/game.repository.port';
 import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
 import { Game } from '../../domain/entities/game.entity';
+import { withGameLock } from '../../domain/services/game-lock';
 import { SendMessageUseCase } from './send-message.use-case';
 
 /**
@@ -180,6 +181,104 @@ describe('SendMessageUseCase', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('las tools MCP serializadas con withGameLock no se bloquean durante el turno (regresión del deadlock del candado)', async () => {
+    // Bug real observado en producción: el controller envolvía TODO
+    // execute() (turno del DM incluido) en withGameLock(gameId), y las tools
+    // MCP que el propio turno invoca (set_battle_map, place_participant...)
+    // también piden ese MISMO candado en mcp.server.ts -- la tool se quedaba
+    // encolada detrás del turno que la estaba esperando (deadlock circular),
+    // rota solo por el timeout de 15s del cliente MCP. Síntoma en partida:
+    // "set_battle_map: Tiempo de espera agotado (15000ms)" tres veces
+    // seguidas, y el mapa apareciendo tarde (las llamadas encoladas se
+    // ejecutaban al soltarse el candado, después de acabar el turno).
+    // Este test fija el contrato correcto: el use case NUNCA debe retener el
+    // candado de la partida mientras dmEngine.sendTurn está en marcha, así
+    // que una tool que pida withGameLock del mismo gameId durante el turno
+    // debe poder completarse al momento.
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+
+    const dmEngine = new FakeDmEngineClient(
+      { narrative: 'El mapa está fijado.', events: [] },
+      async () => {
+        // Simula exactamente lo que hace mcp.server.ts con set_battle_map.
+        await withGameLock(game.id, async () => {
+          const duringTurn = await games.findById(game.id);
+          duringTurn!.setBattleMap({ rows: 10, cols: 12, imageUrl: '/maps/ruinas-bosque.png' });
+          await games.save(duringTurn!);
+        });
+      },
+    );
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    // Si el use case retiene el candado durante sendTurn, esta promesa no se
+    // resuelve nunca (deadlock) -- el guard de 3s la convierte en fallo visible.
+    const guard = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('DEADLOCK: la tool MCP no pudo coger el candado durante el turno')), 3_000),
+    );
+    await Promise.race([
+      useCase.execute({ gameId: game.id, messages: [{ role: 'user', content: 'Miro alrededor' }] }),
+      guard,
+    ]);
+
+    const saved = await games.findById(game.id);
+    expect(saved!.toSnapshot().board).toEqual(
+      expect.objectContaining({ rows: 10, cols: 12, imageUrl: '/maps/ruinas-bosque.png' }),
+    );
+  });
+
+  it('una mutación concurrente (ej. claim-turn) que llega mientras el DM está pensando no se pierde al guardar la narrativa', async () => {
+    // La otra mitad del rediseño del candado: al NO envolver ya el turno
+    // entero, la protección contra lost-updates debe vivir DENTRO del use
+    // case, en sus dos secciones críticas (guardar el mensaje del jugador al
+    // principio, y releer+guardar la narrativa al final). Este test simula
+    // una mutación concurrente con withGameLock (como claim-turn desde el
+    // móvil) que se está ejecutando -- lenta -- justo cuando el turno del DM
+    // termina: sin candado interno, la relectura final leería el estado
+    // ANTERIOR a esa mutación y el save de la narrativa la pisaría (o al
+    // revés). Con el candado interno, la sección final espera su turno en la
+    // cola y AMBOS cambios sobreviven.
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+
+    let concurrentMutation: Promise<void> | null = null;
+    const dmEngine = new FakeDmEngineClient(
+      { narrative: 'La puerta cruje al abrirse.', events: [] },
+      async () => {
+        // Arranca la mutación concurrente SIN esperarla: sigue en marcha
+        // (dentro de su withGameLock, con una escritura lenta) cuando
+        // sendTurn devuelve y el use case pasa a su sección final.
+        concurrentMutation = withGameLock(game.id, async () => {
+          const other = await games.findById(game.id);
+          other!.setBattleMap({ rows: 30, cols: 20, imageUrl: '/maps/battleMap17-sotanoTaberna.png' });
+          await new Promise((resolve) => setTimeout(resolve, 80));
+          await games.save(other!);
+        });
+      },
+    );
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    const result = await useCase.execute({
+      gameId: game.id,
+      messages: [{ role: 'user', content: 'Abro la puerta' }],
+    });
+    await concurrentMutation!;
+
+    expect(result.narrative).toBe('La puerta cruje al abrirse.');
+    const saved = await games.findById(game.id);
+    const snapshot = saved!.toSnapshot();
+    // La mutación concurrente sobrevive...
+    expect(snapshot.board).toEqual(
+      expect.objectContaining({ rows: 30, cols: 20, imageUrl: '/maps/battleMap17-sotanoTaberna.png' }),
+    );
+    // ...y la narrativa del DM también.
+    expect(snapshot.narrativeLog).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'assistant', content: 'La puerta cruje al abrirse.' })]),
+    );
   });
 
   it('lanza DomainError si la partida no existe, sin llegar a llamar al dm-engine', async () => {
