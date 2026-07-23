@@ -62,13 +62,23 @@ app.post('/turn', async (req, res) => {
     } else {
       turnPromise = runDmTurn(chatClient, toolCaller, messages, gameId);
       turnsInFlight.set(gameId, turnPromise);
-      turnPromise.finally(() => {
-        // Defensivo: solo borra la entrada si sigue siendo ESTA promesa (evita
-        // que un finally tardío borre la de una ejecución más nueva).
-        if (turnsInFlight.get(gameId) === turnPromise) {
-          turnsInFlight.delete(gameId);
-        }
-      });
+      turnPromise
+          .finally(() => {
+            // Defensivo: solo borra la entrada si sigue siendo ESTA promesa (evita
+            // que un finally tardío borre la de una ejecución más nueva).
+            if (turnsInFlight.get(gameId) === turnPromise) {
+              turnsInFlight.delete(gameId);
+            }
+          })
+          // CRÍTICO: .finally() devuelve una promesa NUEVA que hereda el
+          // rechazo de turnPromise -- y esa promesa nueva no la espera nadie.
+          // Sin este catch, cualquier turno que falle (se comprobó en
+          // producción con "Se superó el límite de N iteraciones") generaba
+          // un unhandledRejection que MATABA EL PROCESO ENTERO de dm-engine
+          // (triggerUncaughtException), tirando el servicio para todas las
+          // partidas hasta que Render lo reiniciaba en frío. El error real
+          // del turno ya se gestiona en el await turnPromise de abajo.
+          .catch(() => undefined);
     }
 
     const result = await turnPromise;
@@ -86,6 +96,19 @@ app.post('/turn', async (req, res) => {
     }
     res.status(500).json({ error: 'Error interno procesando el turno' });
   }
+});
+
+// Red de seguridad global: un rechazo de promesa sin gestionar NUNCA debe
+// tirar el proceso entero (Node lo mata por defecto) -- un solo turno roto de
+// una partida no puede dejar sin DM a todas las demás. Se registra con el
+// máximo detalle para poder cazar el origen, pero el proceso sigue vivo.
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('[dm-engine] unhandledRejection (proceso sigue vivo):', reason);
+});
+process.on('uncaughtException', (error) => {
+  // eslint-disable-next-line no-console
+  console.error('[dm-engine] uncaughtException (proceso sigue vivo):', error);
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;

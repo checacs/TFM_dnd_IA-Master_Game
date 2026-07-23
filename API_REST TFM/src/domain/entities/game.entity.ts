@@ -451,11 +451,25 @@ export class Game {
     if (zoneName) {
       const zone = findZoneByName(zones, zoneName);
       if (!zone) {
-        throw new DomainError(`No existe ninguna zona llamada "${zoneName}" en el mapa actual`);
+        // Se listan los nombres reales para que el DM-IA (que lee este error
+        // como resultado de la tool) pueda autocorregirse en un solo intento
+        // en vez de probar nombres inventados a ciegas.
+        const available = zones.map((z) => `"${z.name}"`).join(', ') || '(el mapa actual no tiene zonas)';
+        throw new DomainError(
+          `No existe ninguna zona llamada "${zoneName}" en el mapa actual. Zonas disponibles: ${available}`,
+        );
       }
       if (!isCellInsideZone(zone, position.row, position.col)) {
+        // Igual que arriba: sin los rangos reales de la zona en el mensaje,
+        // el DM-IA reintentaba con otras celdas al azar (se comprobó en
+        // producción: (0,15) y (1,15) para una zona que va de la fila 14 a la
+        // 17), quemando iteraciones del turno. Con los rangos puede elegir
+        // una celda válida al primer reintento.
+        const ranges = zone.cells
+          .map((c) => `filas ${c.rowStart}-${c.rowEnd}, columnas ${c.colStart}-${c.colEnd}`)
+          .join(' / ');
         throw new DomainError(
-          `La celda (${position.row}, ${position.col}) no está dentro de la zona "${zoneName}"`,
+          `La celda (${position.row}, ${position.col}) no está dentro de la zona "${zoneName}" (que ocupa: ${ranges})`,
         );
       }
     } else if (!isCellInsideZones(zones, position.row, position.col)) {

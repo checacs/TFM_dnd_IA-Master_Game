@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
+import { DmEngineClient, DmEngineChatMessage, DmEngineResult, DmEngineRespondedError } from '../../domain/ports/dm-engine.port';
 
 /**
  * Llama al endpoint /turn del servicio dm-engine (proyecto hermano). No se
@@ -103,7 +103,11 @@ export class HttpDmEngineClient implements DmEngineClient {
       if (response.status === 503) {
         throw new StartupFailure(new Error(`dm-engine señaló un fallo reintentable (503) antes de mutar estado`));
       }
-      throw new Error(`dm-engine respondió con estado ${response.status}`);
+      // DmEngineRespondedError (no un Error genérico): dm-engine SÍ procesó
+      // el turno antes de fallar, así que pudo mutar la partida -- la capa de
+      // reintentos de SendMessageUseCase debe rendirse al ver este tipo, no
+      // reenviar el turno entero (reintentarlo duplica escenas/combates).
+      throw new DmEngineRespondedError(`dm-engine respondió con estado ${response.status}`);
     }
 
     return response.json() as Promise<DmEngineResult>;

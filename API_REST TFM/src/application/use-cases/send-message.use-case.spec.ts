@@ -1,5 +1,5 @@
 import { GameRepository } from '../../domain/ports/game.repository.port';
-import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
+import { DmEngineClient, DmEngineChatMessage, DmEngineResult, DmEngineRespondedError } from '../../domain/ports/dm-engine.port';
 import { Game } from '../../domain/entities/game.entity';
 import { withGameLock } from '../../domain/services/game-lock';
 import { SendMessageUseCase } from './send-message.use-case';
@@ -154,6 +154,30 @@ describe('SendMessageUseCase', () => {
     // Timeout explícito: los 2 sleeps de reintento (5s cada uno) avanzados con
     // advanceTimers pueden superar los 5s por defecto de jest según la máquina.
   }, 30_000);
+
+  it('NO reintenta el turno si dm-engine RESPONDIÓ con error (DmEngineRespondedError): pudo haber mutado la partida y reintentar duplica escenas', async () => {
+    // Bug real de producción: un turno superó el límite de iteraciones de
+    // tools DESPUÉS de haber iniciado un combate de verdad (start_combat ya
+    // ejecutado) y dm-engine devolvió 500. La capa de reintentos reenviaba el
+    // turno COMPLETO: cada reintento ejecuta otro turno entero del LLM (no
+    // determinista) sobre una partida ya mutada -- duplicando combates y
+    // escenas. Si el error dice "dm-engine sí procesó el turno" hay que
+    // rendirse a la primera y mostrar el fallback.
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+
+    const dmEngine = new FailingDmEngineClient(new DmEngineRespondedError('dm-engine respondió con estado 500'));
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    const result = await useCase.execute({
+      gameId: game.id,
+      messages: [{ role: 'user', content: 'Entramos al pantano' }],
+    });
+
+    expect(dmEngine.attempts).toBe(1); // ni un solo reintento
+    expect(result.narrative).toMatch(/no ha podido responder/i);
+  });
 
   it('si el dm-engine falla las primeras veces pero se recupera (cold-start doble), el jugador nunca ve el mensaje de fallback', async () => {
     jest.useFakeTimers({ advanceTimers: true });

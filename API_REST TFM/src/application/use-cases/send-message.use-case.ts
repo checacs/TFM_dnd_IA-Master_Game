@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { GameRepository, GAME_REPOSITORY } from '../../domain/ports/game.repository.port';
-import { DmEngineClient, DM_ENGINE_CLIENT, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
+import { DmEngineClient, DM_ENGINE_CLIENT, DmEngineChatMessage, DmEngineResult, DmEngineRespondedError } from '../../domain/ports/dm-engine.port';
 import { DomainError } from '../../domain/errors/domain-error';
 import { withGameLock } from '../../domain/services/game-lock';
 
@@ -88,6 +88,16 @@ export class SendMessageUseCase {
           `[SendMessageUseCase] dm-engine falló (intento ${attempt}/${MAX_SEND_ATTEMPTS}) para la partida ` +
             `${input.gameId}: ${reason}`,
         );
+        // Si dm-engine SÍ procesó el turno antes de fallar
+        // (DmEngineRespondedError: respondió con un 4xx/5xx real, no un fallo
+        // de conexión), pudo haber mutado la partida (mapa aplicado, combate
+        // iniciado...) -- reintentar reenvía el turno ENTERO y cada reintento
+        // ejecuta otro turno completo del LLM sobre esas mutaciones,
+        // duplicando escenas y combates (visto en producción). Rendirse ya y
+        // pasar al mensaje de fallback.
+        if (error instanceof DmEngineRespondedError) {
+          break;
+        }
         if (!isLastAttempt) {
           await sleep(SEND_RETRY_DELAY_MS);
         }

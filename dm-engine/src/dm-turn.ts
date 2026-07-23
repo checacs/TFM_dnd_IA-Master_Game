@@ -23,8 +23,23 @@ export class NoMutationYetError extends Error {
  * Límite máximo de vueltas del bucle de tool-calling. Sin esto, un fallo del
  * modelo (que no deje de pedir tools) lo dejaría llamando indefinidamente —
  * quedó anotado como pendiente desde el diseño del paso 5 y se resuelve aquí.
+ *
+ * Subido de 8 a 16 tras un fallo real: un turno LEGÍTIMO de inicio de combate
+ * (buscar mapa + describe_map + 2 fichas de personaje + set_battle_map +
+ * colocar 2 jugadores con un par de reintentos por zona equivocada +
+ * start_combat + colocar al enemigo) necesita 10-12 vueltas cuando el modelo
+ * llama a las tools de una en una -- con 8, el turno reventaba justo después
+ * de start_combat, dejando el combate creado pero sin narrativa, sin el
+ * enemigo colocado y (por el bug del .finally sin catch en server.ts, ya
+ * arreglado) con el proceso entero de dm-engine muerto.
+ *
+ * Además, superar el límite YA NO lanza una excepción: a esas alturas el
+ * turno puede haber mutado la partida de verdad (mapa aplicado, combate
+ * iniciado...) y reventarlo pierde la narrativa y deja la partida a medias.
+ * Ver el manejo del límite dentro de runDmTurn: se corta el acceso a más
+ * tools y se le exige al modelo una narración final de cierre.
  */
-const MAX_TOOL_CALL_ITERATIONS = 8;
+const MAX_TOOL_CALL_ITERATIONS = 16;
 
 /**
  * Límite de avisos correctivos por turno. Antes era un booleano de un solo
@@ -942,9 +957,42 @@ export async function runDmTurn(
     if (response.message.tool_calls?.length) {
       iterations += 1;
       if (iterations > MAX_TOOL_CALL_ITERATIONS) {
-        throw new Error(
-            `Se superó el límite de ${MAX_TOOL_CALL_ITERATIONS} iteraciones de tool-calling en un mismo turno`,
+        // NO se lanza excepción (antes sí): a estas alturas el turno puede
+        // haber mutado la partida de verdad (mapa aplicado, combate iniciado,
+        // jugadores colocados...) y reventar aquí perdía la narrativa, dejaba
+        // el turno a medias de cara al jugador y (combinado con el bug del
+        // .finally sin catch en server.ts) llegó a matar el proceso entero en
+        // producción. En su lugar: se descarta esta última petición de tools
+        // (sin ejecutarla), se le explica al modelo por nota interna que el
+        // presupuesto de tools del turno se agotó, y se le pide UNA narración
+        // final de cierre. Si aun así insiste en pedir más tools, se acepta
+        // una narrativa genérica de cierre -- los seguros deterministas del
+        // final del turno (arranque de pueblo, fase de enemigos atascada)
+        // siguen ejecutándose después de esto en cualquier caso.
+        console.error(
+            `[dm-engine] Límite de ${MAX_TOOL_CALL_ITERATIONS} iteraciones de tools alcanzado -- se corta el ` +
+            'acceso a más tools y se exige la narración final de cierre (el turno NO se pierde).',
         );
+        messages.push({
+          role: 'system',
+          content: 'Nota interna del sistema -- el jugador NO ha escrito esto: has agotado el número máximo de ' +
+              'llamadas a herramientas permitidas en este turno. NO llames a ninguna herramienta más. Escribe ' +
+              'AHORA tu narración final para el jugador con lo que ya tengas resuelto, terminando con una ' +
+              'pregunta sobre qué quieren hacer.',
+        });
+        response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
+        if (response.message.tool_calls?.length) {
+          // Se rinde de verdad: narrativa mínima de cierre para no dejar el
+          // chat vacío. Los eventos ya generados por las tools ejecutadas
+          // (combate, mapa...) se devuelven igualmente.
+          response = {
+            message: {
+              role: 'assistant',
+              content: 'La escena queda preparada ante vosotros. ¿Qué hacéis?',
+            },
+          };
+        }
+        break;
       }
 
       messages.push(response.message);
