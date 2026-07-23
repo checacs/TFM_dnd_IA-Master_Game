@@ -66,7 +66,7 @@ const PANEL_WIDTH = Math.min(340, Dimensions.get('window').width * 0.85);
  *
  * A propósito esta pantalla NO muestra el texto de la narración ni tiene
  * botón para escucharla en voz alta -- el jugador lee (y, desde ui-web,
- * escucha con Amazon Polly) la partida en ui-web; el móvil se queda solo
+ * escucha con Qwen-TTS) la partida en ui-web; el móvil se queda solo
  * como mando para actuar (escribir, reclamar turno, tirar dados).
  *
  * La ficha completa (HP/CA, XP, atributos, hechizos, inventario) ya no vive

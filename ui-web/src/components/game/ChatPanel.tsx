@@ -40,7 +40,7 @@ function renderFormattedContent(content: string) {
   });
 }
 
-/** Quita la sintaxis Markdown (**negrita**) antes de pasarle el texto a Amazon Polly -- si no, lee los asteriscos en voz alta. */
+/** Quita la sintaxis Markdown (**negrita**) antes de pasarle el texto al TTS -- si no, lee los asteriscos en voz alta. */
 function stripMarkdownForSpeech(content: string): string {
   return content.replace(/\*\*/g, '');
 }
@@ -129,7 +129,7 @@ export function ChatPanel({ messages, isLoading, errorMessage }: ChatPanelProps)
                     className="chat-speak-btn"
                     onClick={() => handleToggleSpeak(i, m.content)}
                     disabled={synthesizeSpeech.isPending && speakingIndex !== i}
-                    title="Escuchar con Amazon Polly"
+                    title="Escuchar al DM"
                   >
                     {speakingIndex === i ? '⏹' : '🔊'}
                   </button>

@@ -123,7 +123,7 @@ export function useCastSpell(gameId: string) {
   });
 }
 
-/** Botón "Escuchar" en cada mensaje del DM (ChatPanel) — pide a Amazon Polly (backend) que convierta texto a voz; devuelve el mp3 en base64. */
+/** Botón "Escuchar" en cada mensaje del DM (ChatPanel) — pide al backend (Qwen-TTS) que convierta texto a voz; devuelve el audio en base64. */
 export function useSynthesizeSpeech() {
   return useMutation<{ audioBase64: string }, Error, { text: string }>({
     mutationFn: (input) => api.post<{ audioBase64: string }>('/tts/speak', input),

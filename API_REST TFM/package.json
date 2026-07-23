@@ -31,7 +31,6 @@
     "ts-node": "^10.9.2"
   },
   "dependencies": {
-    "@aws-sdk/client-polly": "^3.700.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",

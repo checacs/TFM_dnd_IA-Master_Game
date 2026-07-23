@@ -9,3 +9,10 @@ yarn-error.log*
 .pnp.js
 .env
 .vscode/*
+
+# Scripts sueltos de verificación (ts-node) usados durante el desarrollo con
+# Claude y restos de archivos que no se pudieron borrar por el bug de
+# permisos del sandbox (solo se pueden renombrar, nunca eliminar) -- seguros
+# de borrar a mano desde el explorador de archivos.
+*.bak
+*.removed
