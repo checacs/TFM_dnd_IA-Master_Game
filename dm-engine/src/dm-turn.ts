@@ -230,6 +230,45 @@ function staleEncounterConflictNudge(failedStartCombatMessage: string | null): s
       'tu propia narración acaba de presentar -- nunca falsees el número de enemigos.';
 }
 
+/**
+ * Se detectó en partida real un bug grave y muy distinto de todos los
+ * anteriores: el jugador escribió "Vamos al tablon" (una elección de
+ * arranque perfectamente clara) y el DM respondió "Veo que el sistema de
+ * mapas está teniendo problemas momentáneos, pero no importa -- sigamos con
+ * la narración mientras tanto" -- y a continuación narró una escena TOTALMENTE
+ * distinta e inconexa (un molino abandonado con un tal "Héctor" dentro, que no
+ * tenía nada que ver con la taberna ni el tablón de anuncios de la partida en
+ * curso). La causa más probable: el modelo llamó a una tool de mapas
+ * (set_battle_map, describe_map, get_battle_maps o clear_battle_map), esa
+ * llamada falló de verdad (mapId inválido, error de la tool, etc.), y en vez
+ * de corregir el error o simplemente seguir la escena sin tocar el mapa, el
+ * modelo inventó una excusa técnica Y ADEMÁS se inventó contenido narrativo
+ * completamente ajeno a la partida -- probablemente relleno improvisado del
+ * propio modelo al quedarse "perdido" tras el error. Ninguno de los nudges
+ * anteriores cubre este hueco concreto: protocolNudge solo revisa si se
+ * TOCÓ alguna tool de mapa (aquí sí se tocó, solo que falló) y
+ * villageDestinationMismatchNudge solo compara mapIds cuando la llamada tuvo
+ * ÉXITO (appliedMapId solo se fija tras un set_battle_map que no falló). Esta
+ * señal es 100% determinista (el propio mensaje de error de la tool, no un
+ * heurístico de texto): si CUALQUIER tool de mapas falló este turno, se
+ * fuerza a corregir el error de verdad (nunca inventar una excusa ni cambiar
+ * de escena) antes de aceptar la respuesta.
+ */
+const MAP_TOOLS = ['get_battle_maps', 'describe_map', 'set_battle_map', 'clear_battle_map'];
+
+function mapToolFailedNudge(failedMapToolCall: { name: string; message: string } | null): string | null {
+  if (!failedMapToolCall) {
+    return null;
+  }
+  return `Has llamado a la tool de mapas "${failedMapToolCall.name}" y ha fallado de verdad, con este error: ` +
+      `"${failedMapToolCall.message}". NUNCA inventes una excusa técnica genérica (como "el sistema de mapas ` +
+      'tiene problemas momentáneos") ni, mucho menos, cambies de escena para narrar contenido inconexo con lo que ' +
+      'estaba pasando (eso confunde gravemente al jugador con una historia que no tiene nada que ver con la ' +
+      'partida real). Corrige el error de verdad en este mismo turno: revisa el mapId y los argumentos que ' +
+      'usaste (llama a get_battle_maps si necesitas encontrar uno válido) y vuelve a intentar la tool correcta -- ' +
+      'manteniéndote en la escena y la decisión que el jugador acaba de tomar, sin inventar ningún desvío.';
+}
+
 /** Tools que, si se llamó a alguna, indican que este turno SÍ tocó el sistema de combate real. */
 const COMBAT_MECHANIC_TOOLS = ['start_combat', 'resolve_attack', 'cast_spell', 'grant_xp', 'end_combat'];
 
@@ -595,6 +634,11 @@ export async function runDmTurn(
   const combatEnemyIds = new Set<string>();
   const attackedEnemyIds = new Set<string>();
   let failedStartCombatMessage: string | null = null;
+  // Igual que failedStartCombatMessage, pero para cualquier tool de mapas
+  // (MAP_TOOLS) que falle este turno -- ver mapToolFailedNudge más arriba.
+  // Solo se guarda el PRIMER fallo del turno (si varios fallan, el primero ya
+  // basta para forzar la corrección).
+  let failedMapToolCall: { name: string; message: string } | null = null;
   // mapId del último set_battle_map aplicado con éxito en este turno -- se usa
   // solo para saber si es "tablonAnuncios" (nunca lleva place_participant, ver
   // dm-system-prompt.ts) y así no disparar el aviso de "aplicaste el mapa
@@ -618,7 +662,35 @@ export async function runDmTurn(
   const initialMessageCount = messages.length;
 
   let iterations = 0;
+  // correctionAttempts cuenta intentos CONSECUTIVOS del MISMO aviso (mismo
+  // texto exacto) -- si el modelo no logra corregir el mismo problema tras
+  // MAX_CORRECTION_ATTEMPTS vueltas, se rinde con ESE problema. lastNudgeText
+  // guarda el texto del último aviso disparado para poder distinguir "sigue
+  // fallando en lo mismo" de "ahora falla en otra cosa distinta".
+  //
+  // Se detectó en partida real un fallo grave que el diseño anterior (un
+  // único contador global, sin memoria de CUÁL aviso se disparó) no cubría:
+  // el jugador eligió "tablón" y los dos intentos de corrección permitidos
+  // se gastaron en el MISMO aviso ("no has tocado ninguna tool de mapa" --
+  // protocolNudge). Al tercer turno del modelo, YA CON EL PRESUPUESTO
+  // AGOTADO, el modelo por fin llamó a una tool de mapas -- pero con las
+  // etiquetas equivocadas ("molino"), acabó aplicando un mapa de mazmorra
+  // real del catálogo que no tenía nada que ver con el tablón elegido, y
+  // como el contador global ya estaba en el límite, NINGÚN nuevo aviso (ni
+  // siquiera villageDestinationMismatchNudge, que sí lo habría detectado)
+  // llegó a evaluarse -- el turno se aceptó tal cual, con una escena
+  // completamente inconexa (un molino con un personaje inventado) mostrada
+  // al jugador. La causa raíz: gastar el presupuesto entero en UN tipo de
+  // problema no debería impedir corregir un problema DISTINTO y más grave
+  // que aparece después. Con lastNudgeText, un aviso con texto distinto al
+  // anterior reinicia su propio contador (le da su propio margen de
+  // MAX_CORRECTION_ATTEMPTS intentos), mientras que totalCorrections pone un
+  // techo absoluto para que el turno nunca pueda alargarse sin límite si el
+  // modelo encadena problemas distintos uno tras otro sin parar.
   let correctionAttempts = 0;
+  let totalCorrections = 0;
+  let lastNudgeText: string | null = null;
+  const MAX_TOTAL_CORRECTIONS = 4;
   let response = await completeOrThrow(chatClient, withSystem(), tools, calledTools);
 
   for (;;) {
@@ -664,6 +736,10 @@ export async function runDmTurn(
             failedStartCombatMessage = message;
           }
         }
+        if (failed && !failedMapToolCall && MAP_TOOLS.includes(call.function.name)) {
+          const message = (result as { message?: unknown } | null)?.message;
+          failedMapToolCall = { name: call.function.name, message: typeof message === 'string' ? message : 'error desconocido' };
+        }
 
         if (!failed) {
           if (call.function.name === 'set_battle_map' && typeof args['mapId'] === 'string') {
@@ -692,7 +768,7 @@ export async function runDmTurn(
       continue;
     }
 
-    if (correctionAttempts < MAX_CORRECTION_ATTEMPTS) {
+    if (totalCorrections < MAX_TOTAL_CORRECTIONS) {
       // Orden de prioridad: 1) gameStartNudge (señal 100% determinista: el
       // turno 1 se reconoce por messageCount === 1, y es el fallo más
       // temprano posible en cualquier partida -- si el arranque ya sale mal,
@@ -700,35 +776,40 @@ export async function runDmTurn(
       // 2) staleEncounterConflictNudge (señal 100% determinista: start_combat
       // rechazado por un combate huérfano ya activo -- el fallo más grave de
       // partida en curso, porque implica engañar al jugador con enemigos que
-      // no coinciden con lo narrado); 3) playerRequestedMapNudge (también
-      // determinista: el jugador pidió el mapa explícitamente y no se tocó
-      // ninguna tool -- muy grave porque el DM puede llegar a mentir diciendo
-      // que "ya se está mostrando"); 4) villageDestinationMismatchNudge
+      // no coinciden con lo narrado); 3) mapToolFailedNudge (también
+      // determinista: una tool de mapas se llamó de verdad y falló -- si no
+      // se corrige, el modelo tiende a inventar excusas y desviarse a
+      // contenido inconexo, como se vio en partida real); 4) playerRequestedMapNudge
+      // (también determinista: el jugador pidió el mapa explícitamente y no
+      // se tocó ninguna tool -- muy grave porque el DM puede llegar a mentir
+      // diciendo que "ya se está mostrando"); 5) villageDestinationMismatchNudge
       // (también determinista: se aplicó un mapa de arranque, pero es el
       // mapId equivocado para lo que el jugador pidió -- distinto de
       // protocolNudge, que solo comprueba que SE TOCÓ algún mapa, nunca cuál);
-      // 5) combate resuelto sin NINGUNA tool; 6) checkCombatStateNudge (un
+      // 6) combate resuelto sin NINGUNA tool; 7) checkCombatStateNudge (un
       // hecho verificable contra el HP real vía get_game_state);
-      // 7) protocolNudge (heurísticos de texto sobre mapas/colocación a
+      // 8) protocolNudge (heurísticos de texto sobre mapas/colocación a
       // partir de la NARRACIÓN del DM, el más leve de todos porque depende de
       // cómo el propio DM elija contarlo).
       const gameStart = gameStartNudge(initialMessageCount, response.message.content ?? '');
       const staleEncounterNudge = gameStart ? null : staleEncounterConflictNudge(failedStartCombatMessage);
-      const mapRequestNudge = (gameStart || staleEncounterNudge)
+      const mapFailedNudge = (gameStart || staleEncounterNudge) ? null : mapToolFailedNudge(failedMapToolCall);
+      const mapRequestNudge = (gameStart || staleEncounterNudge || mapFailedNudge)
           ? null
           : playerRequestedMapNudge(calledTools, lastPlayerMessageText(messages));
-      const destinationMismatchNudge = (gameStart || staleEncounterNudge || mapRequestNudge)
+      const destinationMismatchNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge)
           ? null
           : villageDestinationMismatchNudge(lastPlayerMessageText(messages), appliedMapId, initialMessageCount);
-      const noToolsNudge = (gameStart || staleEncounterNudge || mapRequestNudge || destinationMismatchNudge)
+      const noToolsNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge)
           ? null
           : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = (gameStart || staleEncounterNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
+      const combatStateNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
           gameStart ??
           staleEncounterNudge ??
+          mapFailedNudge ??
           mapRequestNudge ??
           destinationMismatchNudge ??
           noToolsNudge ??
@@ -737,9 +818,21 @@ export async function runDmTurn(
               calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '',
               initialMessageCount, appliedMapId, lastPlayerMessageText(messages),
           );
-      if (nudge) {
+      // Si el aviso es idéntico al último ya disparado, es el MISMO problema
+      // sin resolver -- cuenta contra su propio límite (MAX_CORRECTION_ATTEMPTS).
+      // Si es distinto (incluido el caso de que antes no hubiera ninguno),
+      // es un problema nuevo: reinicia el contador para darle su propio margen.
+      if (nudge && nudge !== lastNudgeText) {
+        correctionAttempts = 0;
+      }
+      if (nudge && correctionAttempts < MAX_CORRECTION_ATTEMPTS) {
         correctionAttempts += 1;
-        console.log(`[dm-engine] Aviso correctivo de protocolo (intento ${correctionAttempts}/${MAX_CORRECTION_ATTEMPTS}): ${nudge}`);
+        totalCorrections += 1;
+        lastNudgeText = nudge;
+        console.log(
+            `[dm-engine] Aviso correctivo de protocolo (intento ${correctionAttempts}/${MAX_CORRECTION_ATTEMPTS} ` +
+            `de este problema, ${totalCorrections}/${MAX_TOTAL_CORRECTIONS} en total del turno): ${nudge}`,
+        );
         messages.push(response.message);
         // OJO: este aviso iba antes con role:'user' -- eso hace que el
         // modelo lo lea como si el JUGADOR hubiera escrito ese texto tan
