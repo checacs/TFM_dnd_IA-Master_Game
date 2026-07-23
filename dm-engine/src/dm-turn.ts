@@ -268,9 +268,20 @@ async function resolveVillageStartFallback(
     }
   }
 
+  // El texto del tablón LISTA contratos concretos a propósito (ligados a
+  // mapas reales del catálogo: pantano-rey, molino-piso1/2/3, sotanoTaberna)
+  // -- la primera versión solo decía "varios pergaminos... ¿cuál os
+  // interesa?" sin enumerar ninguno, y en partida real el siguiente turno
+  // del modelo, sin ninguna lista establecida en el historial, respondió
+  // suplantando al jugador ("San: Me interesa lo del pantano...") en vez de
+  // describir los trabajos. Con la lista ya establecida aquí, el modelo
+  // tiene material concreto sobre el que continuar como DM.
   return expectedMapId === 'tablonAnuncios'
-      ? 'Os acercáis al tablón de anuncios. Varios pergaminos cuelgan clavados, cada uno con un encargo ' +
-          'distinto del gremio de mercenarios. ¿Qué contrato os interesa?'
+      ? 'Os acercáis al tablón de anuncios. Entre los pergaminos clavados destacan tres contratos del gremio: ' +
+          '**"La bestia del pantano"** (un monstruo acecha en las ciénagas del este y el gremio paga bien por su ' +
+          'cabeza), **"El molino silencioso"** (el viejo molino de las afueras lleva días parado y nadie sabe ' +
+          'nada de sus molineros), y **"Ruidos en el sótano"** (el tabernero jura que algo se mueve de noche ' +
+          'bajo su taberna). ¿Cuál de los tres contratos os interesa?'
       : 'Entráis en la taberna. El calor del fuego y el bullicio de las conversaciones os envuelven nada más ' +
           'cruzar la puerta. ¿Qué hacéis?';
 }
@@ -308,6 +319,54 @@ const ENEMY_DEFEAT_CUES = [
 
 function narrativeSuggestsEnemyDefeated(text: string): boolean {
   return ENEMY_DEFEAT_CUES.some((p) => p.test(text));
+}
+
+/**
+ * Se detectó en partida real un fallo nuevo y distinto de todos los
+ * anteriores: el jugador (San) preguntó "Dime qué trabajos hay" delante del
+ * tablón de anuncios, y el DM respondió literalmente "San: Me interesa lo
+ * del pantano, cazar al monstruo" -- es decir, respondió HACIÉNDOSE PASAR
+ * por el personaje del jugador y tomando la decisión por él, en vez de
+ * responder como DM describiendo los trabajos. Causa probable: los mensajes
+ * de los jugadores llegan al modelo con el prefijo "**Nombre:** texto" (ver
+ * SendPlayerActionUseCase), y el modelo a veces imita ese patrón y continúa
+ * el diálogo con la voz del jugador en vez de con la suya de narrador.
+ * gameStartNudge solo cubre la primera persona en el turno 1; este chequeo
+ * cubre CUALQUIER turno, y es determinista: extrae los nombres reales de los
+ * jugadores de los prefijos "**Nombre:**" del historial y comprueba si la
+ * respuesta del DM empieza suplantando a alguno de ellos.
+ */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function playerNamesFromHistory(messages: ChatMessage[]): string[] {
+  const names = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== 'user' || typeof message.content !== 'string') {
+      continue;
+    }
+    const match = message.content.match(/^\*\*([^*:]{1,40}):\*\*/);
+    if (match) {
+      names.add(match[1].trim());
+    }
+  }
+  return [...names];
+}
+
+function playerImpersonationNudge(messages: ChatMessage[], narrativeText: string): string | null {
+  for (const name of playerNamesFromHistory(messages)) {
+    const impersonation = new RegExp(`^\\s*(\\*\\*)?${escapeRegExp(name)}(\\*\\*)?\\s*:`, 'i');
+    if (impersonation.test(narrativeText)) {
+      return `Tu respuesta empieza hablando en nombre del personaje jugador "${name}" (como si tú fueras él y ` +
+          'estuvieras decidiendo o hablando por él). Eso NUNCA está permitido: los personajes jugadores solo ' +
+          'hablan a través de los mensajes reales de sus jugadores, y las decisiones son siempre suyas. ' +
+          'Reescribe tu respuesta como DM: responde a lo que el jugador te ha preguntado (por ejemplo, si pide ' +
+          'ver los trabajos del tablón, descríbele los contratos disponibles uno a uno), narra en segunda/tercera ' +
+          'persona dirigiéndote al grupo, y termina preguntándoles qué deciden hacer -- sin decidir tú por ellos.';
+    }
+  }
+  return null;
 }
 
 /**
@@ -501,7 +560,9 @@ function playerRequestedMapNudge(calledTools: Set<string>, lastPlayerMessage: st
  * Esta función detecta ese hueco entre lo que se llamó y lo que el protocolo
  * exige, para dar al modelo un empujón correctivo antes de aceptar su respuesta.
  */
-function protocolNudge(
+async function protocolNudge(
+    toolCaller: ToolCaller,
+    gameId: string,
     calledTools: Set<string>,
     events: GameEvent[],
     combatEnemyIds: Set<string>,
@@ -510,7 +571,7 @@ function protocolNudge(
     messageCount: number,
     appliedMapId: string | null,
     lastPlayerMessage: string,
-): string | null {
+): Promise<string | null> {
   // Se comprobó en partida real que el DM narraba salir de una localización
   // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
   // ni siquiera get_battle_maps/describe_map, así que el aviso de "aún no has
@@ -535,6 +596,24 @@ function protocolNudge(
       (cue) => cue.test(narrativeText) || cue.test(lastPlayerMessage),
   );
   if (!touchedMapSystem && messageCount > 1 && messageCount <= VILLAGE_START_MAX_MESSAGES && mentionsDestination) {
+    // Si YA se aplicó algún mapa en un turno anterior de esta partida
+    // (mapHistory no vacío en el estado real), la elección de arranque ya
+    // quedó resuelta: mencionar "el tablón"/"la taberna" en la conversación
+    // posterior (ej. el DM describiendo los contratos del tablón donde el
+    // grupo YA está) es normal y no debe forzar ninguna corrección. Se
+    // detectó como falso positivo real: tras aplicarse el mapa del tablón,
+    // cada turno de conversación que mencionaba "el tablón" quemaba intentos
+    // de corrección pidiendo aplicar un mapa que ya estaba aplicado.
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      const mapHistory = (state as { mapHistory?: unknown[] } | null)?.mapHistory ?? [];
+      if (Array.isArray(mapHistory) && mapHistory.length > 0) {
+        return null;
+      }
+    } catch {
+      // Si no se puede comprobar el estado real, se mantiene el aviso como
+      // hasta ahora (mejor un aviso de más que un mapa sin aplicar).
+    }
     return 'Tu narración (o el mensaje del jugador) menciona la taberna o el tablón de anuncios (la elección de ' +
         'arranque de la partida), pero no has llamado a ninguna tool de mapa en este turno. Sigue el paso 2 del ' +
         'arranque: llama a describe_map con el mapId correspondiente ("tabernaMercenarios" o "tablonAnuncios"), ' +
@@ -902,32 +981,44 @@ export async function runDmTurn(
       // partir de la NARRACIÓN del DM, el más leve de todos porque depende de
       // cómo el propio DM elija contarlo).
       const gameStart = gameStartNudge(initialMessageCount, response.message.content ?? '');
-      const staleEncounterNudge = gameStart ? null : staleEncounterConflictNudge(failedStartCombatMessage);
-      const mapFailedNudge = (gameStart || staleEncounterNudge) ? null : mapToolFailedNudge(failedMapToolCall);
-      const mapRequestNudge = (gameStart || staleEncounterNudge || mapFailedNudge)
+      // Suplantación de jugador: determinista (el nombre real del jugador,
+      // extraído de los prefijos "**Nombre:**" del historial, encabezando la
+      // respuesta del DM) y aplicable en CUALQUIER turno -- va justo después
+      // de gameStartNudge porque ambos son fallos de voz del narrador.
+      const impersonationNudge = gameStart
+          ? null
+          : playerImpersonationNudge(messages, response.message.content ?? '');
+      const staleEncounterNudge = (gameStart || impersonationNudge)
+          ? null
+          : staleEncounterConflictNudge(failedStartCombatMessage);
+      const mapFailedNudge = (gameStart || impersonationNudge || staleEncounterNudge)
+          ? null
+          : mapToolFailedNudge(failedMapToolCall);
+      const mapRequestNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge)
           ? null
           : playerRequestedMapNudge(calledTools, lastPlayerMessageText(messages));
-      const destinationMismatchNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge)
+      const destinationMismatchNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge || mapRequestNudge)
           ? null
           : villageDestinationMismatchNudge(lastPlayerMessageText(messages), appliedMapId, initialMessageCount);
-      const noToolsNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge)
+      const noToolsNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge)
           ? null
           : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
-      const combatStateNudge = (gameStart || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
+      const combatStateNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
       const nudge =
           gameStart ??
+          impersonationNudge ??
           staleEncounterNudge ??
           mapFailedNudge ??
           mapRequestNudge ??
           destinationMismatchNudge ??
           noToolsNudge ??
           combatStateNudge ??
-          protocolNudge(
-              calledTools, events, combatEnemyIds, placedParticipantIds, response.message.content ?? '',
-              initialMessageCount, appliedMapId, lastPlayerMessageText(messages),
-          );
+          (await protocolNudge(
+              toolCaller, gameId, calledTools, events, combatEnemyIds, placedParticipantIds,
+              response.message.content ?? '', initialMessageCount, appliedMapId, lastPlayerMessageText(messages),
+          ));
       // Si el aviso es idéntico al último ya disparado, es el MISMO problema
       // sin resolver -- cuenta contra su propio límite (MAX_CORRECTION_ATTEMPTS).
       // Si es distinto (incluido el caso de que antes no hubiera ninguno),
