@@ -220,13 +220,25 @@ describe('SendMessageUseCase', () => {
 
     // Si el use case retiene el candado durante sendTurn, esta promesa no se
     // resuelve nunca (deadlock) -- el guard de 3s la convierte en fallo visible.
-    const guard = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('DEADLOCK: la tool MCP no pudo coger el candado durante el turno')), 3_000),
-    );
-    await Promise.race([
-      useCase.execute({ gameId: game.id, messages: [{ role: 'user', content: 'Miro alrededor' }] }),
-      guard,
-    ]);
+    // El timer se limpia SIEMPRE al terminar la carrera: sin el clearTimeout,
+    // el setTimeout de 3s quedaba vivo tras acabar el test (el camino feliz
+    // termina en milisegundos) y jest avisaba de "worker process has failed
+    // to exit gracefully" por el handle abierto.
+    let guardTimer: NodeJS.Timeout | undefined;
+    const guard = new Promise<never>((_, reject) => {
+      guardTimer = setTimeout(
+        () => reject(new Error('DEADLOCK: la tool MCP no pudo coger el candado durante el turno')),
+        3_000,
+      );
+    });
+    try {
+      await Promise.race([
+        useCase.execute({ gameId: game.id, messages: [{ role: 'user', content: 'Miro alrededor' }] }),
+        guard,
+      ]);
+    } finally {
+      clearTimeout(guardTimer);
+    }
 
     const saved = await games.findById(game.id);
     expect(saved!.toSnapshot().board).toEqual(
