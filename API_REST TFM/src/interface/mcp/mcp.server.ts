@@ -83,14 +83,17 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
 
   server.tool(
     'get_battle_maps',
-    'Busca mapas de combate del catálogo por etiquetas derivadas del sitio real que estás narrando ' +
-      '(interior/exterior, taberna, cueva, castillo, bosque, cabaña, almacén, cripta, mazmorra...), NUNCA ' +
-      'una lista fija de ejemplo: piensa en la escena concreta de TU historia, no repitas siempre las ' +
-      'mismas etiquetas de partida en partida. El resultado ya viene priorizado por relevancia y con el ' +
-      'orden variado a propósito -- no asumas que el primero de la lista es siempre la mejor opción, y ' +
-      'consulta get_game_state.mapHistory para evitar el mapId que ya hayas usado en esta partida si hay ' +
-      'alternativas razonables. Úsalo para elegir un mapId coherente con la escena antes de llamar a ' +
-      'start_combat/set_battle_map.',
+    'Busca mapas de combate del catálogo por etiquetas (interior/exterior, taberna, cueva, castillo, ' +
+      'bosque, cabaña, almacén, cripta, mazmorra, pantano, molino, sotano...). REGLA DE ORO: consulta el ' +
+      'catálogo ANTES de inventar la siguiente localización de tu historia, y construye la narración ' +
+      'alrededor de un mapa REAL de los devueltos (su nombre, su descripción, sus salas) -- nunca al ' +
+      'revés. Si ninguna etiqueta coincide, esta tool devuelve el catálogo COMPLETO: elige el mapa que ' +
+      'mejor encaje y ADAPTA tu historia a ese mapa (renombra el sitio, reubica la escena), en vez de ' +
+      'mantener un escenario imaginado que no existe en el catálogo. El resultado ya viene priorizado ' +
+      'por relevancia y con el orden variado a propósito -- no asumas que el primero es siempre la mejor ' +
+      'opción, y consulta get_game_state.mapHistory para evitar repetir el mapId que ya hayas usado en ' +
+      'esta partida si hay alternativas razonables. Úsalo para elegir un mapId coherente antes de llamar ' +
+      'a start_combat/set_battle_map.',
     { tags: z.array(z.string()).optional() },
     async ({ tags }) => ({
       content: [{ type: 'text', text: JSON.stringify(await tools.searchMapsTool({ tags })) }],

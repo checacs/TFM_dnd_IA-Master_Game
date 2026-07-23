@@ -30,11 +30,27 @@ export class SearchMapsUseCase {
   ) {}
 
   async execute(criteria: MapSearchCriteria): Promise<MapSearchResult[]> {
-    const found = await this.maps.search(criteria);
-    const shuffled = this.shuffler.shuffle(found);
+    let found = await this.maps.search(criteria);
     const tags = criteria.tags ?? [];
+
+    // NUNCA devolver una lista vacía si el catálogo tiene mapas: se comprobó
+    // en partida real que la IA inventaba una localización ("Juncos
+    // susurrantes") ANTES de mirar el catálogo, buscaba etiquetas que no
+    // existen en ningún mapa ('juncos'), recibía [] y la escena se quedaba
+    // sin mapa en el tablero. Devolver el catálogo completo (barajado)
+    // fuerza el flujo "mapa primero, historia después": la IA siempre tiene
+    // mapas REALES entre los que elegir y adapta su narración al que escoja,
+    // en vez de quedarse sin opciones por haber imaginado un sitio que no
+    // está mapeado.
+    let usedFallback = false;
+    if (found.length === 0 && tags.length > 0) {
+      found = await this.maps.search({});
+      usedFallback = true;
+    }
+
+    const shuffled = this.shuffler.shuffle(found);
     const ordered =
-      tags.length === 0
+      tags.length === 0 || usedFallback
         ? shuffled
         : [...shuffled].sort((a, b) => this.matchCount(b, tags) - this.matchCount(a, tags));
 

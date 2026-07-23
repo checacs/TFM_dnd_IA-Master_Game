@@ -111,6 +111,24 @@ describe('SearchMapsUseCase', () => {
       expect(results.map((r) => r.name)).toEqual(['Bosque B', 'Bosque A']);
     });
 
+    it('si NINGUN mapa coincide con las etiquetas, devuelve el catalogo completo (barajado) en vez de una lista vacia', async () => {
+      // Bug real de producción: la IA inventó una localización ("Juncos
+      // susurrantes") ANTES de mirar el catálogo, buscó tags ['juncos'] que
+      // no existen en ningún mapa, recibió [], y la escena se quedó sin mapa
+      // en el tablero. Devolver el catálogo completo obliga al flujo "mapa
+      // primero, historia después": la IA siempre recibe mapas REALES entre
+      // los que elegir, y adapta la narración al que escoja.
+      const repo = new FakeMapRepository([buildTaberna(), buildBosque()]);
+      const useCase = new SearchMapsUseCase(repo, new ReverseShuffler());
+
+      const results = await useCase.execute({ tags: ['juncos'] });
+
+      expect(results).toHaveLength(2);
+      // El fallback también pasa por el Shuffler (ReverseShuffler invierte),
+      // para no ofrecer siempre el catálogo en el mismo orden.
+      expect(results.map((r) => r.name)).toEqual(['Claro del bosque', 'Taberna del jabalí']);
+    });
+
     it('tambien desordena cuando no se piden etiquetas', async () => {
       const a = buildMap('Mapa A', []);
       const b = buildMap('Mapa B', []);
