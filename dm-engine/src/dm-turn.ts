@@ -571,6 +571,7 @@ async function protocolNudge(
     messageCount: number,
     appliedMapId: string | null,
     lastPlayerMessage: string,
+    resolvedPlayerAttack: boolean,
 ): Promise<string | null> {
   // Se comprobó en partida real que el DM narraba salir de una localización
   // (taberna) y entrar en otra (cripta) SIN LLAMAR A NINGUNA tool de mapa --
@@ -669,17 +670,69 @@ async function protocolNudge(
         `place_participant para cada uno de estos instanceId antes de narrar: ${missingEnemyPlacements.join(', ')}.`;
   }
 
-  // Igual que con la colocación de enemigos: se comprobó que el DM resolvía
-  // los ataques de la fase de enemigos (resolve_attack) pero se olvidaba de
-  // reabrir la ronda de jugadores — el móvil se quedaba sin poder reclamar
-  // turno hasta el siguiente mensaje. Solo se dispara si YA resolvió al
-  // menos un ataque en este turno (si no hubo fase de enemigos que resolver,
-  // no tiene sentido pedirle que la cierre).
+  // Chequeos de ROTACIÓN DE TURNOS -- ambos consultan el estado real de la
+  // partida (una única llamada a get_game_state compartida) porque dependen
+  // de la fase real de la ronda, no solo de qué tools se llamaron este turno:
+  //
+  // (a) end_player_turn olvidado: si este turno se resolvió el ataque de un
+  //     JUGADOR (resolve_attack con playerD20 -- la señal inequívoca de que
+  //     su acción de combate quedó resuelta) y no se llamó a end_player_turn,
+  //     ese jugador conserva su turno reclamado para siempre: nunca pasa a
+  //     actedThisRound, puede seguir actuando sin límite en la misma ronda, y
+  //     la fase nunca avanza a 'enemigos' -- rompe la estructura de "un turno
+  //     por jugador por ronda" que define el juego.
+  //
+  // (b) advance_to_player_round con la fase de enemigos abierta: el chequeo
+  //     anterior se disparaba con CUALQUIER ataque resuelto sin advance --
+  //     incluido el ataque de un jugador en plena fase de jugadores (con
+  //     otros jugadores aún pendientes de actuar). Si el modelo obedecía,
+  //     reopenPlayerRound() reseteaba actedThisRound A MITAD de ronda y los
+  //     que ya habían actuado podían volver a actuar -- un falso positivo
+  //     que rompía la ronda. Ahora solo se dispara si la fase REAL es
+  //     'enemigos' (get_game_state), que es cuando de verdad hay una fase de
+  //     enemigos pendiente de resolver y cerrar.
   const resolvedAnyAttack = events.some((e) => e.type === 'ataque_resuelto');
   const advancedRound = calledTools.has('advance_to_player_round');
-  if (resolvedAnyAttack && !advancedRound) {
-    return 'Has resuelto ataques de enemigos pero no has llamado a advance_to_player_round. ' +
-        'Llámala ahora para reabrir la ronda de jugadores antes de terminar tu narración.';
+  const endedPlayerTurn = calledTools.has('end_player_turn');
+  const needsTurnChecks =
+      (resolvedPlayerAttack && !endedPlayerTurn) || (resolvedAnyAttack && !advancedRound);
+  if (needsTurnChecks) {
+    type StatePlayer = { characterId?: unknown; name?: unknown };
+    type StateEncounter = { roundPhase?: unknown; turnClaims?: unknown[] };
+    let encounter: StateEncounter | null = null;
+    let players: StatePlayer[] = [];
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      encounter = (state as { activeEncounter?: StateEncounter } | null)?.activeEncounter ?? null;
+      players = (state as { players?: StatePlayer[] } | null)?.players ?? [];
+    } catch {
+      // Sin estado real no se puede validar ninguna de las dos condiciones
+      // con seguridad -- mejor no forzar correcciones a ciegas (el falso
+      // positivo de (b) era más dañino que el aviso que se pierde).
+      return null;
+    }
+
+    const claims = (encounter?.turnClaims ?? []).filter((c): c is string => typeof c === 'string');
+    if (resolvedPlayerAttack && !endedPlayerTurn && claims.length > 0) {
+      const claimList = claims
+          .map((id) => {
+            const player = players.find((p) => p.characterId === id);
+            return player && typeof player.name === 'string' ? `${id} (${player.name})` : id;
+          })
+          .join(', ');
+      return 'Has resuelto el ataque de un JUGADOR (resolve_attack con playerD20) pero no has llamado a ' +
+          'end_player_turn -- sin esa llamada, su turno de esta ronda nunca se consume: conserva el turno ' +
+          'reclamado, puede actuar sin límite y la ronda no avanza jamás a la fase de enemigos. Llama ahora a ' +
+          `end_player_turn con el characterId del jugador cuya acción acabas de resolver (turnos reclamados ahora ` +
+          `mismo: ${claimList} -- identifica en el chat quién acaba de tirar los dados).`;
+    }
+
+    if (resolvedAnyAttack && !advancedRound && encounter?.roundPhase === 'enemigos') {
+      return 'La fase de ENEMIGOS de esta ronda está abierta (todos los jugadores ya han actuado). Resuelve ' +
+          'los ataques de los enemigos que falten con resolve_attack (cada enemigo vivo actúa una vez) y llama ' +
+          'DESPUÉS a advance_to_player_round para reabrir la ronda de jugadores -- sin esa llamada, ningún ' +
+          'jugador puede volver a reclamar turno y el combate se queda congelado.';
+    }
   }
 
   return null;
@@ -828,6 +881,9 @@ export async function runDmTurn(
   // Solo se guarda el PRIMER fallo del turno (si varios fallan, el primero ya
   // basta para forzar la corrección).
   let failedMapToolCall: { name: string; message: string } | null = null;
+  // true si este turno se resolvió el ataque de un JUGADOR (resolve_attack
+  // con playerD20) -- ver el chequeo de end_player_turn en protocolNudge.
+  let resolvedPlayerAttack = false;
   // mapId del último set_battle_map aplicado con éxito en este turno -- se usa
   // solo para saber si es "tablonAnuncios" (nunca lleva place_participant, ver
   // dm-system-prompt.ts) y así no disparar el aviso de "aplicaste el mapa
@@ -940,6 +996,12 @@ export async function runDmTurn(
           if (call.function.name === 'resolve_attack' && typeof args['targetId'] === 'string') {
             attackedEnemyIds.add(args['targetId'] as string);
           }
+          if (call.function.name === 'resolve_attack' && args['playerD20'] !== undefined && args['playerD20'] !== null) {
+            // Señal inequívoca de que la acción de combate de un JUGADOR quedó
+            // resuelta este turno -- usada por el chequeo de end_player_turn
+            // en protocolNudge (ver comentario allí).
+            resolvedPlayerAttack = true;
+          }
           if (call.function.name === 'start_combat') {
             const enemies = (result as { enemies?: Array<{ instanceId?: unknown }> } | null)?.enemies ?? [];
             for (const enemy of enemies) {
@@ -1018,6 +1080,7 @@ export async function runDmTurn(
           (await protocolNudge(
               toolCaller, gameId, calledTools, events, combatEnemyIds, placedParticipantIds,
               response.message.content ?? '', initialMessageCount, appliedMapId, lastPlayerMessageText(messages),
+              resolvedPlayerAttack,
           ));
       // Si el aviso es idéntico al último ya disparado, es el MISMO problema
       // sin resolver -- cuenta contra su propio límite (MAX_CORRECTION_ATTEMPTS).
@@ -1077,10 +1140,53 @@ export async function runDmTurn(
     );
   }
 
+  // Segundo seguro determinista de última instancia, este para los TURNOS DE
+  // COMBATE: si el turno termina con la fase de enemigos abierta
+  // (roundPhase === 'enemigos' en el estado real) y el modelo no llamó a
+  // advance_to_player_round pese a los avisos, la partida queda CONGELADA
+  // PARA SIEMPRE: en esa fase ningún jugador tiene el turno reclamado, así
+  // que nadie puede escribir ni tirar dados (SendPlayerActionUseCase /
+  // PlayerRollUseCase lo exigen), ningún mensaje nuevo puede disparar otro
+  // turno del DM, y no existe ningún otro camino que reabra la ronda. Antes
+  // de aceptar el turno se comprueba el estado real y, si hace falta, se
+  // fuerza advance_to_player_round por código. La fase de enemigos queda sin
+  // resolver del todo (sus ataques no tirados no se tiran), pero un combate
+  // ligeramente más fácil es infinitamente mejor que una partida muerta.
+  // Solo se comprueba si este turno tocó tools de combate: la fase solo puede
+  // quedar en 'enemigos' por un end_player_turn del propio turno (el flip
+  // ocurre dentro de releaseTurnAfterAction) o por un start_combat/combate ya
+  // en marcha manipulado este turno -- si no se tocó nada de combate, no hay
+  // nada que comprobar y nos ahorramos la llamada extra a get_game_state.
+  const touchedCombatSystem =
+      calledTools.has('start_combat') || calledTools.has('resolve_attack') ||
+      calledTools.has('cast_spell') || calledTools.has('end_player_turn') ||
+      calledTools.has('advance_to_player_round') || calledTools.has('end_combat');
+  let stuckPhaseSuffix = '';
+  if (touchedCombatSystem) {
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      const phase = (state as { activeEncounter?: { roundPhase?: unknown } } | null)?.activeEncounter?.roundPhase;
+      if (phase === 'enemigos') {
+        await toolCaller.callTool('advance_to_player_round', { gameId });
+        events.push({ type: 'ronda_reabierta', payload: {} });
+        stuckPhaseSuffix = '\n\nLos enemigos completan sus maniobras y la iniciativa vuelve a vosotros. ¡Os toca!';
+        console.log(
+            '[dm-engine] Seguro anti-atasco de combate activado: el turno terminaba con la fase de enemigos ' +
+            'abierta (nadie habría podido volver a actuar) -- advance_to_player_round forzado por código.',
+        );
+      }
+    } catch (error) {
+      console.error(
+          '[dm-engine] Seguro anti-atasco de combate: no se pudo comprobar/reabrir la ronda -- ' +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+
   console.log(
       `[dm-engine] Turno terminado. Tools llamadas: [${[...calledTools].join(', ') || 'ninguna'}] — ` +
       `Eventos: [${events.map((e) => e.type).join(', ') || 'ninguno'}]`,
   );
 
-  return { narrative: fallbackNarrative ?? response.message.content ?? '', events };
+  return { narrative: (fallbackNarrative ?? response.message.content ?? '') + stuckPhaseSuffix, events };
 }
