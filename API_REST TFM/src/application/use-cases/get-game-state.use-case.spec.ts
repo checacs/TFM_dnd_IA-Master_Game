@@ -28,7 +28,11 @@ describe('GetGameStateUseCase', () => {
     const state = await useCase.execute({ gameId: game.id });
 
     expect(state.name).toBe('La torre olvidada');
-    expect(state.board).toEqual({ rows: 8, cols: 8, imageUrl: null, combatPoint: null, zones: [] });
+    // El tablero empieza con la imagen del pueblo (Piedrablanca) por defecto,
+    // no en blanco -- ver game.entity.spec.ts, describe('board').
+    expect(state.board).toEqual({
+      rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png', combatPoint: null, zones: [],
+    });
     expect(state.players).toHaveLength(1);
     expect(state.players[0].class).toBe('mago'); // la UI necesita la clase para pintar la partida
     expect(state.activeEncounter).toBeNull();

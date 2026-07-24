@@ -110,6 +110,18 @@ export type CreateGameInput = Pick<GameProps, 'name' | 'hostUserId' | 'maxPlayer
 
 const DEFAULT_BOARD_SIZE = 8;
 
+/**
+ * Imagen del pueblo (Piedrablanca) que se muestra por defecto desde que se
+ * crea la partida, hasta que el DM aplique el mapa real (tabernaMercenarios
+ * o tablonAnuncios) tras la elección del jugador en el arranque -- antes el
+ * tablero se quedaba completamente en blanco (imageUrl: null) durante ese
+ * primer turno, sin ninguna imagen que acompañara la escena inicial. Debe
+ * mantenerse en sync manualmente con la entrada mapId "pueblo" en
+ * scripts/seed-maps.ts (rows/cols elegidos allí para que coincidan con el
+ * ratio real de esa imagen y BoardPanel.tsx no añada letterboxing).
+ */
+const INITIAL_VILLAGE_BOARD = { rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png' } as const;
+
 const MIN_PLAYERS_TO_LAUNCH = 1;
 
 /**
@@ -164,13 +176,26 @@ export class Game {
       narrativeLog: [],
       captainUserId: null,
       mapHistory: [],
-      board: {
-        rows: input.board?.rows ?? DEFAULT_BOARD_SIZE,
-        cols: input.board?.cols ?? DEFAULT_BOARD_SIZE,
-        imageUrl: null,
-        combatPoint: null,
-        zones: [],
-      },
+      // Sin board explícito (el camino real de producción -- CreateGameUseCase
+      // nunca lo pasa, solo lo usan algunos tests para un tablero plano de
+      // tamaño concreto), se arranca con la imagen del pueblo en vez de un
+      // tablero en blanco. Si SÍ se pide un board custom, se respeta tal cual
+      // (sin la imagen del pueblo) -- ver INITIAL_VILLAGE_BOARD más arriba.
+      board: input.board
+        ? {
+          rows: input.board.rows ?? DEFAULT_BOARD_SIZE,
+          cols: input.board.cols ?? DEFAULT_BOARD_SIZE,
+          imageUrl: null,
+          combatPoint: null,
+          zones: [],
+        }
+        : {
+          rows: INITIAL_VILLAGE_BOARD.rows,
+          cols: INITIAL_VILLAGE_BOARD.cols,
+          imageUrl: INITIAL_VILLAGE_BOARD.imageUrl,
+          combatPoint: null,
+          zones: [],
+        },
     });
   }
 

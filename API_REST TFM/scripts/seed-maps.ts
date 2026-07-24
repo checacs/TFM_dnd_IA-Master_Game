@@ -14,6 +14,23 @@ import { mapMongooseSchema } from '../src/infrastructure/persistence/mongoose/sc
  */
 const maps = [
   {
+    _id: 'pueblo',
+    name: 'Pueblo Piedrablanca',
+    description: 'Vista general de Piedrablanca, la villa donde arranca la partida, con la taberna y el ' +
+        'tablón de anuncios de la plaza a la vista. Se muestra por defecto desde que se crea la partida, hasta ' +
+        'que el grupo elige taberna o tablón de anuncios y se aplica el mapa correspondiente.',
+    tags: ['pueblo', 'exterior', 'calle', 'arranque'],
+    // Imagen real 847x1264 (ratio ancho/alto 0.6701) -- rows/cols elegidos para
+    // que cols/rows se aproxime a ese ratio (20/30 = 0.6667, error < 0.6%) y
+    // BoardPanel.tsx no añada letterboxing. Igual que tablonAnuncios, es una
+    // ilustración de establecimiento sin salas que catalogar (no se coloca a
+    // nadie aquí con place_participant), así que zones queda vacío a propósito.
+    rows: 30,
+    cols: 20,
+    imageUrl: '/maps/battleMap0-pueblo.png',
+    zones: [],
+  },
+  {
     _id: 'tablonAnuncios',
     name: 'Tablon Anuncios',
     description: 'Tablon de anuncios del pueblo sobre trabajos remunerados o dar ayuda a gente necesitada.',

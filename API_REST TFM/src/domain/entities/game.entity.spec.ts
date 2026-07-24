@@ -190,12 +190,19 @@ describe('Game', () => {
   });
 
   describe('board', () => {
-    it('empieza con un tablero 8x8 por defecto y sin punto de combate', () => {
-      const game = buildGame();
-      expect(game.toSnapshot().board).toEqual({ rows: 8, cols: 8, imageUrl: null, combatPoint: null, zones: [] });
-    });
+    it(
+        'empieza con la imagen del pueblo (Piedrablanca) por defecto y sin punto de combate -- se muestra ' +
+        'desde el primer turno hasta que el jugador elige taberna o tablón de anuncios (ver mapId "pueblo" en ' +
+        'seed-maps.ts)',
+        () => {
+          const game = buildGame();
+          expect(game.toSnapshot().board).toEqual({
+            rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png', combatPoint: null, zones: [],
+          });
+        },
+    );
 
-    it('permite fijar un tamaño de tablero distinto al crear la partida', () => {
+    it('permite fijar un tamaño de tablero distinto al crear la partida (sin la imagen del pueblo)', () => {
       const game = buildGame({ board: { rows: 6, cols: 6 } });
       expect(game.toSnapshot().board).toEqual({ rows: 6, cols: 6, imageUrl: null, combatPoint: null, zones: [] });
     });

@@ -310,7 +310,7 @@ async function resolveVillageStartFallback(
 
 /** mapIds que son sitios fijos del pueblo (arranque), nunca aventuras a ofrecer como contrato. */
 const VILLAGE_FIXTURE_MAP_IDS = new Set([
-  'tablonAnuncios', 'tabernaMercenarios', 'tavernaMercenarios', 'sotanoTaberna',
+  'pueblo', 'tablonAnuncios', 'tabernaMercenarios', 'tavernaMercenarios', 'sotanoTaberna',
 ]);
 
 /**
@@ -810,11 +810,14 @@ async function protocolNudge(
         '(gameId y mapId) y coloca a los participantes con place_participant; si ninguno encaja, llama a ' +
         'clear_battle_map para no dejar en pantalla el mapa de la escena anterior.';
   }
-  // tablonAnuncios es una excepción a propósito: es solo una ilustración de
-  // calle sin marcadores de personajes (ver dm-system-prompt.ts), así que
-  // nunca lleva place_participant -- sin esta excepción, este aviso obligaría
-  // al DM a colocar jugadores donde la UI ni siquiera los va a pintar.
-  if (mapApplied && !placedParticipant && appliedMapId !== 'tablonAnuncios') {
+  // tablonAnuncios y pueblo son excepciones a propósito: son solo
+  // ilustraciones de calle sin marcadores de personajes (ver
+  // dm-system-prompt.ts), así que nunca llevan place_participant -- sin esta
+  // excepción, este aviso obligaría al DM a colocar jugadores donde la UI ni
+  // siquiera los va a pintar (ambos mapas se catalogan con zones: [] en
+  // seed-maps.ts precisamente por esto).
+  const MAP_IDS_WITHOUT_PARTICIPANTS = new Set(['tablonAnuncios', 'pueblo']);
+  if (mapApplied && !placedParticipant && !MAP_IDS_WITHOUT_PARTICIPANTS.has(appliedMapId ?? '')) {
     return 'Has aplicado un mapa con set_battle_map pero no has colocado a ningún participante. Llama a ' +
         'place_participant para cada jugador (y enemigo si hay combate) antes de narrar.';
   }
