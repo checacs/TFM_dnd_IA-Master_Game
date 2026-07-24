@@ -295,9 +295,9 @@ const maps = [
   },
   {
     _id: 'casa-escondite-piso1',
-    name: 'Casa ocupada (planta superior)',
+    name: 'Casa ocupada (planta baja)',
     description: 'Planta superior de la casa escondite de un enemigo vil y poderoso, conectada a la planta ' +
-        'baja (mapId casa-escondite-piso2) por una escalera de caracol: un dormitorio con arcón y estantería, ' +
+        'superior (mapId casa-escondite-piso2) por una escalera de caracol: un dormitorio con arcón y estantería, ' +
         'una cocina-despensa con alacena y mesa, la escalera de caracol que baja, una bodega con barriles y ' +
         'cajas, y la entrada de la casa.',
     tags: ['interior', 'casa', 'habitaciones', 'multisala', 'piso1', 'escaleras'],
@@ -323,9 +323,9 @@ const maps = [
   },
   {
     _id: 'casa-escondite-piso2',
-    name: 'Casa ocupada (planta baja)',
-    description: 'Planta baja de la casa escondite de un enemigo vil y poderoso, conectada a la planta ' +
-        'superior (mapId casa-escondite-piso1) por una escalera de caracol: una sala de mapas con cofres y ' +
+    name: 'Casa ocupada (planta superior)',
+    description: 'Planta superior de la casa escondite de un enemigo vil y poderoso, conectada a la planta ' +
+        'baja (mapId casa-escondite-piso1) por una escalera de caracol: una sala de mapas con cofres y ' +
         'un plano de guerra, un pasillo central, una armería-estudio con armero y mesa de trabajo, una gran ' +
         'bodega con barriles y escombros, y la entrada trasera.',
     tags: ['interior', 'casa', 'habitaciones', 'armeria', 'multisala', 'piso2', 'escaleras'],
@@ -347,8 +347,8 @@ const maps = [
   },
   {
     _id: 'almacen-piso1',
-    name: 'Almacén (planta superior)',
-    description: 'Planta superior de un gran almacén de mercancías, conectada a la planta baja (mapId ' +
+    name: 'Almacén (planta baja)',
+    description: 'Planta baja de un gran almacén de mercancías, conectada a la planta superior (mapId ' +
         'almacen-piso2) por una escalera de carga central: estanterías y barriles a ambos lados de la ' +
         'nave, el hueco de la escalera en el centro, y grandes puertas de carga al norte y al sur.',
     tags: ['interior', 'almacen', 'comercio', 'tienda', 'multisala', 'piso1', 'escaleras'],
@@ -372,8 +372,8 @@ const maps = [
   },
   {
     _id: 'almacen-piso2',
-    name: 'Almacén (planta baja)',
-    description: 'Planta baja del almacén, conectada a la planta superior (mapId almacen-piso1) por una ' +
+    name: 'Almacén (planta superior)',
+    description: 'Planta superior del almacén, conectada a la planta baja (mapId almacen-piso1) por una ' +
         'escalera de carga central: estanterías de mercancías al oeste, el hueco de la escalera, y al este ' +
         'la oficina del encargado con un ventanal enrejado y una pequeña armería con lanzas y escudo. La ' +
         'única puerta de carga está al sur.',
