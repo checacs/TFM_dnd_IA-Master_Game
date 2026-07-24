@@ -1,7 +1,15 @@
 import { DomainError } from '../errors/domain-error';
+import { addMoney, Money, subtractMoney, ZERO_MONEY } from '../value-objects/money';
 
 export type CharacterClass = 'guerrero' | 'picaro' | 'mago' | 'clerigo';
 export type AttributeKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+
+/** Clase de armadura real de un objeto del catálogo (dnd5eapi: armor_class). */
+export interface ArmorClassData {
+  base: number;
+  dexBonus: boolean;
+  maxBonus: number | null;
+}
 
 export interface SpellSlots {
   level1: { max: number; used: number };
@@ -36,13 +44,28 @@ export interface CharacterProps {
   spells: { known: string[]; slots: SpellSlots } | null;
   inventory: InventoryItem[];
   equippedWeaponId: string | null;
+  equippedArmorId: string | null;
+  // Objetos mágicos (anillos, amuletos, varitas...) del catálogo de objetos
+  // mágicos: a diferencia de arma/armadura, hoy no tienen ningún efecto
+  // mecánico modelado (el catálogo de objetos mágicos no captura sus
+  // bonificadores reales) -- equiparlos solo deja constancia de cuál lleva
+  // puesto el personaje y lo marca "(equipado)" en la ficha, igual que ya
+  // hacía equippedWeaponId antes de que resolve-player-attack empezara a
+  // usarlo de verdad. Mejora futura: modelar el efecto real de cada objeto.
+  equippedAccessoryId: string | null;
+  currency: Money;
 }
 
 export type CreateCharacterInput = Omit<
   CharacterProps,
-  'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'
+  | 'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'
+  | 'equippedArmorId' | 'equippedAccessoryId' | 'currency'
 > &
-  Partial<Pick<CharacterProps, 'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'>>;
+  Partial<Pick<
+    CharacterProps,
+    | 'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'
+    | 'equippedArmorId' | 'equippedAccessoryId' | 'currency'
+  >>;
 
 const SPELLCASTER_CLASSES: CharacterClass[] = ['mago', 'clerigo'];
 
@@ -117,6 +140,9 @@ export class Character {
       spells: input.spells ?? (spellcaster ? { known: STARTING_SPELLS_BY_CLASS[input.class] ?? [], slots: startingSpellSlots() } : null),
       inventory: input.inventory ?? [],
       equippedWeaponId: input.equippedWeaponId ?? null,
+      equippedArmorId: input.equippedArmorId ?? null,
+      equippedAccessoryId: input.equippedAccessoryId ?? null,
+      currency: input.currency ?? { ...ZERO_MONEY },
     });
   }
 
@@ -198,6 +224,53 @@ export class Character {
     this.props.equippedWeaponId = equipmentId;
   }
 
+  /**
+   * Fija la armadura activa y RECALCULA la CA real a partir de sus datos
+   * reales (base + modificador de destreza, respetando el tope de armadura
+   * media o la ausencia de bonificador de armadura pesada) — a petición
+   * explícita del usuario, equipar una armadura tiene que afectar de verdad
+   * al combate, no solo quedar anotado en la ficha.
+   */
+  equipArmor(equipmentId: string, armorClass: ArmorClassData): void {
+    const owns = this.props.inventory.some((item) => item.equipmentId === equipmentId);
+    if (!owns) {
+      throw new DomainError('No puedes equipar un objeto que no está en tu inventario');
+    }
+    const dexModifier = this.attributeModifier('dex');
+    const dexContribution = armorClass.dexBonus
+      ? (armorClass.maxBonus !== null ? Math.min(dexModifier, armorClass.maxBonus) : dexModifier)
+      : 0;
+    this.props.equippedArmorId = equipmentId;
+    this.props.ac = armorClass.base + dexContribution;
+  }
+
+  /**
+   * Fija un objeto mágico (anillo, amuleto, varita...) como "equipado" -- sin
+   * efecto mecánico real todavía (ver comentario de equippedAccessoryId en
+   * CharacterProps), solo lo marca para que la ficha lo muestre puesto.
+   */
+  equipAccessory(equipmentId: string): void {
+    const owns = this.props.inventory.some((item) => item.equipmentId === equipmentId);
+    if (!owns) {
+      throw new DomainError('No puedes equipar un objeto que no está en tu inventario');
+    }
+    this.props.equippedAccessoryId = equipmentId;
+  }
+
+  /** Recibe dinero encontrado/recibido (GrantCurrencyUseCase, lo llama el DM-IA). */
+  receiveCurrency(amount: Partial<Money>): void {
+    this.props.currency = addMoney(this.props.currency, amount);
+  }
+
+  /** Gasta dinero en una compra (BuyItemUseCase) — lanza DomainError si no llega a cubrir el coste. */
+  spendCurrency(cost: Money): void {
+    const remaining = subtractMoney(this.props.currency, cost);
+    if (remaining === null) {
+      throw new DomainError('No tienes suficiente dinero para esto');
+    }
+    this.props.currency = remaining;
+  }
+
   /** ¿Este personaje conoce este hechizo del catálogo? */
   knowsSpell(spellId: string): boolean {
     return this.props.spells?.known.includes(spellId) ?? false;
@@ -221,6 +294,7 @@ export class Character {
       attributes: { ...this.props.attributes },
       hp: { ...this.props.hp },
       inventory: this.props.inventory.map((item) => ({ ...item })),
+      currency: { ...this.props.currency },
     };
   }
 }

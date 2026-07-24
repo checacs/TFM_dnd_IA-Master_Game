@@ -32,7 +32,7 @@ function buildDagger() {
     {
       name: 'Dagger', category: 'Weapon', cost: { quantity: 2, unit: 'gp' }, weight: 1, description: '',
       weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d4', damageType: 'piercing',
-      properties: ['finesse', 'light', 'thrown', 'monk'],
+      properties: ['finesse', 'light', 'thrown', 'monk'], armorClass: null,
     },
     'dagger',
   );
@@ -72,7 +72,7 @@ describe('GrantItemUseCase', () => {
     const shield = Equipment.create(
       {
         name: 'Shield', category: 'Armor', cost: { quantity: 10, unit: 'gp' }, weight: 6, description: '',
-        weaponCategory: null, weaponRange: null, damageDice: null, damageType: null, properties: [],
+        weaponCategory: null, weaponRange: null, damageDice: null, damageType: null, properties: [], armorClass: null,
       },
       'shield',
     );

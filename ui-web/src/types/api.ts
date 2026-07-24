@@ -109,6 +109,9 @@ export interface CharacterSnapshot {
   spells: { known: string[]; slots: SpellSlots } | null;
   inventory: InventoryItem[];
   equippedWeaponId: string | null;
+  equippedArmorId: string | null;
+  equippedAccessoryId: string | null;
+  currency: { gold: number; silver: number; copper: number };
 }
 
 export interface BoardPosition {

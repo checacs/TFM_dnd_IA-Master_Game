@@ -10,6 +10,10 @@ export interface EquipmentProps {
   damageDice: string | null;
   damageType: string | null;
   properties: string[];
+  // Campos específicos de armadura — null si el equipo no es una armadura
+  // (dnd5eapi: armor_class = {base, dex_bonus, max_bonus}). EquipArmorUseCase
+  // los usa para recalcular la CA real del personaje al equiparla.
+  armorClass: { base: number; dexBonus: boolean; maxBonus: number | null } | null;
 }
 
 /**

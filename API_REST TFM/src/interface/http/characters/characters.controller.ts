@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Inject, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { LevelUpUseCase } from '../../../application/use-cases/level-up.use-case';
 import { AddToInventoryUseCase } from '../../../application/use-cases/add-to-inventory.use-case';
-import { EquipWeaponUseCase } from '../../../application/use-cases/equip-weapon.use-case';
+import { EquipItemUseCase } from '../../../application/use-cases/equip-item.use-case';
 import { CharacterRepository, CHARACTER_REPOSITORY } from '../../../domain/ports/character.repository.port';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUserId } from '../auth/current-user.decorator';
@@ -15,7 +15,13 @@ export class CharactersController {
   constructor(
     private readonly levelUp: LevelUpUseCase,
     private readonly addToInventory: AddToInventoryUseCase,
-    private readonly equipWeapon: EquipWeaponUseCase,
+    // Renombrado de EquipWeaponUseCase a EquipItemUseCase (mismo endpoint
+    // REST /equip): antes solo sabía equipar armas: ahora decide por la
+    // categoría real del catálogo si lo que se equipa es un arma, una
+    // armadura (recalculando la CA real) o un objeto mágico -- el móvil sigue
+    // llamando al mismo endpoint sin tener que saber de antemano qué tipo de
+    // objeto es.
+    private readonly equipItem: EquipItemUseCase,
     @Inject(CHARACTER_REPOSITORY) private readonly characters: CharacterRepository,
   ) {}
 
@@ -40,6 +46,6 @@ export class CharactersController {
 
   @Post(':id/equip')
   equip(@Param('id') id: string, @Body() dto: EquipWeaponDto, @CurrentUserId() requestingUserId: string) {
-    return this.equipWeapon.execute({ characterId: id, requestingUserId, equipmentId: dto.equipmentId });
+    return this.equipItem.execute({ characterId: id, requestingUserId, equipmentId: dto.equipmentId });
   }
 }

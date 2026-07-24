@@ -1,0 +1,143 @@
+/* eslint-disable no-console */
+import { CharacterRepository } from './src/domain/ports/character.repository.port';
+import { EquipmentRepository } from './src/domain/ports/equipment.repository.port';
+import { MagicItemRepository } from './src/domain/ports/magic-item.repository.port';
+import { Character } from './src/domain/entities/character.entity';
+import { Equipment } from './src/domain/entities/equipment.entity';
+import { MagicItem } from './src/domain/entities/magic-item.entity';
+import { GrantItemUseCase } from './src/application/use-cases/grant-item.use-case';
+import { GrantMagicItemUseCase } from './src/application/use-cases/grant-magic-item.use-case';
+import { GrantCurrencyUseCase } from './src/application/use-cases/grant-currency.use-case';
+import { BuyItemUseCase } from './src/application/use-cases/buy-item.use-case';
+import { EquipItemUseCase } from './src/application/use-cases/equip-item.use-case';
+
+// Reproduce de punta a punta el flujo completo pedido por el usuario:
+// encontrar un objeto + dinero como botín (grant_item/grant_magic_item/
+// grant_currency), gastar dinero comprando un objeto real del catálogo
+// (buy_item), y equipar arma/armadura/objeto mágico (equip_item) con efecto
+// real en la CA. Todo contra los casos de uso reales, con fakes en memoria
+// (jest no corre en este sandbox).
+
+class FakeCharacterRepository implements CharacterRepository {
+  private readonly characters = new Map<string, Character>();
+  seed(character: Character): void { this.characters.set(character.id, character); }
+  async findById(id: string): Promise<Character | null> { return this.characters.get(id) ?? null; }
+  async save(character: Character): Promise<void> { this.characters.set(character.id, character); }
+}
+
+class FakeEquipmentRepository implements EquipmentRepository {
+  constructor(private readonly items: Equipment[]) {}
+  async findById(id: string): Promise<Equipment | null> { return this.items.find((i) => i.id === id) ?? null; }
+  async search(): Promise<Equipment[]> { return this.items; }
+}
+
+class FakeMagicItemRepository implements MagicItemRepository {
+  constructor(private readonly items: MagicItem[]) {}
+  async findById(id: string): Promise<MagicItem | null> { return this.items.find((i) => i.id === id) ?? null; }
+  async search(): Promise<MagicItem[]> { return this.items; }
+}
+
+const dagger = Equipment.create({
+  name: 'Dagger', category: 'Weapon', cost: { quantity: 2, unit: 'gp' }, weight: 1, description: '',
+  weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d4', damageType: 'piercing',
+  properties: ['finesse'], armorClass: null,
+}, 'dagger');
+
+const leatherArmor = Equipment.create({
+  name: 'Leather Armor', category: 'Armor', cost: { quantity: 10, unit: 'gp' }, weight: 10, description: '',
+  weaponCategory: null, weaponRange: null, damageDice: null, damageType: null,
+  properties: [], armorClass: { base: 11, dexBonus: true, maxBonus: null },
+}, 'leather-armor');
+
+const ringOfProtection = MagicItem.create({
+  name: 'Anillo de Protección', category: 'Ring', rarity: 'Rare', description: 'Un anillo sin identificar todavía.',
+  isVariant: false, variantNames: [],
+}, 'ring-of-protection');
+
+async function main() {
+  const characters = new FakeCharacterRepository();
+  const equipment = new FakeEquipmentRepository([dagger, leatherArmor]);
+  const magicItems = new FakeMagicItemRepository([ringOfProtection]);
+
+  const character = Character.create({
+    ownerId: 'user-1', gameId: 'game-1', name: 'Norman', class: 'guerrero',
+    attributes: { str: 16, dex: 14, con: 14, int: 8, wis: 10, cha: 8 },
+    hp: { current: 14, max: 14 }, ac: 12, unassignedSkillPoints: 0,
+  }, 'char-1');
+  characters.seed(character);
+
+  const grantItem = new GrantItemUseCase(characters, equipment);
+  const grantMagicItem = new GrantMagicItemUseCase(characters, magicItems);
+  const grantCurrency = new GrantCurrencyUseCase(characters);
+  const buyItem = new BuyItemUseCase(characters, equipment);
+  const equipItemUseCase = new EquipItemUseCase(characters, equipment, magicItems);
+
+  // 1) Botín real: el jugador encuentra un anillo sin identificar + 12 monedas de cobre.
+  await grantMagicItem.execute({ characterId: 'char-1', magicItemId: 'ring-of-protection' });
+  await grantCurrency.execute({ characterId: 'char-1', amount: { copper: 12 } });
+
+  let snapshot = (await characters.findById('char-1'))!.toSnapshot();
+  console.log('Tras el botín -- inventario:', snapshot.inventory, '| dinero:', snapshot.currency);
+  if (!snapshot.inventory.some((i) => i.equipmentId === 'ring-of-protection')) {
+    throw new Error('FALLO: el anillo no llegó al inventario real.');
+  }
+  if (JSON.stringify(snapshot.currency) !== JSON.stringify({ gold: 0, silver: 1, copper: 2 })) {
+    throw new Error('FALLO: el dinero concedido no es el esperado (0 oro, 1 plata, 2 cobre).');
+  }
+  console.log('OK: el anillo sin identificar y las monedas llegan de verdad al personaje.\n');
+
+  // 2) Le regalan también una daga (grant_item, botín gratuito).
+  await grantItem.execute({ characterId: 'char-1', equipmentId: 'dagger' });
+
+  // 3) Compra una armadura de cuero -- pero antes le concedemos oro suficiente.
+  await grantCurrency.execute({ characterId: 'char-1', amount: { gold: 15 } });
+  await buyItem.execute({ characterId: 'char-1', equipmentId: 'leather-armor' });
+
+  snapshot = (await characters.findById('char-1'))!.toSnapshot();
+  console.log('Tras comprar la armadura -- dinero:', snapshot.currency, '| inventario:', snapshot.inventory.map((i) => i.name));
+  if (JSON.stringify(snapshot.currency) !== JSON.stringify({ gold: 5, silver: 1, copper: 2 })) {
+    throw new Error(`FALLO: el dinero tras la compra no es el esperado. Real: ${JSON.stringify(snapshot.currency)}`);
+  }
+  if (!snapshot.inventory.some((i) => i.equipmentId === 'leather-armor')) {
+    throw new Error('FALLO: la armadura comprada no llegó al inventario.');
+  }
+  console.log('OK: la compra descuenta el precio real del catálogo y añade el objeto.\n');
+
+  // 4) Intentar comprar otra vez sin dinero suficiente debe fallar sin tocar el estado.
+  let failedAsExpected = false;
+  try {
+    await buyItem.execute({ characterId: 'char-1', equipmentId: 'leather-armor' });
+  } catch {
+    failedAsExpected = true;
+  }
+  if (!failedAsExpected) {
+    throw new Error('FALLO: la compra sin dinero suficiente debería haber fallado.');
+  }
+  console.log('OK: comprar sin dinero suficiente falla sin romper el estado.\n');
+
+  // 5) Equipar arma, armadura y el objeto mágico -- vía el único endpoint EquipItemUseCase.
+  await equipItemUseCase.execute({ characterId: 'char-1', requestingUserId: 'user-1', equipmentId: 'dagger' });
+  await equipItemUseCase.execute({ characterId: 'char-1', requestingUserId: 'user-1', equipmentId: 'leather-armor' });
+  await equipItemUseCase.execute({ characterId: 'char-1', requestingUserId: 'user-1', equipmentId: 'ring-of-protection' });
+
+  snapshot = (await characters.findById('char-1'))!.toSnapshot();
+  console.log('Tras equipar todo:', {
+    equippedWeaponId: snapshot.equippedWeaponId,
+    equippedArmorId: snapshot.equippedArmorId,
+    equippedAccessoryId: snapshot.equippedAccessoryId,
+    ac: snapshot.ac,
+  });
+  if (snapshot.equippedWeaponId !== 'dagger') throw new Error('FALLO: la daga no quedó equipada.');
+  if (snapshot.equippedArmorId !== 'leather-armor') throw new Error('FALLO: la armadura no quedó equipada.');
+  if (snapshot.equippedAccessoryId !== 'ring-of-protection') throw new Error('FALLO: el anillo no quedó equipado.');
+  // dex 14 -> mod +2; leather armor base 11, dexBonus true, sin tope -> CA real 13.
+  if (snapshot.ac !== 13) throw new Error(`FALLO: la CA real esperada era 13, salió ${snapshot.ac}.`);
+  console.log('OK: equipar la armadura cambia la CA real (11 base + 2 destreza = 13), no solo la anota.\n');
+
+  console.log('TODO OK: botín real, compra real y equipar con efecto real, de punta a punta.');
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

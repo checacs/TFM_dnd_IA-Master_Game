@@ -11,7 +11,9 @@ export type GameEventType =
   | 'objeto_concedido'
   | 'combate_terminado'
   | 'hechizo_lanzado'
-  | 'objeto_magico_concedido';
+  | 'objeto_magico_concedido'
+  | 'dinero_concedido'
+  | 'objeto_comprado';
 
 export interface GameEvent {
   type: GameEventType;
@@ -38,6 +40,8 @@ const TOOL_TO_EVENT_TYPE: Partial<Record<string, GameEventType>> = {
   end_combat: 'combate_terminado',
   cast_spell: 'hechizo_lanzado',
   grant_magic_item: 'objeto_magico_concedido',
+  grant_currency: 'dinero_concedido',
+  buy_item: 'objeto_comprado',
 };
 
 export function toGameEvent(toolName: string, toolResult: unknown): GameEvent | null {

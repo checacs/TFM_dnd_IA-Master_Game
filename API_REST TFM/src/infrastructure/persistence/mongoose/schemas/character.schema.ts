@@ -22,6 +22,9 @@ export const characterMongooseSchema = new Schema(
     spells: { type: Object, default: null },
     inventory: { type: [Object], default: [] },
     equippedWeaponId: { type: String, default: null },
+    equippedArmorId: { type: String, default: null },
+    equippedAccessoryId: { type: String, default: null },
+    currency: { type: Object, default: () => ({ gold: 0, silver: 0, copper: 0 }) },
   },
   { collection: 'characters', timestamps: true },
 );

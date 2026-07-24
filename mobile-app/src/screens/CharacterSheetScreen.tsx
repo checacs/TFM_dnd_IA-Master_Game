@@ -25,6 +25,7 @@ import {
   usePlayerRoll,
   useLevelUp,
   useAssignCaptain,
+  useEquipItem,
 } from '../api/hooks';
 import { useAuth } from '../auth/useAuth';
 import { decodeUserId } from '../auth/jwt';
@@ -86,6 +87,7 @@ export function CharacterSheetScreen({ route }: Props) {
   const { data: character, isLoading, error } = useCharacter(characterId);
   const { data: game } = useGame(gameId);
   const levelUp = useLevelUp(characterId);
+  const equipItem = useEquipItem(characterId);
   const claimTurn = useClaimTurn(gameId);
   const playerAction = usePlayerAction(gameId);
   const playerRoll = usePlayerRoll(gameId);
@@ -180,6 +182,10 @@ export function CharacterSheetScreen({ route }: Props) {
 
   const handleAssignCaptain = (targetUserId: string) => {
     assignCaptain.mutate({ targetUserId }, { onSuccess: () => setCaptainPickerOpen(false) });
+  };
+
+  const handleEquip = (equipmentId: string) => {
+    equipItem.mutate({ equipmentId });
   };
 
   let combatStatusText: string;
@@ -382,6 +388,15 @@ export function CharacterSheetScreen({ route }: Props) {
             </View>
 
             <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Monedas</Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.currencyItem}>{character.currency.gold} po</Text>
+                <Text style={styles.currencyItem}>{character.currency.silver} pp</Text>
+                <Text style={styles.currencyItem}>{character.currency.copper} pc</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
               <View style={styles.xpHeaderRow}>
                 <Text style={styles.sectionTitle}>Experiencia</Text>
                 <Text style={styles.xpText}>
@@ -442,12 +457,30 @@ export function CharacterSheetScreen({ route }: Props) {
             {character.inventory.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Equipamiento</Text>
-                {character.inventory.map((item) => (
-                  <Text key={item.equipmentId} style={styles.listItem}>
-                    · {item.name}
-                    {item.equipmentId === character.equippedWeaponId ? '  (equipado)' : ''}
-                  </Text>
-                ))}
+                {character.inventory.map((item) => {
+                  const isEquipped =
+                    item.equipmentId === character.equippedWeaponId ||
+                    item.equipmentId === character.equippedArmorId ||
+                    item.equipmentId === character.equippedAccessoryId;
+                  return (
+                    <View key={item.equipmentId} style={styles.inventoryRow}>
+                      <Text style={styles.listItem}>
+                        · {item.name}
+                        {isEquipped ? '  (equipado)' : ''}
+                      </Text>
+                      {!isEquipped && (
+                        <Pressable
+                          style={[styles.equipButton, equipItem.isPending && styles.buttonDisabled]}
+                          disabled={equipItem.isPending}
+                          onPress={() => handleEquip(item.equipmentId)}
+                        >
+                          <Text style={styles.equipButtonText}>Equipar</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+                {equipItem.error && <Text style={styles.error}>{equipItem.error.message}</Text>}
               </View>
             )}
 
@@ -765,8 +798,24 @@ const styles = StyleSheet.create({
   plusButtonDisabled: { opacity: 0.35 },
   plusButtonText: { fontWeight: '700', color: colors.ink, fontSize: 16, lineHeight: 18 },
   slotsText: { fontSize: 12, color: colors.inkSoft, marginBottom: 6 },
-  listItem: { fontSize: 13, color: colors.ink, marginBottom: 2 },
+  listItem: { fontSize: 13, color: colors.ink, marginBottom: 2, flexShrink: 1 },
   emptyNote: { fontSize: 12, color: colors.inkSoft, fontStyle: 'italic', marginTop: 4 },
+  currencyRow: { flexDirection: 'row', gap: 16 },
+  currencyItem: { fontSize: 14, fontWeight: '700', color: colors.ink },
+  inventoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  equipButton: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  equipButtonText: { color: colors.ink, fontWeight: '700', fontSize: 12 },
   logoutInPanel: {
     marginTop: 8,
     marginBottom: 24,

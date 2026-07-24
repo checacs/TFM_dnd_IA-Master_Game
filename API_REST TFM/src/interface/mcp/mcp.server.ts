@@ -176,7 +176,8 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   server.tool(
     'get_equipment_catalog',
     'Busca armas, armaduras y objetos de aventurero por categoría (ej. "Weapon", "Armor", "Adventuring Gear"). ' +
-      'Úsalo para describir con precisión el equipo de un personaje: nunca inventes daño, alcance o propiedades de un arma.',
+      'Devuelve también el precio real (cost) de cada objeto -- úsala SIEMPRE antes de narrar o cobrar un precio ' +
+      '(ej. una compra con buy_item): nunca inventes daño, alcance, propiedades o precio de un objeto.',
     { category: z.string().optional() },
     async ({ category }) => ({
       content: [{ type: 'text', text: JSON.stringify(await tools.searchEquipmentTool({ category })) }],
@@ -237,6 +238,35 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   );
 
   server.tool(
+    'grant_currency',
+    'Añade dinero REAL (oro/plata/cobre) al personaje -- llama a esta tool SIEMPRE que tu narración implique ' +
+      'que un jugador encuentra, recibe o saquea monedas (ej. "contáis unas 12 monedas de cobre", "el mercader te ' +
+      'paga 5 monedas de oro") -- nunca lo des por hecho solo con narrarlo: si no llamas a esta tool, el dinero ' +
+      'nunca aparece en la ficha del jugador aunque tu texto diga que lo tiene. Pasa solo las denominaciones que ' +
+      'correspondan (ej. {copper: 12}); las que omitas se tratan como 0.',
+    { characterId: z.string(), gold: z.number().int().nonnegative().optional(), silver: z.number().int().nonnegative().optional(), copper: z.number().int().nonnegative().optional() },
+    async ({ characterId, gold, silver, copper }) => {
+      await tools.grantCurrencyTool(characterId, { gold, silver, copper });
+      return { content: [{ type: 'text', text: JSON.stringify({ granted: true }) }] };
+    },
+  );
+
+  server.tool(
+    'buy_item',
+    'Resuelve una compra que el jugador pide narrativamente (ej. "quiero comprar la espada corta") -- descuenta ' +
+      'el precio REAL del catálogo de equipo (get_equipment_catalog, campo cost) del dinero del personaje y le ' +
+      'añade el objeto al inventario. Primero busca el objeto real con get_equipment_catalog (nunca inventes un ' +
+      'objeto ni un precio que no exista ahí) y usa su id como equipmentId. Si el personaje no tiene suficiente ' +
+      'dinero, esta tool falla con un error -- en ese caso narra que no le llega, nunca completes la compra de ' +
+      'todos modos.',
+    { characterId: z.string(), equipmentId: z.string() },
+    async ({ characterId, equipmentId }) => {
+      await tools.buyItemTool(characterId, equipmentId);
+      return { content: [{ type: 'text', text: JSON.stringify({ bought: true }) }] };
+    },
+  );
+
+  server.tool(
     'apply_condition',
     'Aplica una condición (ej. "frightened", "blinded") a un jugador o enemigo del combate activo. ' +
       'Tiene efecto mecánico real: puede dar ventaja/desventaja en los ataques posteriores. ' +
@@ -284,10 +314,11 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
 
   server.tool(
     'get_character_sheet',
-    'Devuelve la ficha completa de un personaje: CA, HP actual/máximo, atributos, nivel, equipo e ' +
-      'inventario. Llama a esto SIEMPRE que necesites cualquiera de estos datos (por ejemplo para resolver ' +
-      'un ataque, o para describir el aspecto/equipo de un personaje) — nunca le preguntes al jugador sus ' +
-      'propias estadísticas, ya viven en la base de datos. El characterId de cada jugador está en ' +
+    'Devuelve la ficha completa de un personaje: CA, HP actual/máximo, atributos, nivel, equipo, inventario y ' +
+      'dinero (currency: oro/plata/cobre). Llama a esto SIEMPRE que necesites cualquiera de estos datos (por ' +
+      'ejemplo para resolver un ataque, describir el aspecto/equipo de un personaje, o comprobar si le llega el ' +
+      'dinero antes de narrar una compra) — nunca le preguntes al jugador sus propias estadísticas ni inventes ' +
+      'cuánto dinero lleva, ya viven en la base de datos. El characterId de cada jugador está en ' +
       'get_game_state.players[].characterId.',
     { characterId: z.string() },
     async ({ characterId }) => ({

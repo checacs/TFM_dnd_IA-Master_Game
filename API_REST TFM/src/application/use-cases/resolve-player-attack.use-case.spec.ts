@@ -59,7 +59,7 @@ function buildDagger() {
     {
       name: 'Dagger', category: 'Weapon', cost: null, weight: 1, description: '',
       weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d4', damageType: 'piercing',
-      properties: ['finesse', 'light', 'thrown'],
+      properties: ['finesse', 'light', 'thrown'], armorClass: null,
     },
     'dagger',
   );
@@ -70,7 +70,7 @@ function buildGreatclub() {
     {
       name: 'Greatclub', category: 'Weapon', cost: null, weight: 10, description: '',
       weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d8', damageType: 'bludgeoning',
-      properties: [],
+      properties: [], armorClass: null,
     },
     'greatclub',
   );
@@ -81,7 +81,7 @@ function buildLongbow() {
     {
       name: 'Longbow', category: 'Weapon', cost: null, weight: 2, description: '',
       weaponCategory: 'Martial', weaponRange: 'Ranged', damageDice: '1d8', damageType: 'piercing',
-      properties: [],
+      properties: [], armorClass: null,
     },
     'longbow',
   );

@@ -117,6 +117,9 @@ El `dm-engine` intercepta cada `tool_call`/resultado del bucle y lo traduce a un
 | `get_game_state` | *(sin evento)* | Igual, es una consulta de fundamentación |
 | `grant_xp` | `xp_otorgada` | Notifica en la app móvil si el personaje puede subir de nivel |
 | `grant_item` | `objeto_concedido` | Actualiza el inventario visible en la ficha de personaje |
+| `grant_magic_item` | `objeto_magico_concedido` | Igual que `grant_item`, pero para el catálogo de objetos mágicos |
+| `grant_currency` | `dinero_concedido` | Actualiza el oro/plata/cobre visible en la ficha de personaje |
+| `buy_item` | `objeto_comprado` | Actualiza inventario Y dinero a la vez (se ha descontado el precio real) |
 | `cast_spell` | `hechizo_lanzado` | Actualiza ranuras de conjuro consumidas en la ficha y, si hizo daño, el HP del objetivo (igual que `ataque_resuelto`) |
 
 ## 5. Quién dispara `runDmTurn`

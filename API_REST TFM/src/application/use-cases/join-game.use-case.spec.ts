@@ -46,7 +46,7 @@ function buildDagger() {
     {
       name: 'Dagger', category: 'Weapon', cost: null, weight: 1, description: '',
       weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d4', damageType: 'piercing',
-      properties: ['finesse'],
+      properties: ['finesse'], armorClass: null,
     },
     'dagger',
   );
@@ -56,7 +56,7 @@ function buildWand() {
   return Equipment.create(
     {
       name: 'Wand', category: 'Adventuring Gear', cost: null, weight: 1, description: '',
-      weaponCategory: null, weaponRange: null, damageDice: null, damageType: null, properties: [],
+      weaponCategory: null, weaponRange: null, damageDice: null, damageType: null, properties: [], armorClass: null,
     },
     'wand',
   );

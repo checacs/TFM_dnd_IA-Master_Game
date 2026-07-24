@@ -42,6 +42,91 @@ describe('Character', () => {
       const character = buildCharacter();
       expect(() => character.equipWeapon('dagger')).toThrow(DomainError);
     });
+
+    it('empieza sin dinero, sin armadura ni accesorio equipado', () => {
+      const character = buildCharacter();
+      const snapshot = character.toSnapshot();
+      expect(snapshot.currency).toEqual({ gold: 0, silver: 0, copper: 0 });
+      expect(snapshot.equippedArmorId).toBeNull();
+      expect(snapshot.equippedAccessoryId).toBeNull();
+    });
+
+    it('equipArmor recalcula la CA real (base + destreza, sin tope) si está en el inventario', () => {
+      // dex 14 -> mod +2
+      const character = buildCharacter({ attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 } });
+      character.addToInventory({ equipmentId: 'leather-armor', name: 'Leather Armor' });
+      character.equipArmor('leather-armor', { base: 11, dexBonus: true, maxBonus: null });
+
+      const snapshot = character.toSnapshot();
+      expect(snapshot.ac).toBe(13); // 11 + 2
+      expect(snapshot.equippedArmorId).toBe('leather-armor');
+    });
+
+    it('equipArmor respeta el tope de bonificador de destreza (ej. armadura media, máximo +2)', () => {
+      // dex 14 -> mod +2, pero el tope es +1
+      const character = buildCharacter({ attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 } });
+      character.addToInventory({ equipmentId: 'scale-mail', name: 'Scale Mail' });
+      character.equipArmor('scale-mail', { base: 14, dexBonus: true, maxBonus: 1 });
+
+      expect(character.toSnapshot().ac).toBe(15); // 14 + min(2, 1)
+    });
+
+    it('equipArmor ignora la destreza por completo si dexBonus es false (armadura pesada)', () => {
+      const character = buildCharacter({ attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 } });
+      character.addToInventory({ equipmentId: 'plate', name: 'Plate' });
+      character.equipArmor('plate', { base: 18, dexBonus: false, maxBonus: null });
+
+      expect(character.toSnapshot().ac).toBe(18);
+    });
+
+    it('equipArmor lanza DomainError si el objeto no está en el inventario', () => {
+      const character = buildCharacter();
+      expect(() => character.equipArmor('leather-armor', { base: 11, dexBonus: true, maxBonus: null }))
+          .toThrow(DomainError);
+    });
+
+    it('equipAccessory marca un objeto mágico como equipado (sin efecto mecánico) si está en el inventario', () => {
+      const character = buildCharacter();
+      character.addToInventory({ equipmentId: 'ring-of-protection', name: 'Anillo de Protección' });
+      character.equipAccessory('ring-of-protection');
+
+      expect(character.toSnapshot().equippedAccessoryId).toBe('ring-of-protection');
+    });
+
+    it('equipAccessory lanza DomainError si el objeto no está en el inventario', () => {
+      const character = buildCharacter();
+      expect(() => character.equipAccessory('ring-of-protection')).toThrow(DomainError);
+    });
+  });
+
+  describe('dinero (oro/plata/cobre)', () => {
+    it('receiveCurrency añade dinero encontrado o recibido', () => {
+      const character = buildCharacter();
+      character.receiveCurrency({ gold: 2, copper: 5 });
+      expect(character.toSnapshot().currency).toEqual({ gold: 2, silver: 0, copper: 5 });
+    });
+
+    it('receiveCurrency acumula y normaliza entre llamadas sucesivas', () => {
+      const character = buildCharacter();
+      character.receiveCurrency({ silver: 8 });
+      character.receiveCurrency({ silver: 5 });
+      // 80 + 50 = 130 cobre -> 1 oro, 3 plata
+      expect(character.toSnapshot().currency).toEqual({ gold: 1, silver: 3, copper: 0 });
+    });
+
+    it('spendCurrency descuenta el coste si hay fondos suficientes', () => {
+      const character = buildCharacter();
+      character.receiveCurrency({ gold: 5 });
+      character.spendCurrency({ gold: 2, silver: 0, copper: 0 });
+      expect(character.toSnapshot().currency).toEqual({ gold: 3, silver: 0, copper: 0 });
+    });
+
+    it('spendCurrency lanza DomainError si no hay fondos suficientes (y no descuenta nada)', () => {
+      const character = buildCharacter();
+      character.receiveCurrency({ silver: 5 });
+      expect(() => character.spendCurrency({ gold: 1, silver: 0, copper: 0 })).toThrow(DomainError);
+      expect(character.toSnapshot().currency).toEqual({ gold: 0, silver: 5, copper: 0 });
+    });
   });
 
   describe('createNew', () => {

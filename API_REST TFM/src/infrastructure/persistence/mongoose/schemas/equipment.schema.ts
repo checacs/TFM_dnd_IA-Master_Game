@@ -13,6 +13,7 @@ export const equipmentMongooseSchema = new Schema(
     damageDice: { type: String, default: null },
     damageType: { type: String, default: null },
     properties: { type: [String], required: true },
+    armorClass: { type: Object, default: null },
   },
   { collection: 'equipment', timestamps: true },
 );

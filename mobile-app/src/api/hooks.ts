@@ -127,3 +127,17 @@ export function useLevelUp(characterId: string) {
     },
   });
 }
+
+// Un único endpoint para equipar cualquier objeto del inventario -- el
+// backend (EquipItemUseCase) decide por su categoría real si es un arma, una
+// armadura (recalcula la CA real) o un objeto mágico (sin efecto mecánico
+// todavía), así que el móvil no necesita saber de antemano qué tipo es.
+export function useEquipItem(characterId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<CharacterSnapshot, Error, { equipmentId: string }>({
+    mutationFn: (input) => api.post<CharacterSnapshot>(`/characters/${characterId}/equip`, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+    },
+  });
+}

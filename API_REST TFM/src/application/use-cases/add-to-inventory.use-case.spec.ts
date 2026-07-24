@@ -32,7 +32,7 @@ function buildDagger() {
     {
       name: 'Dagger', category: 'Weapon', cost: { quantity: 2, unit: 'gp' }, weight: 1, description: '',
       weaponCategory: 'Simple', weaponRange: 'Melee', damageDice: '1d4', damageType: 'piercing',
-      properties: ['finesse', 'light', 'thrown', 'monk'],
+      properties: ['finesse', 'light', 'thrown', 'monk'], armorClass: null,
     },
     'dagger',
   );

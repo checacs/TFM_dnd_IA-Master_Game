@@ -22,7 +22,10 @@ import { EndCombatUseCase } from '../../application/use-cases/end-combat.use-cas
 import { GetCharacterUseCase } from '../../application/use-cases/get-character.use-case';
 import { GrantItemUseCase } from '../../application/use-cases/grant-item.use-case';
 import { GrantMagicItemUseCase } from '../../application/use-cases/grant-magic-item.use-case';
+import { GrantCurrencyUseCase } from '../../application/use-cases/grant-currency.use-case';
+import { BuyItemUseCase } from '../../application/use-cases/buy-item.use-case';
 import { CastSpellUseCase } from '../../application/use-cases/cast-spell.use-case';
+import { Money } from '../../domain/value-objects/money';
 import { EnemySearchCriteria } from '../../domain/ports/enemy.repository.port';
 import { MapSearchCriteria } from '../../domain/ports/map.repository.port';
 import { SpellSearchCriteria } from '../../domain/ports/spell.repository.port';
@@ -61,6 +64,8 @@ export class GameMcpTools {
     private readonly getCharacter: GetCharacterUseCase,
     private readonly grantItem: GrantItemUseCase,
     private readonly grantMagicItem: GrantMagicItemUseCase,
+    private readonly grantCurrency: GrantCurrencyUseCase,
+    private readonly buyItem: BuyItemUseCase,
     private readonly castSpell: CastSpellUseCase,
   ) {}
 
@@ -154,6 +159,14 @@ export class GameMcpTools {
 
   grantMagicItemTool(characterId: string, magicItemId: string) {
     return this.grantMagicItem.execute({ characterId, magicItemId });
+  }
+
+  grantCurrencyTool(characterId: string, amount: Partial<Money>) {
+    return this.grantCurrency.execute({ characterId, amount });
+  }
+
+  buyItemTool(characterId: string, equipmentId: string) {
+    return this.buyItem.execute({ characterId, equipmentId });
   }
 
   castSpellTool(gameId: string, casterCharacterId: string, spellId: string, targetId?: string) {
