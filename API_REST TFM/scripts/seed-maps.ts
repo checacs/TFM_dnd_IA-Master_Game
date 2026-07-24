@@ -15,10 +15,16 @@ import { mapMongooseSchema } from '../src/infrastructure/persistence/mongoose/sc
 const maps = [
   {
     _id: 'pueblo',
-    name: 'Pueblo Piedrablanca',
-    description: 'Vista general de Piedrablanca, la villa donde arranca la partida, con la taberna y el ' +
-        'tablón de anuncios de la plaza a la vista. Se muestra por defecto desde que se crea la partida, hasta ' +
-        'que el grupo elige taberna o tablón de anuncios y se aplica el mapa correspondiente.',
+    // Sin nombre propio a propósito -- el DM inventa el nombre del pueblo en
+    // su narración (y debe variarlo entre partidas, ver dm-system-prompt.ts).
+    // Si aquí se fijara un nombre concreto, el DM lo copiaría tal cual de
+    // describe_map en TODAS las partidas -- se detectó justo este bug en
+    // partida real (dos partidas distintas usando siempre el mismo nombre).
+    name: 'Plaza del pueblo (vista general)',
+    description: 'Vista general de la plaza del pueblo donde arranca la partida, con la taberna y el tablón de ' +
+        'anuncios a la vista. Se muestra por defecto desde que se crea la partida, hasta que el grupo elige ' +
+        'taberna o tablón de anuncios y se aplica el mapa correspondiente. El nombre del pueblo no está fijado ' +
+        'aquí a propósito: invéntalo en tu narración y varíalo entre partidas.',
     tags: ['pueblo', 'exterior', 'calle', 'arranque'],
     // Imagen real 847x1264 (ratio ancho/alto 0.6701) -- rows/cols elegidos para
     // que cols/rows se aproxime a ese ratio (20/30 = 0.6667, error < 0.6%) y

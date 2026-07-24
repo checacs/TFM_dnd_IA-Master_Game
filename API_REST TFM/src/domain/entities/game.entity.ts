@@ -111,14 +111,15 @@ export type CreateGameInput = Pick<GameProps, 'name' | 'hostUserId' | 'maxPlayer
 const DEFAULT_BOARD_SIZE = 8;
 
 /**
- * Imagen del pueblo (Piedrablanca) que se muestra por defecto desde que se
- * crea la partida, hasta que el DM aplique el mapa real (tabernaMercenarios
- * o tablonAnuncios) tras la elección del jugador en el arranque -- antes el
- * tablero se quedaba completamente en blanco (imageUrl: null) durante ese
- * primer turno, sin ninguna imagen que acompañara la escena inicial. Debe
- * mantenerse en sync manualmente con la entrada mapId "pueblo" en
- * scripts/seed-maps.ts (rows/cols elegidos allí para que coincidan con el
- * ratio real de esa imagen y BoardPanel.tsx no añada letterboxing).
+ * Imagen del pueblo (sin nombre propio -- lo inventa el DM en su narración,
+ * ver seed-maps.ts) que se muestra por defecto desde que se crea la partida,
+ * hasta que el DM aplique el mapa real (tabernaMercenarios o tablonAnuncios)
+ * tras la elección del jugador en el arranque -- antes el tablero se quedaba
+ * completamente en blanco (imageUrl: null) durante ese primer turno, sin
+ * ninguna imagen que acompañara la escena inicial. Debe mantenerse en sync
+ * manualmente con la entrada mapId "pueblo" en scripts/seed-maps.ts (rows/cols
+ * elegidos allí para que coincidan con el ratio real de esa imagen y
+ * BoardPanel.tsx no añada letterboxing).
  */
 const INITIAL_VILLAGE_BOARD = { rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png' } as const;
 

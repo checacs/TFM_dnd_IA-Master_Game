@@ -28,7 +28,7 @@ describe('GetGameStateUseCase', () => {
     const state = await useCase.execute({ gameId: game.id });
 
     expect(state.name).toBe('La torre olvidada');
-    // El tablero empieza con la imagen del pueblo (Piedrablanca) por defecto,
+    // El tablero empieza con la imagen del pueblo por defecto,
     // no en blanco -- ver game.entity.spec.ts, describe('board').
     expect(state.board).toEqual({
       rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png', combatPoint: null, zones: [],

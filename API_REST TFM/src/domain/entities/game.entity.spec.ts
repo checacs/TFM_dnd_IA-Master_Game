@@ -191,7 +191,7 @@ describe('Game', () => {
 
   describe('board', () => {
     it(
-        'empieza con la imagen del pueblo (Piedrablanca) por defecto y sin punto de combate -- se muestra ' +
+        'empieza con la imagen del pueblo por defecto y sin punto de combate -- se muestra ' +
         'desde el primer turno hasta que el jugador elige taberna o tablón de anuncios (ver mapId "pueblo" en ' +
         'seed-maps.ts)',
         () => {
