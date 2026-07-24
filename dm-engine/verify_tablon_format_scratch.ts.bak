@@ -1,0 +1,86 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+// Verifica el nuevo formato pedido por el usuario para el fallback del
+// tablón de anuncios: (1) sin "(mapId ...)" ni "(planta ...)" filtrándose al
+// texto del jugador, (2) un bloque por pergamino (Pergamino/Trabajo/Lugar)
+// en vez de un párrafo corrido.
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(_params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  constructor(private readonly results: Record<string, unknown> = {}) {}
+  async listTools(): Promise<McpToolInfo[]> { return []; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    return this.results[name] ?? {};
+  }
+}
+
+async function main() {
+  const chat = new FakeChatClient([
+    { message: { role: 'assistant', content: 'San arranca un pergamino cualquiera sin usar ninguna tool...' } },
+    { message: { role: 'assistant', content: 'San arranca un pergamino cualquiera sin usar ninguna tool...' } },
+    { message: { role: 'assistant', content: 'El grupo decide algo inconexo...' } },
+  ]);
+  const toolCaller = new FakeToolCaller({
+    describe_map: { mapId: 'tablonAnuncios', rows: 21, cols: 20, zones: [] },
+    set_battle_map: undefined,
+    get_game_state: { players: [{ characterId: 'san' }] },
+    get_battle_maps: [
+      {
+        id: 'almacen-piso1',
+        name: 'Almacén (planta superior)',
+        description: 'Planta superior de un gran almacén de mercancías, conectada a la planta baja (mapId ' +
+            'almacen-piso2) por una escalera de carga central: estanterías y barriles a ambos lados de la ' +
+            'nave, el hueco de la escalera en el centro, y grandes puertas de carga al norte y al sur.',
+      },
+      {
+        id: 'cripta-multisala',
+        name: 'Fortaleza con mazmorras (planta completa)',
+        description: 'Planta completa de una fortaleza con mazmorras: sala de tortura, barracones, almacén, ' +
+            'celdas de la prisión, armería, sala central, escalera al patio de armas y escaleras que bajan a las criptas.',
+      },
+      {
+        id: 'cabana-bosque-grande',
+        name: 'Cabaña de troncos en el bosque',
+        description: 'Interior de una amplia cabaña de troncos en el bosque, con varias estancias.',
+      },
+    ],
+  });
+  const history: ChatMessage[] = [
+    { role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' },
+    { role: 'assistant', content: '¿Entráis en la taberna o os acercáis al tablón de anuncios?' },
+    { role: 'user', content: 'Vamos al tablon' },
+  ];
+  const result = await runDmTurn(chat, toolCaller, history, 'g1');
+  console.log('--- Narrativa final ---');
+  console.log(result.narrative);
+  console.log('--- Fin narrativa ---');
+
+  if (result.narrative.includes('mapId')) {
+    throw new Error('FALLO: la narrativa sigue conteniendo "mapId".');
+  }
+  if (/\(planta[^)]*\)/i.test(result.narrative)) {
+    throw new Error('FALLO: la narrativa sigue conteniendo un paréntesis "(planta ...)".');
+  }
+  if (!result.narrative.includes('Primer Pergamino') || !result.narrative.includes('Segundo Pergamino') ||
+      !result.narrative.includes('Tercer Pergamino')) {
+    throw new Error('FALLO: no se ven los tres bloques de pergamino esperados.');
+  }
+  if (!result.narrative.includes('Trabajo:') || !result.narrative.includes('Lugar:')) {
+    throw new Error('FALLO: no se ven las etiquetas "Trabajo:"/"Lugar:" esperadas.');
+  }
+  console.log('OK: formato ordenado sin metadatos filtrados.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

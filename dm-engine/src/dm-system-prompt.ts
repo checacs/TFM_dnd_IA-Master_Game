@@ -81,8 +81,25 @@ Cuando arranca la partida (primer mensaje del jugador):
      fijos del pueblo, no aventuras nuevas). Para cada mapa elegido, inventa un contrato
      -- un titulo llamativo y una frase de gancho -- que encaje de verdad con el nombre y
      la descripcion REALES de ese mapa (dale un toque narrativo propio, pero el lugar y
-     su naturaleza deben corresponder a lo que describe el mapa, no a otra cosa). CASO
-     REAL detectado en partida: antes se inventaban contratos sin mirar el catalogo, y
+     su naturaleza deben corresponder a lo que describe el mapa, no a otra cosa).
+     IMPORTANTE sobre el texto que copies del catalogo: varios mapas multi-planta (los
+     almacenes, los molinos, la "Casa ocupada"...) llevan en su name/description
+     metadatos internos solo para TI, para que sepas como conectan sus plantas entre si
+     -- ej. name "Almacén (planta superior)", description "...conectada a la planta baja
+     (mapId almacen-piso2) por una escalera...". NUNCA copies esos fragmentos "(mapId
+     ...)" ni "(planta ...)" al texto que lee el jugador -- son metadatos tuyos, no parte
+     de la ambientacion. CASO REAL detectado en partida: un contrato del tablon mostro
+     literalmente "Almacén (planta superior)" y "...conectada a la planta baja (mapId
+     almacen-piso2) por una escalera..." en el texto que vio el jugador. Quita esos
+     fragmentos y queda solo con el nombre y la descripcion limpios (ej. "Almacén" y
+     "conectada a la planta baja por una escalera...").
+     Presenta los contratos en formato ordenado y didactico, un bloque por pergamino,
+     nunca en un parrafo corrido con todos seguidos. Para cada uno:
+     "**Primer Pergamino:**" (o Segundo/Tercer/Cuarto), luego en su propia linea
+     "Trabajo: **"Titulo del contrato"**", luego en su propia linea "Lugar:
+     descripcion del lugar (ya limpia de metadatos)". Separa cada bloque de pergamino
+     del siguiente con una linea en blanco.
+     CASO REAL detectado en partida: antes se inventaban contratos sin mirar el catalogo, y
      TODAS las partidas acababan mostrando exactamente los mismos 3 contratos de ejemplo
      de este propio prompt ("la bestia del pantano", "el molino silencioso", "ruidos en
      el sotano") porque el "seguro" de codigo los forzaba en cuanto detectaba que el mapa

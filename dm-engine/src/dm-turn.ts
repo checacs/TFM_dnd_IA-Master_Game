@@ -346,6 +346,31 @@ async function fetchRandomContractMaps(
   return eligible.slice(0, count);
 }
 
+// Varios mapas multi-planta del catálogo (almacenes, molinos, la "Casa
+// ocupada"...) llevan en su name/description metadatos internos para que el
+// DM-IA sepa cómo conectan sus plantas entre sí -- ej. name: "Almacén
+// (planta superior)", description: "...conectada a la planta baja (mapId
+// almacen-piso2) por una escalera...". Esto es información útil para la IA,
+// pero NUNCA debe llegar al jugador tal cual: se detectó en partida real un
+// contrato del tablón mostrando literalmente "(mapId almacen-piso2)" y
+// "(planta superior)" en el texto que lee el jugador. Se limpian ambos
+// patrones antes de mostrar nada.
+function sanitizeContractText(text: string): string {
+  return text
+      .replace(/\s*\(mapId\s+[a-zA-Z0-9_-]+\)/gi, '')
+      .replace(/\s*\(planta[^)]*\)/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+}
+
+const CONTRACT_ORDINALS = ['Primer', 'Segundo', 'Tercer', 'Cuarto'];
+
+/**
+ * Formato ordenado y didáctico (a petición del usuario, en vez del párrafo
+ * corrido anterior que además dejaba pasar metadatos internos como "mapId" o
+ * "(planta superior)"): un pergamino por bloque, con su nombre de trabajo y
+ * su descripción de lugar en líneas separadas.
+ */
 function buildTablonContractsText(maps: Array<{ id: string; name: string; description: string }>): string {
   if (maps.length === 0) {
     // Catálogo vacío o get_battle_maps falló -- degrada a un texto genérico
@@ -354,11 +379,15 @@ function buildTablonContractsText(maps: Array<{ id: string; name: string; descri
         '¿Cuál os interesa mirar más de cerca?';
   }
   const items = maps
-      .map((m) => `**"${m.name}"** (${m.description})`)
-      .join(maps.length > 2 ? ', ' : ' y ')
-      .replace(/,([^,]*)$/, maps.length > 2 ? ' y$1' : ',$1');
-  return `Os acercáis al tablón de anuncios. Entre los pergaminos clavados destacan ${maps.length} contratos ` +
-      `del gremio: ${items}. ¿Cuál de los contratos os interesa?`;
+      .map((m, i) => {
+        const ordinal = CONTRACT_ORDINALS[i] ?? `Contrato ${i + 1}`;
+        const name = sanitizeContractText(m.name);
+        const description = sanitizeContractText(m.description);
+        return `**${ordinal} Pergamino:**\n\nTrabajo: **"${name}"**\n\nLugar: ${description}`;
+      })
+      .join('\n\n---\n\n');
+  return 'Os acercáis al tablón de anuncios. Entre los pergaminos clavados destacan estos contratos del gremio:' +
+      `\n\n${items}\n\n¿Cuál de los contratos os interesa?`;
 }
 
 function narrativeSuggestsLocationChange(text: string): boolean {
