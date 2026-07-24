@@ -1,0 +1,109 @@
+import { runDmTurn } from './src/dm-turn';
+import { ToolCaller, ChatClient, ChatMessage } from './src/ports';
+
+type Scenario = {
+  label: string;
+  turnClaims: string[];
+  players: Array<{ characterId: string; name: string }>;
+  attackerName: string | undefined;
+  expectForced: string | null; // characterId expected to be forced, or null if none
+};
+
+const scenarios: Scenario[] = [
+  {
+    label: 'un solo turno reclamado (sin ambiguedad)',
+    turnClaims: ['san-id'],
+    players: [{ characterId: 'san-id', name: 'San' }, { characterId: 'che-id', name: 'Che' }],
+    attackerName: undefined,
+    expectForced: 'san-id',
+  },
+  {
+    label: 'dos reclamados, nombre coincide con uno',
+    turnClaims: ['san-id', 'che-id'],
+    players: [{ characterId: 'san-id', name: 'San' }, { characterId: 'che-id', name: 'Che' }],
+    attackerName: 'San',
+    expectForced: 'san-id',
+  },
+  {
+    label: 'dos reclamados, nombre no distingue (ambiguo) -> no forzar',
+    turnClaims: ['san-id', 'che-id'],
+    players: [{ characterId: 'san-id', name: 'San' }, { characterId: 'che-id', name: 'Che' }],
+    attackerName: undefined,
+    expectForced: null,
+  },
+];
+
+async function run() {
+  for (const s of scenarios) {
+    let forcedCharacterId: string | null = null;
+    let getGameStateCalls = 0;
+
+    const toolCaller: ToolCaller = {
+      listTools: async () => [
+        { name: 'resolve_attack', description: '', inputSchema: {} },
+        { name: 'get_game_state', description: '', inputSchema: {} },
+        { name: 'end_player_turn', description: '', inputSchema: {} },
+      ],
+      callTool: async (name: string, args: Record<string, unknown>) => {
+        if (name === 'get_game_state') {
+          getGameStateCalls++;
+          return {
+            players: s.players,
+            activeEncounter: { roundPhase: 'jugadores', turnClaims: s.turnClaims, actedThisRound: [] },
+          };
+        }
+        if (name === 'end_player_turn') {
+          forcedCharacterId = args['characterId'] as string;
+          return {};
+        }
+        if (name === 'resolve_attack') {
+          return { hit: true };
+        }
+        throw new Error('tool inesperada: ' + name);
+      },
+    };
+
+    let callCount = 0;
+    const chatClient: ChatClient = {
+      createCompletion: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call1',
+                  type: 'function' as const,
+                  function: {
+                    name: 'resolve_attack',
+                    arguments: JSON.stringify({
+                      gameId: 'g1',
+                      targetId: 'enemy-1',
+                      attackerName: s.attackerName,
+                      attackerModifier: 3,
+                      targetArmorClass: 12,
+                      damageDice: '1d6+2',
+                      playerD20: 15,
+                    }),
+                  },
+                },
+              ],
+            },
+          };
+        }
+        // Turno final: narrativa de cierre, sin llamar a end_player_turn (el bug real).
+        return { message: { role: 'assistant', content: 'El golpe conecta. ¿Qué hacéis ahora?' } };
+      },
+    };
+
+    const messages: ChatMessage[] = [{ role: 'user', content: 'Ataco con mi espada' }];
+    await runDmTurn(chatClient, toolCaller, messages, 'g1');
+
+    const pass = forcedCharacterId === s.expectForced;
+    console.log(`[${pass ? 'OK' : 'FALLO'}] ${s.label} -> forzado=${forcedCharacterId} (esperado=${s.expectForced})`);
+  }
+}
+
+run();
