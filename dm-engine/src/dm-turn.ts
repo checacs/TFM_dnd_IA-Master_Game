@@ -426,6 +426,51 @@ function narrativeSuggestsEnemyDefeated(text: string): boolean {
 }
 
 /**
+ * Caso real reportado por el usuario (partida "primera partida", 2026-07-24):
+ * el combate contra una Osa Lechuza se narró ENTERO -- "¡el combate ha
+ * comenzado!", misiles mágicos, ataques con espada, un segundo enemigo
+ * apareciendo de la nada -- durante SEIS turnos seguidos sin llamar NUNCA a
+ * start_combat ("Tools llamadas: [ninguna]" en todos ellos). El chequeo de
+ * arriba (narrativeSuggestsEnemyDefeated) no lo detectó ni una sola vez
+ * porque exige que la narración dé a alguien por MUERTO -- aquí nadie llegó
+ * a morir en los turnos capturados, así que el aviso nunca llegó a
+ * dispararse pese a que el combate llevaba media partida resolviéndose como
+ * texto libre. El jugador se quedó sin poder pulsar "Tirar Dados" en el
+ * móvil en ningún momento (el botón exige un activeEncounter real, que
+ * nunca se creó).
+ *
+ * Estas dos señales adicionales cubren el problema mucho antes, en el
+ * turno EXACTO en que empieza a torcerse, en vez de esperar a que alguien
+ * muera:
+ * 1) la propia narración del DM declara que el combate ha comenzado
+ *    (COMBAT_START_NARRATIVE_CUES);
+ * 2) el jugador expresa intención de atacar en su último mensaje
+ *    (PLAYER_ATTACK_INTENT_CUES) -- a petición explícita del usuario:
+ *    "en el momento que aparezca la palabra atacar o similar debe
+ *    activarse el combate".
+ */
+const COMBAT_START_NARRATIVE_CUES = [
+  /\bel combate ha comenzado\b/i,
+  /\b(empieza|comienza|se inicia|ha comenzado|ha empezado)\s+el combate\b/i,
+  /\bcombate\s+(iniciado|comenzado|empezado)\b/i,
+  /\bya no hay sorpresa que valga\b/i,
+  /\b¡?entráis en combate!?\b/i,
+];
+const PLAYER_ATTACK_INTENT_CUES = [
+  /\batac/i,
+  /\bgolpe(a|amos|ad)/i,
+  /\bdispar(o|a|amos)/i,
+];
+
+function narrativeSuggestsCombatStart(text: string): boolean {
+  return COMBAT_START_NARRATIVE_CUES.some((p) => p.test(text));
+}
+
+function playerMessageSuggestsAttackIntent(text: string): boolean {
+  return PLAYER_ATTACK_INTENT_CUES.some((p) => p.test(text));
+}
+
+/**
  * Se detectó en partida real un fallo nuevo y distinto de todos los
  * anteriores: el jugador (San) preguntó "Dime qué trabajos hay" delante del
  * tablón de anuncios, y el DM respondió literalmente "San: Me interesa lo
@@ -603,20 +648,70 @@ function mapToolFailedNudge(failedMapToolCall: { name: string; message: string }
 /** Tools que, si se llamó a alguna, indican que este turno SÍ tocó el sistema de combate real. */
 const COMBAT_MECHANIC_TOOLS = ['start_combat', 'resolve_attack', 'cast_spell', 'grant_xp', 'end_combat'];
 
-function combatWithoutToolsNudge(calledTools: Set<string>, narrativeText: string): string | null {
+async function combatWithoutToolsNudge(
+    toolCaller: ToolCaller,
+    gameId: string,
+    calledTools: Set<string>,
+    narrativeText: string,
+    lastPlayerMessage: string,
+): Promise<string | null> {
   const usedCombatTools = COMBAT_MECHANIC_TOOLS.some((t) => calledTools.has(t));
-  if (usedCombatTools || !narrativeSuggestsEnemyDefeated(narrativeText)) {
+  if (usedCombatTools) {
     return null;
   }
-  return 'Tu narración de este turno da por muerto o derrotado a alguien, pero no has llamado a start_combat, ' +
-      'resolve_attack ni cast_spell en NINGÚN momento de este turno -- eso significa que ningún ataque se ha ' +
-      'resuelto de verdad, ninguna tirada real ha ocurrido, y ningún combate se ha registrado en el sistema (el ' +
-      'móvil no puede mostrar "Mi turno"/"Tirar Dados" ni el tablero pintar a los enemigos si nunca llamaste a ' +
-      'start_combat). Corrige tu narración: si esto es el inicio de una pelea, llama primero a start_combat con ' +
-      'los enemigos reales de get_enemy_catalog; si un jugador ataca, sigue el proceso de DOS TURNOS (invita a ' +
-      '"Tirar Dados" primero, no resuelvas nada hasta leer su tirada real en el chat) y llama a resolve_attack o ' +
-      'cast_spell para aplicar el resultado real antes de narrar impactos, heridas o muertes. Nunca resuelvas un ' +
-      'combate completo solo con texto libre, por muy claro que parezca el desenlace.';
+
+  if (narrativeSuggestsEnemyDefeated(narrativeText)) {
+    return 'Tu narración de este turno da por muerto o derrotado a alguien, pero no has llamado a start_combat, ' +
+        'resolve_attack ni cast_spell en NINGÚN momento de este turno -- eso significa que ningún ataque se ha ' +
+        'resuelto de verdad, ninguna tirada real ha ocurrido, y ningún combate se ha registrado en el sistema (el ' +
+        'móvil no puede mostrar "Mi turno"/"Tirar Dados" ni el tablero pintar a los enemigos si nunca llamaste a ' +
+        'start_combat). Corrige tu narración: si esto es el inicio de una pelea, llama primero a start_combat con ' +
+        'los enemigos reales de get_enemy_catalog; si un jugador ataca, sigue el proceso de DOS TURNOS (invita a ' +
+        '"Tirar Dados" primero, no resuelvas nada hasta leer su tirada real en el chat) y llama a resolve_attack o ' +
+        'cast_spell para aplicar el resultado real antes de narrar impactos, heridas o muertes. Nunca resuelvas un ' +
+        'combate completo solo con texto libre, por muy claro que parezca el desenlace.';
+  }
+
+  // Igual de grave pero detectado MUCHO antes: la narración declara que el
+  // combate "ha comenzado" (o el jugador acaba de expresar intención de
+  // atacar) sin que start_combat se haya llamado todavía. Sin esto, el
+  // combate entero se puede resolver como texto libre turno tras turno sin
+  // que ENEMY_DEFEAT_CUES llegue nunca a dispararse (nadie tiene por qué
+  // morir en los primeros intercambios) -- ver el caso real documentado
+  // encima de narrativeSuggestsCombatStart.
+  if (narrativeSuggestsCombatStart(narrativeText) || playerMessageSuggestsAttackIntent(lastPlayerMessage)) {
+    // Solo tiene sentido exigir start_combat si de verdad no hay ya un
+    // combate activo -- si ya existe (el jugador dice "atacamos" en una
+    // ronda ya en marcha, o el DM está haciendo una pregunta aclaratoria
+    // legítima como "¿a quién apuntáis?" antes de resolver, sin tocar
+    // ninguna tool todavía), forzar esto sería un falso positivo: le
+    // pediría llamar de nuevo a start_combat sobre un combate que ya existe
+    // (falla, ver staleEncounterConflictNudge) o le empujaría a resolver un
+    // ataque sin toda la información que aún necesita del jugador.
+    let hasActiveEncounter: boolean;
+    try {
+      const state = await toolCaller.callTool('get_game_state', { gameId });
+      hasActiveEncounter = (state as { activeEncounter?: unknown } | null)?.activeEncounter != null;
+    } catch {
+      // Sin poder comprobar el estado real, mejor no forzar un aviso a
+      // ciegas que podría ser un falso positivo.
+      return null;
+    }
+    if (hasActiveEncounter) {
+      return null;
+    }
+
+    return 'Este turno señala el inicio de un combate (tu propia narración lo declara, o el jugador acaba de ' +
+        'expresar intención de atacar), pero no has llamado a start_combat en NINGÚN momento de este turno -- sin ' +
+        'esa llamada no existe ningún activeEncounter real, el móvil nunca podrá mostrar "Mi turno"/"Tirar Dados" y ' +
+        'el tablero no podrá pintar a los enemigos, así que el combate entero quedaría resuelto como texto libre sin ' +
+        'ninguna tirada real detrás. Antes de narrar ningún ataque, impacto o daño: llama a get_enemy_catalog para ' +
+        'traer los enemigos reales, luego a start_combat con ellos, y a place_participant para colocar tanto a los ' +
+        'jugadores como a cada enemigo en el tablero. Solo después de eso, sigue el proceso de dos turnos (invita a ' +
+        '"Tirar Dados" primero) y usa resolve_attack/cast_spell para aplicar cada resultado real.';
+  }
+
+  return null;
 }
 
 /**
@@ -1490,7 +1585,9 @@ export async function runDmTurn(
           : villageDestinationMismatchNudge(lastPlayerMessageText(messages), appliedMapId, initialMessageCount);
       const noToolsNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge)
           ? null
-          : combatWithoutToolsNudge(calledTools, response.message.content ?? '');
+          : await combatWithoutToolsNudge(
+              toolCaller, gameId, calledTools, response.message.content ?? '', lastPlayerMessageText(messages),
+          );
       const combatStateNudge = (gameStart || impersonationNudge || staleEncounterNudge || mapFailedNudge || mapRequestNudge || destinationMismatchNudge || noToolsNudge)
           ? null
           : await checkCombatStateNudge(toolCaller, gameId, calledTools, attackedEnemyIds);
