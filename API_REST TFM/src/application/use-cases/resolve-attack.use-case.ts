@@ -7,6 +7,16 @@ import { DomainError } from '../../domain/errors/domain-error';
 export interface ResolveAttackInput {
   gameId: string;
   targetId: string;
+  /**
+   * Nombre real del atacante (ej. "Matón Cicatrizado", el nombre reflavored
+   * del enemigo, no su tipo genérico) -- CASO REAL detectado en partida: el
+   * chat mostraba "Ataque contra 1 (1d20+3): 4 vs CA 15 → falla" sin decir
+   * quién atacaba ni con qué. Ahora es obligatorio para que el mensaje del
+   * chat siempre diga quién ataca.
+   */
+  attackerName: string;
+  /** Nombre del arma/ataque con el que golpea (ej. "su hacha mellada"). Opcional: si se omite, el mensaje no lo menciona. */
+  weaponName?: string;
   attackerModifier: number;
   targetArmorClass: number;
   damageDice: string;
@@ -48,6 +58,24 @@ export class ResolveAttackUseCase {
     const game = await this.games.findById(input.gameId);
     if (!game) {
       throw new DomainError('Partida no encontrada');
+    }
+
+    // CASO REAL detectado en partida: el chat mostró "Ataque contra 1" y
+    // "Ataque contra 2" en vez del nombre real de San/Che -- el DM había
+    // pasado un targetId inventado ("1", "2") que no correspondía a ningún
+    // characterId/instanceId real. Se rechaza aquí, en vez de degradar
+    // mostrando el id crudo: fuerza al DM a reintentar con el id real de
+    // get_game_state, en vez de dejar pasar un mensaje ilegible al jugador.
+    const snapshotForValidation = game.toSnapshot();
+    const targetIsPlayer = snapshotForValidation.players.some((p) => p.characterId === input.targetId);
+    const targetIsEnemy =
+        snapshotForValidation.activeEncounter?.enemies.some((e) => e.instanceId === input.targetId) ?? false;
+    if (!targetIsPlayer && !targetIsEnemy) {
+      throw new DomainError(
+          `targetId "${input.targetId}" no corresponde a ningún jugador ni enemigo real de esta partida -- ` +
+          'usa el characterId real de get_game_state.players[] o el instanceId real de ' +
+          'get_game_state.activeEncounter.enemies[], nunca un número o nombre inventado.',
+      );
     }
 
     const d20 = input.playerD20 ?? this.diceRoller.rollD20();
@@ -94,9 +122,13 @@ export class ResolveAttackUseCase {
     // invisible calculada por el sistema -- para que quede claro de dónde
     // sale el número sin tener que ir a mirar el mensaje anterior del chat.
     const rollSource = input.playerD20 !== undefined ? ' (tirada del jugador)' : '';
+    // CASO REAL: antes decía "Ataque contra {targetId}" sin decir quién
+    // atacaba, y el jugador solo veía un id crudo si el DM se equivocaba de
+    // target. Ahora siempre nombra al atacante real y, si se indica, el arma.
+    const weaponText = input.weaponName ? ` con ${input.weaponName}` : '';
     const header =
-        `🎲 Ataque contra **${targetName}** (1d20${modifierText}${rollSource}): **${attackRoll}** vs ` +
-        `CA ${input.targetArmorClass} → ` + (hit ? '¡IMPACTA!' : 'falla');
+        `🎲 **${input.attackerName}** ataca${weaponText} a **${targetName}** (1d20${modifierText}${rollSource}): ` +
+        `**${attackRoll}** vs Armadura ${input.targetArmorClass} → ` + (hit ? '¡IMPACTA!' : 'falla');
 
     if (!hit) {
       return header;

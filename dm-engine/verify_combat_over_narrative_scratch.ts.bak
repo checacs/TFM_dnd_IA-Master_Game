@@ -1,0 +1,86 @@
+import { ChatClient, ChatCompletionResult, ChatMessage, ToolCaller, McpToolInfo, ToolDefinition } from './src/ports';
+import { runDmTurn } from './src/dm-turn';
+
+// Reproduce el bug real reportado: un bandido se rinde y se le deja escapar
+// (nunca baja de HP real), otros dos mueren de verdad. El DM narra "El
+// combate ha terminado" y otorga XP, pero NUNCA llama a end_combat de
+// verdad. Como el superviviente sigue con HP > 0, el seguro "todos
+// derrotados" NO se dispara -- este script comprueba que el nuevo chequeo
+// basado en la propia narración del DM sí fuerza el cierre.
+
+function fillerHistory(n: number): ChatMessage[] {
+  const history: ChatMessage[] = [];
+  for (let i = 0; i < n; i++) {
+    history.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: `Mensaje de relleno ${i}.` });
+  }
+  return history;
+}
+
+class FakeChatClient implements ChatClient {
+  private i = 0;
+  constructor(private readonly responses: ChatCompletionResult[]) {}
+  async createCompletion(_params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    const response = this.responses[this.i];
+    this.i = Math.min(this.i + 1, this.responses.length - 1);
+    return response;
+  }
+}
+
+class FakeToolCaller implements ToolCaller {
+  public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+  async listTools(): Promise<McpToolInfo[]> { return []; }
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ name, args });
+    if (name === 'get_game_state') {
+      return {
+        activeEncounter: {
+          enemies: [
+            { instanceId: 'bandit-1', name: 'Matón Cicatrizado', currentHp: 0 },
+            { instanceId: 'bandit-2', name: 'Mujer Canosa', currentHp: 0 },
+            { instanceId: 'bandit-3', name: 'Traficante Flaco', currentHp: 11 }, // se rindió, huyó, sigue vivo
+          ],
+        },
+      };
+    }
+    if (name === 'end_combat') return { combatEnded: true };
+    if (name === 'grant_xp') return { leveledUp: false };
+    return {};
+  }
+}
+
+async function main() {
+  const narrative =
+      'El Traficante Flaco huye escaleras abajo. El combate ha terminado. ' +
+      'Otorgando 50 XP a cada jugador por los dos bandidos derrotados.';
+  const chatClient = new FakeChatClient([{ message: { role: 'assistant', content: narrative } }]);
+  const toolCaller = new FakeToolCaller();
+  const messages = [...fillerHistory(12), { role: 'user' as const, content: 'Lo dejamos escapar' }];
+
+  const result = await runDmTurn(chatClient, toolCaller, messages, 'g1');
+  console.log('narrative:', result.narrative);
+  console.log('events:', result.events.map((e) => e.type));
+  console.log('calls:', toolCaller.calls.map((c) => c.name));
+
+  const endCombatCalled = toolCaller.calls.some((c) => c.name === 'end_combat');
+  const hasEvent = result.events.some((e) => e.type === 'combate_terminado');
+  if (!endCombatCalled || !hasEvent) {
+    throw new Error('FALLO: el seguro no forzó end_combat pese a que el DM declaró el combate cerrado.');
+  }
+  console.log('OK: end_combat se fuerza por código cuando el DM narra el cierre, aunque un enemigo siga vivo (huyó).');
+
+  // Control: si la narración NO declara el combate cerrado y sigue habiendo
+  // un enemigo vivo, el seguro NO debe forzar nada.
+  const chatClient2 = new FakeChatClient([
+    { message: { role: 'assistant', content: 'El Traficante Flaco retrocede, asustado, pero sigue en pie.' } },
+  ]);
+  const toolCaller2 = new FakeToolCaller();
+  const result2 = await runDmTurn(chatClient2, toolCaller2, messages, 'g1');
+  const endCombatCalled2 = toolCaller2.calls.some((c) => c.name === 'end_combat');
+  if (endCombatCalled2) {
+    throw new Error('FALLO control: end_combat se llamó sin que el DM declarara el combate cerrado.');
+  }
+  console.log('OK control: no se fuerza el cierre si el DM no declara el combate terminado.');
+  void result2;
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

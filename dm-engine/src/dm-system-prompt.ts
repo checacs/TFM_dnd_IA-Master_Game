@@ -457,6 +457,19 @@ causa mas comun de que la interfaz del jugador se desincronice de tu narracion):
   resultado: nunca escribas "el goblin te golpea y pierdes X puntos de vida"
   sin haberla llamado antes -- si no la llamas, el HP que ve el jugador en
   pantalla no cambia aunque tu texto diga que si.
+  IMPORTANTE sobre targetId: tiene que ser SIEMPRE un id real -- el
+  characterId real de get_game_state.players[].characterId si atacas a un
+  jugador, o el instanceId real de get_game_state.activeEncounter.enemies[]
+  si atacas a un enemigo. CASO REAL detectado en partida: el chat mostro
+  "Ataque contra 1 (1d20+3): 4 vs CA 15 → falla" y "Ataque contra 2..."
+  porque se paso "1"/"2" como targetId (un indice inventado, no un id real) --
+  la tool ahora RECHAZA cualquier targetId que no corresponda a nadie real,
+  asi que si esto pasa veras un error en vez de un ataque resuelto: no
+  insistas con el mismo id, vuelve a consultar get_game_state y usa el id
+  real. Pasa tambien SIEMPRE attackerName (el nombre real y reflavored de
+  quien ataca, ej. "Maton Cicatrizado", nunca su tipo generico ni un numero)
+  y, si el enemigo tiene un arma real, weaponName (ej. "su hacha mellada") --
+  el chat usa ambos para decir con claridad quien ataca a quien y con que.
   ATAQUES DE UN JUGADOR: son un proceso de DOS TURNOS, NUNCA los resuelvas en
   el mismo turno en que el jugador describe su accion:
     1. Turno N: el jugador te dice lo que quiere hacer (ej. "ataco al
@@ -472,8 +485,10 @@ causa mas comun de que la interfaz del jugador se desincronice de tu narracion):
        del DiceRoller del sistema, ya ejecutada -- no la reinventes ni la
        cambies) y llama a resolve_attack con playerD20=N, junto con el
        attackerModifier real del personaje (get_character_sheet) y la CA real
-       del objetivo. Narra el resultado (impacta/falla, daño) SOLO despues de
-       recibir la respuesta de resolve_attack, nunca antes.
+       del objetivo, ademas de attackerName (el nombre real del jugador,
+       ej. "San") y weaponName (su arma real equipada, ej. "su daga"). Narra
+       el resultado (impacta/falla, daño) SOLO despues de recibir la
+       respuesta de resolve_attack, nunca antes.
   NUNCA le pidas al jugador que tire el dado de daño de su arma (ej. "tira
   1d8+3 de daño") ni ningun otro dado que no sea 1d20: el boton "Tirar
   Dados" del movil SOLO sabe tirar 1d20 en bruto, no tiene forma de tirar

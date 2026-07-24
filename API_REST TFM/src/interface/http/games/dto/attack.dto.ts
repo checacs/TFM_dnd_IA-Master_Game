@@ -1,8 +1,16 @@
-import { IsString, IsInt, Min, Matches } from 'class-validator';
+import { IsString, IsInt, IsOptional, Min, Matches } from 'class-validator';
 
 export class AttackDto {
   @IsString()
   targetId!: string;
+
+  /** Nombre real del atacante -- ver comentario de ResolveAttackInput.attackerName. */
+  @IsString()
+  attackerName!: string;
+
+  @IsOptional()
+  @IsString()
+  weaponName?: string;
 
   @IsInt()
   attackerModifier!: number;

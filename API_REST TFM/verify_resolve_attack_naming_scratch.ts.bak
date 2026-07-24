@@ -1,0 +1,73 @@
+import { DiceRoller } from './src/domain/ports/dice-roller.port';
+import { GameRepository } from './src/domain/ports/game.repository.port';
+import { Game } from './src/domain/entities/game.entity';
+import { ResolveAttackUseCase } from './src/application/use-cases/resolve-attack.use-case';
+
+class FakeDiceRoller implements DiceRoller {
+  private i = 0;
+  constructor(private readonly fixedValues: number[]) {}
+  rollD20(): number { return this.fixedValues[this.i++]; }
+  roll(): number { return this.fixedValues[this.i++]; }
+}
+
+class FakeGameRepository implements GameRepository {
+  private readonly games = new Map<string, Game>();
+  seed(game: Game): void { this.games.set(game.id, game); }
+  async findById(id: string): Promise<Game | null> { return this.games.get(id) ?? null; }
+  async findByUserId(): Promise<Game[]> { return []; }
+  async save(game: Game): Promise<void> { this.games.set(game.id, game); }
+}
+
+function buildGame() {
+  const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+  game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'San', class: 'mago', currentHp: 11 });
+  game.assignCaptain('host-1', 'user-1');
+  game.launch('host-1');
+  game.startEncounter({
+    enemies: [{ instanceId: 'bandit-1', enemyRefId: 'bandit', name: 'Matón Cicatrizado', currentHp: 11, ac: 12 }],
+  });
+  const repo = new FakeGameRepository();
+  repo.seed(game);
+  return { game, repo };
+}
+
+async function main() {
+  // 1) targetId inventado ("1") -- debe rechazarse.
+  {
+    const { game, repo } = buildGame();
+    const useCase = new ResolveAttackUseCase(new FakeDiceRoller([15, 5]), repo);
+    let threw = false;
+    try {
+      await useCase.execute({
+        gameId: game.id, targetId: '1', attackerName: 'Matón Cicatrizado',
+        attackerModifier: 3, targetArmorClass: 12, damageDice: '1d6+2',
+      });
+    } catch (e) {
+      threw = true;
+      console.log('Rechazado correctamente:', (e as Error).message);
+    }
+    if (!threw) throw new Error('FALLO: debería haber rechazado targetId inventado "1".');
+  }
+
+  // 2) Ataque real de un enemigo contra el jugador San, con nombre y arma.
+  {
+    const { game, repo } = buildGame();
+    const useCase = new ResolveAttackUseCase(new FakeDiceRoller([15, 5]), repo);
+    await useCase.execute({
+      gameId: game.id, targetId: 'char-1', attackerName: 'Matón Cicatrizado', weaponName: 'su hacha mellada',
+      attackerModifier: 3, targetArmorClass: 12, damageDice: '1d6+2',
+    });
+    const saved = await repo.findById(game.id);
+    const msg = saved!.toSnapshot().narrativeLog[0].content;
+    console.log('Mensaje generado:', msg);
+    if (!msg.includes('**Matón Cicatrizado**')) throw new Error('FALLO: falta el nombre del atacante.');
+    if (!msg.includes('**San**')) throw new Error('FALLO: falta el nombre real del objetivo (San).');
+    if (!msg.includes('con su hacha mellada')) throw new Error('FALLO: falta el arma.');
+    if (!msg.includes('Armadura 12')) throw new Error('FALLO: debería decir "Armadura", no "CA".');
+    if (msg.includes(' CA ')) throw new Error('FALLO: todavía aparece "CA" en el mensaje.');
+  }
+
+  console.log('TODO OK: resolve_attack nombra al atacante/arma real, dice "Armadura" y rechaza ids inventados.');
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });

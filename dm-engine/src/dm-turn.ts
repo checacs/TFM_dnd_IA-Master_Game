@@ -1009,11 +1009,38 @@ async function checkCombatStateNudge(
  * falta que el modelo narre nada nuevo para esto, es limpieza de estado, no
  * contenido creativo.
  */
+// Frases que declaran el combate cerrado COMO HECHO CONSUMADO (no una
+// pregunta ni una posibilidad). Ademas de "todos a 0 HP", un combate real
+// también puede terminar sin que muera nadie más: un enemigo se rinde o
+// huye (ver bug real más abajo) y sigue con currentHp > 0 en
+// get_game_state, así que el chequeo de "todos derrotados" nunca se
+// dispara para ese caso -- solo la propia narración del DM lo delata.
+const COMBAT_OVER_NARRATIVE_PATTERNS = [
+  /combate\s+(ya\s+)?ha\s+terminado/i,
+  /combate\s+terminado/i,
+  /combate\s+(ya\s+)?ha\s+concluido/i,
+  /combate\s+(ya\s+)?ha\s+acabado/i,
+  /el\s+combate\s+(se\s+)?(ha\s+)?cerrado/i,
+];
+
+function narrativeDeclaresCombatOver(text: string): boolean {
+  return COMBAT_OVER_NARRATIVE_PATTERNS.some((pattern) => {
+    const match = pattern.exec(text);
+    if (!match) return false;
+    // Guarda simple contra negaciones ("el combate NO ha terminado"): si
+    // aparece un "no " justo antes del match, no lo cuentes como declaración
+    // de cierre.
+    const precedingText = text.slice(Math.max(0, match.index - 12), match.index);
+    return !/\bno\s+$/i.test(precedingText);
+  });
+}
+
 async function resolveStaleDefeatedEncounter(
     toolCaller: ToolCaller,
     gameId: string,
     events: GameEvent[],
-    knownState?: unknown,
+    knownState: unknown,
+    narrativeText: string,
 ): Promise<boolean> {
   let state = knownState;
   if (state === undefined) {
@@ -1028,8 +1055,18 @@ async function resolveStaleDefeatedEncounter(
       (state as { activeEncounter?: { enemies?: EncounterEnemyState[] } } | null)?.activeEncounter ?? null;
   const enemies = activeEncounter?.enemies ?? [];
   const allDefeated = enemies.length > 0 && enemies.every((e) => typeof e.currentHp === 'number' && e.currentHp <= 0);
+  // CASO REAL detectado en partida: dos bandidos murieron de verdad (0 HP),
+  // pero el tercero (el Traficante Flaco) se RINDIÓ y fue dejado escapar --
+  // nunca bajó de HP real, así que allDefeated es false. El DM narró "El
+  // combate ha terminado" y "otorgando 50 XP", pero end_combat nunca llegó a
+  // aplicarse de verdad y el panel de combate se quedó fantasma en el
+  // tablero. Un enemigo que se rinde o huye termina el combate igual que uno
+  // derrotado -- por eso este seguro también se dispara si la propia
+  // narración del DM declara el cierre como hecho consumado, no solo cuando
+  // el HP real lo confirma.
+  const narrativeDeclaresOver = narrativeDeclaresCombatOver(narrativeText);
 
-  if (!activeEncounter || !allDefeated) {
+  if (!activeEncounter || (!allDefeated && !narrativeDeclaresOver)) {
     return false;
   }
 
@@ -1045,8 +1082,11 @@ async function resolveStaleDefeatedEncounter(
 
   events.push({ type: 'combate_terminado', payload: {} });
   console.log(
-      '[dm-engine] Seguro de combate ya terminado activado: todos los enemigos estaban a 0 HP real pero ' +
-      'end_combat nunca se llamó -- forzado por código para no dejar el panel de combate fantasma.',
+      '[dm-engine] Seguro de combate ya terminado activado ' +
+      (allDefeated
+        ? '(todos los enemigos estaban a 0 HP real'
+        : '(la narración del DM declaraba el combate cerrado (ej. rendición/huida)') +
+      ') pero end_combat nunca se llamó -- forzado por código para no dejar el panel de combate fantasma.',
   );
   return true;
 }
@@ -1456,7 +1496,9 @@ export async function runDmTurn(
   // siempre. Se reutiliza cachedGameState si ya se pidió arriba en este mismo
   // turno para no duplicar la llamada a get_game_state.
   try {
-    await resolveStaleDefeatedEncounter(toolCaller, gameId, events, cachedGameState);
+    await resolveStaleDefeatedEncounter(
+        toolCaller, gameId, events, cachedGameState, fallbackNarrative ?? response.message.content ?? '',
+    );
   } catch (error) {
     console.error(
         '[dm-engine] Seguro de combate ya terminado: fallo inesperado -- ' +

@@ -34,10 +34,20 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
       'tirada ("🎲 **Nombre** tira 1d20: N"), LEE ese número N y llama a esta tool con playerD20=N -- así el ' +
       'impacto se decide con la tirada que el jugador vio en pantalla al pulsar "Tirar Dados", no con una ' +
       'tirada nueva e invisible resuelta por ti. El dado de daño siempre lo tira el sistema (el botón del ' +
-      'jugador no puede tirar dados de daño, solo 1d20).',
+      'jugador no puede tirar dados de daño, solo 1d20). ' +
+      'CASO REAL detectado en partida: el chat mostró "Ataque contra 1 (1d20+3): 4 vs CA 15 → falla" porque ' +
+      'se pasó un targetId inventado ("1", "2") en vez del characterId/instanceId real -- targetId SIEMPRE ' +
+      'tiene que ser el characterId real de get_game_state.players[].characterId (para atacar a un jugador) o ' +
+      'el instanceId real de get_game_state.activeEncounter.enemies[].instanceId (para atacar a un enemigo); ' +
+      'la tool ahora RECHAZA cualquier id que no corresponda a ninguno de los dos. Pasa también attackerName ' +
+      '(el nombre real de quien ataca, ej. "Matón Cicatrizado") y, si aplica, weaponName (ej. "su hacha ' +
+      'mellada") -- el mensaje del chat los usa para decir claramente quién ataca a quién y con qué, en vez de ' +
+      'mostrar solo el id crudo.',
     {
       gameId: z.string(),
       targetId: z.string(),
+      attackerName: z.string(),
+      weaponName: z.string().optional(),
       attackerModifier: z.number().int(),
       targetArmorClass: z.number().int(),
       damageDice: z.string().describe('Notación de dado de daño, ej. "1d6+2"'),

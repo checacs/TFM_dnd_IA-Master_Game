@@ -56,6 +56,7 @@ describe('ResolveAttackUseCase', () => {
     const result = await useCase.execute({
       gameId: game.id,
       targetId: 'enc-1-goblin-a',
+      attackerName: 'Elyndra',
       attackerModifier: 2,
       targetArmorClass: 17,
       damageDice: '1d6+2',
@@ -80,11 +81,13 @@ describe('ResolveAttackUseCase', () => {
     // distinguirlo del resto del mensaje.
     expect(log[0].content).toContain('**Goblin explorador**');
     // El mensaje muestra el TOTAL de la tirada (15 + 2 = **17**), no el d20
-    // crudo -- formato actual: "(1d20+2): **17** vs CA 17 → ¡IMPACTA! — Daño (1d6+2): **5**".
+    // crudo -- formato actual: "(1d20+2): **17** vs Armadura 17 → ¡IMPACTA! — Daño (1d6+2): **5**".
     expect(log[0].content).toContain('**17**');
-    expect(log[0].content).toContain('CA 17');
+    expect(log[0].content).toContain('Armadura 17');
     expect(log[0].content).toContain('1d6+2');
     expect(log[0].content).toContain('**5**');
+    // CASO REAL: antes no decía quién atacaba -- ahora siempre nombra al atacante real.
+    expect(log[0].content).toContain('**Elyndra**');
   });
 
   it('falla cuando la tirada no alcanza la CA y no modifica el HP del objetivo', async () => {
@@ -95,6 +98,7 @@ describe('ResolveAttackUseCase', () => {
     const result = await useCase.execute({
       gameId: game.id,
       targetId: 'enc-1-goblin-a',
+      attackerName: 'Elyndra',
       attackerModifier: 2,
       targetArmorClass: 17,
       damageDice: '1d6+2',
@@ -114,9 +118,9 @@ describe('ResolveAttackUseCase', () => {
     const log = saved!.toSnapshot().narrativeLog;
     expect(log).toHaveLength(1);
     // El mensaje muestra el TOTAL de la tirada (5 + 2 = **7**), no el d20
-    // crudo -- formato actual: "(1d20+2): **7** vs CA 17 → falla".
+    // crudo -- formato actual: "(1d20+2): **7** vs Armadura 17 → falla".
     expect(log[0].content).toContain('**7**');
-    expect(log[0].content).toContain('CA 17');
+    expect(log[0].content).toContain('Armadura 17');
     expect(log[0].content.toLowerCase()).toContain('falla');
   });
 
@@ -139,6 +143,7 @@ describe('ResolveAttackUseCase', () => {
       const result = await useCase.execute({
         gameId: game.id,
         targetId: 'enc-1-goblin-a',
+        attackerName: 'Elyndra',
         attackerModifier: 2,
         targetArmorClass: 17,
         damageDice: '1d6+2',
@@ -158,6 +163,7 @@ describe('ResolveAttackUseCase', () => {
       await useCase.execute({
         gameId: game.id,
         targetId: 'enc-1-goblin-a',
+        attackerName: 'Elyndra',
         attackerModifier: 2,
         targetArmorClass: 17,
         damageDice: '1d6+2',
@@ -167,7 +173,7 @@ describe('ResolveAttackUseCase', () => {
       const saved = await repo.findById(game.id);
       const log = saved!.toSnapshot().narrativeLog;
       // El mensaje muestra el TOTAL (15 + 2 = **17**), no el d20 crudo del
-      // jugador -- formato actual: "(1d20+2 (tirada del jugador)): **17** vs CA 17 → ...".
+      // jugador -- formato actual: "(1d20+2 (tirada del jugador)): **17** vs Armadura 17 → ...".
       expect(log[0].content).toContain('**17**');
       expect(log[0].content.toLowerCase()).toContain('tirada del jugador');
     });
@@ -180,6 +186,7 @@ describe('ResolveAttackUseCase', () => {
       const result = await useCase.execute({
         gameId: game.id,
         targetId: 'enc-1-goblin-a',
+        attackerName: 'Goblin explorador',
         attackerModifier: 2,
         targetArmorClass: 17,
         damageDice: '1d6+2',
@@ -200,10 +207,72 @@ describe('ResolveAttackUseCase', () => {
         useCase.execute({
           gameId: 'no-existe',
           targetId: 'enc-1-goblin-a',
+          attackerName: 'Elyndra',
           attackerModifier: 2,
           targetArmorClass: 17,
           damageDice: '1d6+2',
         }),
     ).rejects.toThrow();
+  });
+
+  it(
+      'lanza DomainError si targetId no corresponde a ningún jugador ni enemigo real (CASO REAL: el chat ' +
+      'mostraba "Ataque contra 1"/"Ataque contra 2" porque el DM pasaba un id inventado en vez del characterId real)',
+      async () => {
+        const { game, repo } = buildGameWithActiveEnemy();
+        const diceRoller = new FakeDiceRoller([15, 5]);
+        const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+        await expect(
+            useCase.execute({
+              gameId: game.id,
+              targetId: '1', // id inventado, no es ni characterId ni instanceId real
+              attackerName: 'Goblin explorador',
+              attackerModifier: 2,
+              targetArmorClass: 17,
+              damageDice: '1d6+2',
+            }),
+        ).rejects.toThrow();
+      },
+  );
+
+  it('el mensaje del chat nombra al atacante real y, si se indica, el arma con la que golpea', async () => {
+    const { game, repo } = buildGameWithActiveEnemy();
+    const diceRoller = new FakeDiceRoller([15, 5]);
+    const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+    await useCase.execute({
+      gameId: game.id,
+      targetId: 'enc-1-goblin-a',
+      attackerName: 'Matón Cicatrizado',
+      weaponName: 'su hacha mellada',
+      attackerModifier: 2,
+      targetArmorClass: 17,
+      damageDice: '1d6+2',
+    });
+
+    const saved = await repo.findById(game.id);
+    const log = saved!.toSnapshot().narrativeLog;
+    expect(log[0].content).toContain('**Matón Cicatrizado**');
+    expect(log[0].content).toContain('con su hacha mellada');
+  });
+
+  it('ataca a un jugador real (targetId = characterId) sin necesitar weaponName', async () => {
+    const { game, repo } = buildGameWithActiveEnemy();
+    const diceRoller = new FakeDiceRoller([15, 5]);
+    const useCase = new ResolveAttackUseCase(diceRoller, repo);
+
+    await useCase.execute({
+      gameId: game.id,
+      targetId: 'char-1', // characterId real de Elyndra
+      attackerName: 'Goblin explorador',
+      attackerModifier: 2,
+      targetArmorClass: 14,
+      damageDice: '1d6+2',
+    });
+
+    const saved = await repo.findById(game.id);
+    const log = saved!.toSnapshot().narrativeLog;
+    expect(log[0].content).toContain('**Elyndra**');
   });
 });
