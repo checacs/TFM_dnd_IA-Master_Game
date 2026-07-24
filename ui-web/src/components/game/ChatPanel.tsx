@@ -113,6 +113,13 @@ export function ChatPanel({ messages, isLoading, errorMessage }: ChatPanelProps)
 
   return (
     <div className="chat-panel">
+      {/* Aviso fijo (a petición del usuario) para que los jugadores escriban
+       * respuestas concretas al DM en vez de mensajes ambiguos que el
+       * modelo pueda malinterpretar -- siempre visible, fuera del área con
+       * scroll de chat-messages, justo encima del título "Partida". */}
+      <p className="chat-panel-notice">
+        Escribe respuestas lo mas explícitas posible, nada de ambigüedades
+      </p>
       <h3 className="chat-panel-title">Partida</h3>
       <div className="chat-messages">
         {messages.map((m, i) => {

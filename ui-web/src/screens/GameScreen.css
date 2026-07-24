@@ -144,6 +144,16 @@
   min-height: 0;
 }
 
+.chat-panel-notice {
+  flex: 0 0 auto;
+  text-align: center;
+  margin: 0 0 0.5rem 0;
+  color: var(--color-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
 .chat-panel-title {
   flex: 0 0 auto;
   text-align: center;
