@@ -7,6 +7,13 @@ import { ChatMessage } from './ports';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL;
+// Nueva a propósito, con valor por defecto: antes esta URL iba fija a
+// 'https://api.deepseek.com' dentro de DeepSeekChatClient -- para poder
+// cambiar de proveedor (Kimi K2/K3, Qwen, GLM, OpenAI...) sin tocar código,
+// ahora se lee de aquí. El default mantiene el comportamiento de siempre
+// (DeepSeek) si esta variable no se define -- así un despliegue ya
+// existente en Render que no la tenga configurada sigue funcionando igual.
+const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL;
 
 if (!DEEPSEEK_API_KEY) {
@@ -14,14 +21,15 @@ if (!DEEPSEEK_API_KEY) {
 }
 if (!DEEPSEEK_MODEL) {
   throw new Error(
-    'Falta la variable de entorno DEEPSEEK_MODEL. Comprueba el id vigente en api-docs.deepseek.com — cambia con frecuencia.',
+    'Falta la variable de entorno DEEPSEEK_MODEL. Comprueba el id vigente en api-docs.deepseek.com (o la ' +
+    'documentación del proveedor que estés usando) -- cambia con frecuencia.',
   );
 }
 if (!MCP_SERVER_URL) {
   throw new Error('Falta la variable de entorno MCP_SERVER_URL (ej. http://localhost:3000/mcp)');
 }
 
-const chatClient = new DeepSeekChatClient(DEEPSEEK_API_KEY, DEEPSEEK_MODEL);
+const chatClient = new DeepSeekChatClient(DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_BASE_URL);
 const toolCaller = new McpToolCaller(MCP_SERVER_URL);
 
 const app = express();
