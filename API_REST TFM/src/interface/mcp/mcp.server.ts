@@ -16,11 +16,18 @@ import { withGameLock } from '../../domain/services/game-lock';
 export function registerGameTools(server: McpServer, tools: GameMcpTools): void {
   server.tool(
     'roll_dice',
-    'Ejecuta una tirada de dados determinista (ej. tirada de salvación fuera de combate). ' +
-      'El resultado siempre lo genera el backend, nunca se debe asumir un resultado.',
-    { notation: z.string().describe('Notación de dado, ej. "1d20+3"') },
-    async ({ notation }) => ({
-      content: [{ type: 'text', text: JSON.stringify(tools.rollDiceTool(notation)) }],
+    'Ejecuta una tirada de dados determinista fuera de un ataque estructurado (ej. una prueba de habilidad, ' +
+      'una tirada de salvación, un intento de fuga de un enemigo). El resultado siempre lo genera el backend, ' +
+      'nunca se debe asumir un resultado. La tirada y su motivo (reason) se muestran garantizados en el chat del ' +
+      'jugador -- describe SIEMPRE con claridad para qué es (ej. "Intento de fuga del Dust Mephit", "Prueba de ' +
+      'Sigilo de Che") para que el jugador entienda de qué tirada se trata y qué decide.',
+    {
+      gameId: z.string(),
+      notation: z.string().describe('Notación de dado, ej. "1d20+3"'),
+      reason: z.string().describe('Para qué es la tirada, en texto claro (se muestra tal cual en el chat)'),
+    },
+    async ({ gameId, notation, reason }) => ({
+      content: [{ type: 'text', text: JSON.stringify(await withGameLock(gameId, () => tools.rollDiceTool(gameId, notation, reason))) }],
     }),
   );
 
@@ -207,10 +214,12 @@ export function registerGameTools(server: McpServer, tools: GameMcpTools): void 
   server.tool(
     'grant_xp',
     'Otorga experiencia a un personaje tras un evento narrativo (ej. derrotar un enemigo) y marca ' +
-      'si cruza el umbral de nivel.',
-    { characterId: z.string(), amount: z.number().int().positive() },
-    async ({ characterId, amount }) => ({
-      content: [{ type: 'text', text: JSON.stringify(await tools.grantXpTool(characterId, amount)) }],
+      'si cruza el umbral de nivel. Deja un aviso garantizado de la XP ganada en el chat de la partida -- no ' +
+      'hace falta que tú mismo narres la cifra exacta de XP, aunque sí debes seguir narrando el evento que la ' +
+      'motiva (la derrota, la huida resuelta, etc.).',
+    { gameId: z.string(), characterId: z.string(), amount: z.number().int().positive() },
+    async ({ gameId, characterId, amount }) => ({
+      content: [{ type: 'text', text: JSON.stringify(await withGameLock(gameId, () => tools.grantXpTool(gameId, characterId, amount))) }],
     }),
   );
 

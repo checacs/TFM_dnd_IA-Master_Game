@@ -69,8 +69,8 @@ export class GameMcpTools {
     private readonly castSpell: CastSpellUseCase,
   ) {}
 
-  rollDiceTool(notation: string) {
-    return this.rollDice.execute({ notation });
+  rollDiceTool(gameId: string, notation: string, reason: string) {
+    return this.rollDice.execute({ gameId, notation, reason });
   }
 
   resolveAttackTool(input: ResolveAttackInput) {
@@ -121,8 +121,8 @@ export class GameMcpTools {
     return this.getGameState.execute({ gameId });
   }
 
-  grantXpTool(characterId: string, amount: number) {
-    return this.grantXp.execute({ characterId, amount });
+  grantXpTool(gameId: string, characterId: string, amount: number) {
+    return this.grantXp.execute({ gameId, characterId, amount });
   }
 
   applyConditionTool(gameId: string, participantId: string, conditionIndex: string) {

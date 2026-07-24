@@ -87,6 +87,37 @@ describe('EndCombatUseCase', () => {
       },
   );
 
+  it(
+      'nombra explícitamente al enemigo que sigue vivo (huida) en el mensaje de cierre -- antes el jugador ' +
+      'tenía que adivinar por la narración libre del DM qué había pasado con él',
+      async () => {
+        const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+        game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        game.assignCaptain('host-1', 'user-1');
+        game.launch('host-1');
+        game.startEncounter({
+          enemies: [
+            { instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 0, ac: 15 },
+            { instanceId: 'enc-1-mephit-b', enemyRefId: 'enemy-2', name: 'Dust Mephit', currentHp: 8, ac: 12 },
+          ],
+        });
+        const repo = new FakeGameRepository();
+        repo.seed(game);
+        const useCase = new EndCombatUseCase(repo);
+
+        await useCase.execute({ gameId: game.id });
+
+        const saved = await repo.findById(game.id);
+        const log = saved!.toSnapshot().narrativeLog;
+        const combatEndEntry = log.find((e) => e.content.includes('Combate terminado'));
+
+        expect(combatEndEntry).toBeDefined();
+        expect(combatEndEntry?.content).not.toContain('COMBATE TERMINADO');
+        expect(combatEndEntry?.content).toContain('Dust Mephit');
+        expect(combatEndEntry?.content).not.toContain('Goblin explorador');
+      },
+  );
+
   it('lanza DomainError si la partida no existe', async () => {
     const repo = new FakeGameRepository();
     const useCase = new EndCombatUseCase(repo);

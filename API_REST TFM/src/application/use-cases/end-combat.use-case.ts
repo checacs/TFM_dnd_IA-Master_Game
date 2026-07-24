@@ -40,9 +40,23 @@ export class EndCombatUseCase {
     // panel hasta que la interfaz refrescaba el estado.
     const encounter = game.toSnapshot().activeEncounter;
     const allDefeated = !!encounter && encounter.enemies.every((e) => e.currentHp <= 0);
-    const content = allDefeated
-      ? '🏆 **¡COMBATE TERMINADO!** — Todos los enemigos han sido derrotados.'
-      : '🏳️ **Combate terminado.**';
+    // Se detectó en partida real un caso más: un enemigo con HP real aún
+    // positivo (huida a mitad de combate, tregua negociada...) -- el mensaje
+    // genérico "Combate terminado" no decía NADA sobre qué había pasado con
+    // él, y el jugador solo tenía la narración libre del DM (a veces ninguna
+    // mención clara) para enterarse. Ahora se nombra explícitamente a quien
+    // sigue con vida cuando el combate se cierra.
+    const survivors = (encounter?.enemies ?? []).filter((e) => e.currentHp > 0);
+    let content: string;
+    if (allDefeated) {
+      content = '🏆 **¡COMBATE TERMINADO!** — Todos los enemigos han sido derrotados.';
+    } else if (survivors.length > 0) {
+      const names = survivors.map((e) => `**${e.name}**`).join(', ');
+      const verb = survivors.length === 1 ? 'logra escapar con vida' : 'logran escapar con vida';
+      content = `🏳️ **Combate terminado.** — ${names} ${verb}.`;
+    } else {
+      content = '🏳️ **Combate terminado.**';
+    }
 
     game.endEncounter();
     game.appendNarrativeEntry({ role: 'assistant', content });
