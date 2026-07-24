@@ -1092,6 +1092,126 @@ async function resolveStaleDefeatedEncounter(
 }
 
 /**
+ * Seguro determinista de última instancia para el bug de rotación de turnos
+ * confirmado con logs reales de producción (partida D5UBJGSSEF, 2026-07-24):
+ * el aviso correctivo de más arriba (needsTurnChecks dentro de protocolNudge)
+ * detectó DOS VECES SEGUIDAS, en el mismo turno, que se había resuelto el
+ * ataque de un jugador (resolve_attack con playerD20) sin llamar después a
+ * end_player_turn -- y el modelo, pese a agotar los dos intentos de
+ * corrección (MAX_CORRECTION_ATTEMPTS), nunca llegó a llamarla ("Turno
+ * terminado. Tools llamadas: [resolve_attack, get_game_state]", sin
+ * end_player_turn en la lista). Sin este seguro, ese jugador conserva su
+ * turno reclamado para siempre: turnClaims nunca se vacía, actedThisRound
+ * nunca lo incluye, y roundPhase jamás pasa a 'enemigos' -- exactamente el
+ * síntoma reportado por el usuario ("hemos tenido turno 3 veces seguidas San
+ * y Che y eso no es correcto"), porque cada jugador puede reclamar y actuar
+ * de forma independiente (ver comentario de ActiveEncounter en
+ * game.entity.ts) sin que la ronda avance jamás a la fase de enemigos.
+ *
+ * Igual que resolveStaleDefeatedEncounter o el seguro anti-atasco de fase de
+ * enemigos, esto NO depende de que el modelo "por fin" obedezca: si
+ * resolvedPlayerAttack es true y end_player_turn no se llamó este turno, se
+ * fuerza por código -- pero solo cuando se puede identificar SIN AMBIGÜEDAD a
+ * qué personaje corresponde (un único turno reclamado ahora mismo, o el
+ * nombre del atacante -- capturado del propio argumento attackerName con el
+ * que el modelo llamó a resolve_attack, ver resolvedPlayerAttackerName más
+ * abajo -- coincidiendo con exactamente uno de los reclamados). Si hay varios
+ * turnos reclamados a la vez (partida con varios jugadores, cada uno pudo
+ * reclamar turno ya) y el nombre no permite distinguir cuál de ellos fue el
+ * que acaba de atacar, se registra el problema en el log pero NO se fuerza
+ * nada -- cerrar el turno de un jugador que en realidad no ha actuado
+ * todavía sería un fallo peor que el que se intenta arreglar (le impediría
+ * seguir jugando su propio turno sin haberlo resuelto).
+ */
+async function resolveMissingEndPlayerTurn(
+    toolCaller: ToolCaller,
+    gameId: string,
+    events: GameEvent[],
+    calledTools: Set<string>,
+    resolvedPlayerAttack: boolean,
+    resolvedPlayerAttackerName: string | null,
+): Promise<void> {
+  if (!resolvedPlayerAttack || calledTools.has('end_player_turn')) {
+    return;
+  }
+
+  type StatePlayer = { characterId?: unknown; name?: unknown };
+  type StateEncounter = { turnClaims?: unknown[] };
+  let state: unknown;
+  try {
+    state = await toolCaller.callTool('get_game_state', { gameId });
+  } catch (error) {
+    console.error(
+        '[dm-engine] Seguro de end_player_turn: no se pudo comprobar el estado real -- ' +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    return;
+  }
+
+  const encounter = (state as { activeEncounter?: StateEncounter } | null)?.activeEncounter ?? null;
+  const players = (state as { players?: StatePlayer[] } | null)?.players ?? [];
+  const claims = (encounter?.turnClaims ?? []).filter((c): c is string => typeof c === 'string');
+  if (claims.length === 0) {
+    // Ya no hay ningún turno reclamado -- nada que forzar (puede que el
+    // propio modelo lo cerrara de otra forma, o que el combate ya no esté
+    // activo).
+    return;
+  }
+
+  const candidates = players.filter(
+      (p): p is { characterId: string; name?: unknown } =>
+        typeof p.characterId === 'string' && claims.includes(p.characterId),
+  );
+
+  let target: string | null = null;
+  if (candidates.length === 1) {
+    // Sin ambigüedad posible: solo hay un turno reclamado, tiene que ser ese.
+    target = candidates[0].characterId;
+  } else if (resolvedPlayerAttackerName) {
+    const normalizedAttacker = resolvedPlayerAttackerName.trim().toLowerCase();
+    const nameMatches = candidates.filter((p) => {
+      const name = typeof p.name === 'string' ? p.name.trim().toLowerCase() : '';
+      return name.length > 0 &&
+          (name === normalizedAttacker || normalizedAttacker.includes(name) || name.includes(normalizedAttacker));
+    });
+    if (nameMatches.length === 1) {
+      target = nameMatches[0].characterId;
+    }
+  }
+
+  if (!target) {
+    console.error(
+        '[dm-engine] Seguro de end_player_turn: se resolvió el ataque de un jugador (playerD20) sin llamar a ' +
+        `end_player_turn, pero hay ${claims.length} turnos reclamados a la vez (${claims.join(', ')}) y no se ` +
+        `pudo identificar sin ambigüedad cuál corresponde al atacante ("${resolvedPlayerAttackerName ?? 'desconocido'}") ` +
+        '-- no se fuerza nada para no cerrar el turno de un jugador que no ha actuado todavía.',
+    );
+    return;
+  }
+
+  let result: unknown;
+  try {
+    result = await toolCaller.callTool('end_player_turn', { gameId, characterId: target });
+  } catch (error) {
+    console.error(
+        `[dm-engine] Seguro de end_player_turn: no se pudo forzar end_player_turn para ${target} -- ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    return;
+  }
+
+  const event = toGameEvent('end_player_turn', result);
+  if (event) {
+    events.push(event);
+  }
+  console.log(
+      '[dm-engine] Seguro de end_player_turn activado: se resolvió el ataque de un jugador (resolve_attack con ' +
+      `playerD20) pero end_player_turn nunca se llamó pese a los avisos correctivos -- forzado por código para ` +
+      `${target}, evitando que su turno quede reclamado para siempre y la ronda no avance jamás a la fase de enemigos.`,
+  );
+}
+
+/**
  * Envuelve chatClient.createCompletion para distinguir, si falla, si ya se
  * había llamado a alguna tool en este turno (mutación posiblemente ya
  * aplicada -- no reintentar a ciegas) o si todavía no se había llamado a
@@ -1144,6 +1264,11 @@ export async function runDmTurn(
   // true si este turno se resolvió el ataque de un JUGADOR (resolve_attack
   // con playerD20) -- ver el chequeo de end_player_turn en protocolNudge.
   let resolvedPlayerAttack = false;
+  // attackerName con el que el modelo llamó a resolve_attack la última vez
+  // que resolvedPlayerAttack se puso a true -- usado únicamente por
+  // resolveMissingEndPlayerTurn para distinguir, si hay varios turnos
+  // reclamados a la vez, cuál de esos jugadores fue el que realmente atacó.
+  let resolvedPlayerAttackerName: string | null = null;
   // mapId del último set_battle_map aplicado con éxito en este turno -- se usa
   // solo para saber si es "tablonAnuncios" (nunca lleva place_participant, ver
   // dm-system-prompt.ts) y así no disparar el aviso de "aplicaste el mapa
@@ -1296,8 +1421,12 @@ export async function runDmTurn(
           if (call.function.name === 'resolve_attack' && args['playerD20'] !== undefined && args['playerD20'] !== null) {
             // Señal inequívoca de que la acción de combate de un JUGADOR quedó
             // resuelta este turno -- usada por el chequeo de end_player_turn
-            // en protocolNudge (ver comentario allí).
+            // en protocolNudge (ver comentario allí) y por el seguro
+            // determinista resolveMissingEndPlayerTurn.
             resolvedPlayerAttack = true;
+            if (typeof args['attackerName'] === 'string') {
+              resolvedPlayerAttackerName = args['attackerName'] as string;
+            }
           }
           if (call.function.name === 'start_combat') {
             const enemies = (result as { enemies?: Array<{ instanceId?: unknown }> } | null)?.enemies ?? [];
@@ -1437,7 +1566,21 @@ export async function runDmTurn(
     );
   }
 
-  // Segundo seguro determinista de última instancia, este para los TURNOS DE
+  // Segundo seguro determinista de última instancia: end_player_turn nunca
+  // llamado tras resolver el ataque de un jugador (ver
+  // resolveMissingEndPlayerTurn más arriba para el caso real de producción --
+  // partida D5UBJGSSEF -- que motivó esto: dos avisos correctivos seguidos
+  // detectando exactamente este problema, ignorados por el modelo ambas
+  // veces). Se ejecuta ANTES del seguro anti-atasco de fase de enemigos (el
+  // siguiente bloque), porque cerrar este turno puede ser precisamente lo que
+  // hace falta para que la fase pase de verdad a 'enemigos' -- el bloque
+  // siguiente vuelve a leer el estado real después de esto, así que ya lo
+  // vería actualizado.
+  await resolveMissingEndPlayerTurn(
+      toolCaller, gameId, events, calledTools, resolvedPlayerAttack, resolvedPlayerAttackerName,
+  );
+
+  // Tercer seguro determinista de última instancia, este para los TURNOS DE
   // COMBATE: si el turno termina con la fase de enemigos abierta
   // (roundPhase === 'enemigos' en el estado real) y el modelo no llamó a
   // advance_to_player_round pese a los avisos, la partida queda CONGELADA
@@ -1482,7 +1625,7 @@ export async function runDmTurn(
     }
   }
 
-  // Tercer seguro determinista de última instancia: combate con todos los
+  // Quinto seguro determinista de última instancia: combate con todos los
   // enemigos ya a 0 HP real pero end_combat nunca llamado (ver
   // resolveStaleDefeatedEncounter más arriba para el bug real que motivó
   // esto). A propósito NO se gatea detrás de touchedCombatSystem como los dos
