@@ -66,7 +66,13 @@ export class QwenTtsService {
     // indicada en su descripción oficial). Ver catálogo completo (con audio
     // de muestra por voz) en
     // https://www.alibabacloud.com/help/en/model-studio/qwen-tts-voice-list
-    this.voice = process.env.QWEN_TTS_VOICE ?? this.clonedVoiceId ?? 'Bodega';
+    // OJO orden: la voz clonada gana sobre QWEN_TTS_VOICE, no al revés -- si
+    // QWEN_TTS_VOICE se quedó puesta a 'Bodega' de antes (como en Render, al
+    // migrar de Polly), ?? nunca la "salta" porque una cadena no vacía no es
+    // null/undefined. Sin este orden, activar la voz clonada solo con
+    // QWEN_TTS_CLONED_VOICE_ID no tenía ningún efecto mientras
+    // QWEN_TTS_VOICE siguiera presente -- justo el bug reportado en producción.
+    this.voice = this.clonedVoiceId ?? process.env.QWEN_TTS_VOICE ?? 'Bodega';
     this.languageType = process.env.QWEN_TTS_LANGUAGE ?? 'Spanish';
   }
 
