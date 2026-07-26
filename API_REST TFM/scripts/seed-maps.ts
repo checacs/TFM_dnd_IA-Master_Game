@@ -381,8 +381,7 @@ const maps = [
     // columnas) y reescaladas todas las rowStart/rowEnd por ×33/32=1.03125.
     // Verificado con overlay sobre la imagen real: encaje excelente con las
     // estanterías del almacén oeste/este, el hueco central de la escalera de
-    // carga con la polea, y las puertas norte/sur.
-    rows: 33,
+    // carga con la polea, y las puertas norte/sur.    rows: 33,
     cols: 61,
     imageUrl: '/maps/battleMap12-AlmacenPiso1.png',
     zones: [
