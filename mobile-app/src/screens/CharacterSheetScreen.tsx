@@ -511,10 +511,12 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     // El botón "Ficha" flota arriba a la derecha (menuButtonFloating, top:50) y
-    // tapaba la tarjeta de personaje -- se baja bastante el arranque de esta
-    // caja para que quede claramente debajo.
-    paddingTop: 116,
-    marginBottom: 24,
+    // tapaba la tarjeta de personaje -- se baja el arranque de esta caja para
+    // que quede claramente debajo. Antes era 116/24 -- se recorta un poco
+    // (junto con el resto de la pantalla) para que TODO el contenido quepa
+    // sin scroll en un móvil normal y no se monte con "Ficha" al hacer scroll.
+    paddingTop: 100,
+    marginBottom: 14,
   },
   headerCard: {
     flexDirection: 'row',
@@ -524,7 +526,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.ink,
     borderRadius: radius.lg,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
   },
   headerIconWrap: {
@@ -570,12 +572,12 @@ const styles = StyleSheet.create({
   // captainSwapButtonFull) siguiendo el boceto del usuario.
   captainSwapButtonFull: {
     marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 6,
+    marginBottom: 14,
     borderWidth: 2,
     borderColor: colors.gold,
     borderRadius: radius.lg,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     backgroundColor: 'rgba(20, 16, 26, 0.75)',
   },
@@ -585,20 +587,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.ink,
     borderRadius: radius.lg,
-    padding: 14,
+    padding: 12,
     marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 6,
+    marginBottom: 14,
   },
-  combatStatus: { fontSize: 17, color: colors.ink, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
+  combatStatus: { fontSize: 17, color: colors.ink, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
   actionButtonsRow: { flexDirection: 'row', gap: 10 },
-  // Tiles bastante más grandes (antes eran botones finos de paddingVertical:12,
-  // luego 150 -- a petición del usuario, x3 sobre ese último valor: en un
-  // móvil real se quedaban pequeños e incómodos de pulsar/leer) para acercarse
-  // al boceto: dos cuadros grandes lado a lado.
+  // Tiles más grandes que el original (antes eran botones finos de
+  // paddingVertical:12, luego 150) -- primero se probó x3 (450) a petición
+  // del usuario, pero en un móvil real esa altura + el resto de la pantalla
+  // no cabían sin scroll y el scroll montaba el header debajo del botón
+  // "Ficha" flotante (que vive fuera del ScrollView a propósito). Se rebaja
+  // a 220 -- sigue siendo notablemente más grande que el original, pero cabe
+  // entera sin scroll junto al resto de la pantalla en un móvil normal.
   turnButton: {
     flex: 1,
-    height: 450,
+    height: 220,
     backgroundColor: colors.success,
     borderRadius: radius.lg,
     padding: 14,
@@ -608,7 +613,7 @@ const styles = StyleSheet.create({
   turnButtonText: { color: '#fff', fontWeight: '700', fontSize: 21, textAlign: 'center' },
   diceButton: {
     flex: 1,
-    height: 450,
+    height: 220,
     borderRadius: radius.lg,
     borderWidth: 1.5,
     borderColor: colors.ink,
