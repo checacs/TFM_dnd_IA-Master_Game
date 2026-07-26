@@ -405,3 +405,71 @@ textarea {
   background: transparent;
   color: var(--color-gold-bright);
 }
+
+/* "Tus partidas" (GameSetupScreen, la pantalla justo después del login) --
+   a petición del usuario: la tarjeta al doble de tamaño, con el logo y toda
+   la tipografía más grandes. Son overrides con más especificidad que las
+   reglas base de arriba, así que Login y Lobby (que comparten .full-bleed-card
+   / .brand-logo pero NO llevan .game-setup-card) no se ven afectados. */
+.game-setup-card {
+  max-width: 960px;
+  padding: 3.5rem 4rem;
+}
+
+.game-setup-card .brand-logo {
+  max-width: 560px;
+}
+
+.game-setup-card h1 {
+  font-size: 3rem;
+}
+
+.game-setup-card .subtitle {
+  font-size: 1.5rem;
+}
+
+.game-setup-card .field-group label {
+  font-size: 1.35rem;
+}
+
+.game-setup-card .field-group input,
+.game-setup-card .field-group select {
+  font-size: 1.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.game-setup-card .btn-gold,
+.game-setup-card .btn-ghost {
+  font-size: 1.5rem;
+  padding: 0.9rem 1.2rem;
+}
+
+.game-setup-card .section-divider {
+  font-size: 1.3rem;
+}
+
+.game-setup-card .game-list {
+  max-height: 420px;
+}
+
+.game-setup-card .game-list-name {
+  font-size: 1.5rem;
+}
+
+.game-setup-card .game-list-meta {
+  font-size: 1.25rem;
+}
+
+.game-setup-card .game-list-item {
+  padding: 1rem 1.2rem;
+}
+
+.game-setup-card .loading-msg,
+.game-setup-card .error-msg {
+  font-size: 1.35rem;
+}
+
+.game-setup-card .class-option {
+  font-size: 1.1rem;
+  padding: 0.55rem 1.1rem;
+}

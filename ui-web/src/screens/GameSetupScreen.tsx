@@ -46,7 +46,7 @@ export function GameSetupScreen() {
 
   return (
     <div className="full-bleed-screen">
-      <div className="full-bleed-card" style={{ maxWidth: 480 }}>
+      <div className="full-bleed-card game-setup-card">
         <img src="/logo_dnd.png" alt="Dungeons & Dragons" className="brand-logo" />
         <h1>Tus partidas</h1>
         <p className="subtitle">Elige una partida o crea una nueva aventura</p>
@@ -71,6 +71,8 @@ export function GameSetupScreen() {
             ))}
           </ul>
         )}
+
+        <div className="section-divider">o</div>
 
         <form onSubmit={handleJoinByCode} style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
           <div className="field-group" style={{ flex: 1, minWidth: 0, marginBottom: 0 }}>

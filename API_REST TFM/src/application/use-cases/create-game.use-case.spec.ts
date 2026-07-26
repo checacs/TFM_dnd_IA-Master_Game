@@ -33,7 +33,7 @@ class FakeGameCodeGenerator implements GameCodeGenerator {
 describe('CreateGameUseCase', () => {
   it('crea y persiste una partida nueva en estado de configuración', async () => {
     const games = new FakeGameRepository();
-    const codeGenerator = new FakeGameCodeGenerator(['ABCD234567']);
+    const codeGenerator = new FakeGameCodeGenerator(['ABCD23']);
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     const result = await useCase.execute({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
@@ -45,30 +45,30 @@ describe('CreateGameUseCase', () => {
 
   it('usa como gameId el código corto del generador (identificador público de la partida)', async () => {
     const games = new FakeGameRepository();
-    const codeGenerator = new FakeGameCodeGenerator(['XY7834KM9Q']);
+    const codeGenerator = new FakeGameCodeGenerator(['XY78KM']);
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     const result = await useCase.execute({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
 
-    expect(result.gameId).toBe('XY7834KM9Q');
-    expect(result.gameId).toHaveLength(10);
+    expect(result.gameId).toBe('XY78KM');
+    expect(result.gameId).toHaveLength(6);
   });
 
   it('si el código generado ya está en uso por otra partida, reintenta con el siguiente del generador', async () => {
     const games = new FakeGameRepository();
     const existing = Game.create(
       { name: 'Otra partida', hostUserId: 'host-2', maxPlayers: 2 },
-      'DUPLICADO1',
+      'DUPLIC',
     );
     games.seed(existing);
-    const codeGenerator = new FakeGameCodeGenerator(['DUPLICADO1', 'LIBRE00002']);
+    const codeGenerator = new FakeGameCodeGenerator(['DUPLIC', 'LIBRE2']);
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     const result = await useCase.execute({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
 
-    expect(result.gameId).toBe('LIBRE00002');
+    expect(result.gameId).toBe('LIBRE2');
     // La partida que ya existía con ese código no debe haberse tocado.
-    const untouched = await games.findById('DUPLICADO1');
+    const untouched = await games.findById('DUPLIC');
     expect(untouched?.toSnapshot().name).toBe('Otra partida');
   });
 
@@ -76,11 +76,11 @@ describe('CreateGameUseCase', () => {
     const games = new FakeGameRepository();
     const existing = Game.create(
       { name: 'Otra partida', hostUserId: 'host-2', maxPlayers: 2 },
-      'SIEMPRE001',
+      'SIEMPR',
     );
     games.seed(existing);
     // Repite el mismo código colisionado indefinidamente.
-    const codeGenerator = new FakeGameCodeGenerator(['SIEMPRE001']);
+    const codeGenerator = new FakeGameCodeGenerator(['SIEMPR']);
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     await expect(
@@ -90,7 +90,7 @@ describe('CreateGameUseCase', () => {
 
   it('propaga el error de dominio si maxPlayers está fuera de rango', async () => {
     const games = new FakeGameRepository();
-    const codeGenerator = new FakeGameCodeGenerator(['ABCD234567']);
+    const codeGenerator = new FakeGameCodeGenerator(['ABCD23']);
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     await expect(useCase.execute({ name: 'X', hostUserId: 'host-1', maxPlayers: 9 })).rejects.toThrow();

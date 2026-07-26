@@ -1,20 +1,15 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useGame, useLaunchGame, useJoinGame, useAssignCaptain } from '../api/hooks';
+import { useGame, useLaunchGame, useAssignCaptain } from '../api/hooks';
 import { useAuth } from '../auth/useAuth';
-import type { CharacterClass } from '../types/api';
 
 export function LobbyScreen() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const { data: game, isLoading, error } = useGame(gameId);
   const launchMutation = useLaunchGame(gameId!);
-  const joinMutation = useJoinGame(gameId!);
   const assignCaptainMutation = useAssignCaptain(gameId!);
   const { token } = useAuth();
-  const [charName, setCharName] = useState('');
-  const [charClass, setCharClass] = useState<CharacterClass>('guerrero');
-  const [showJoin, setShowJoin] = useState(false);
 
   // La navegación SIEMPRE en un efecto, nunca en el cuerpo del render — llamar
   // a navigate() durante el render de este componente mientras React todavía
@@ -62,28 +57,12 @@ export function LobbyScreen() {
     isHost = userId === game.hostUserId;
   }
 
-  const alreadyJoined = game.players.some((p) => p.userId === userId);
-
   const handleLaunch = () => {
     launchMutation.mutate(undefined, {
       onSuccess: () => {
         navigate(`/game/${gameId}`);
       },
     });
-  };
-
-  const handleJoin = (e: FormEvent) => {
-    e.preventDefault();
-    if (!charName) return;
-    joinMutation.mutate(
-      { characterName: charName, characterClass: charClass },
-      {
-        onSuccess: () => {
-          setShowJoin(false);
-          setCharName('');
-        },
-      },
-    );
   };
 
   return (
@@ -145,49 +124,9 @@ export function LobbyScreen() {
           </div>
         )}
 
-        {userId && !alreadyJoined && !showJoin && (
-          <button className="btn-gold" onClick={() => setShowJoin(true)}>
-            Unirse como jugador
-          </button>
-        )}
-
-        {showJoin && (
-          <form onSubmit={handleJoin} style={{ marginTop: '0.75rem' }}>
-            <div className="field-group">
-              <label htmlFor="charName">Nombre del personaje</label>
-              <input
-                id="charName"
-                type="text"
-                value={charName}
-                onChange={(e) => setCharName(e.target.value)}
-                placeholder="Aragorn..."
-                autoFocus
-              />
-            </div>
-            <div className="field-group">
-              <label>Clase</label>
-              <div className="class-select">
-                {(['guerrero', 'picaro', 'mago', 'clerigo'] as CharacterClass[]).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`class-option ${charClass === c ? 'selected' : ''}`}
-                    onClick={() => setCharClass(c)}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button type="submit" className="btn-gold" disabled={!charName || joinMutation.isPending}>
-              {joinMutation.isPending ? 'Uniendo...' : 'Unirse'}
-            </button>
-            <button type="button" className="btn-ghost" style={{ marginTop: '0.5rem' }} onClick={() => setShowJoin(false)}>
-              Cancelar
-            </button>
-            {joinMutation.error && <p className="error-msg">{joinMutation.error.message}</p>}
-          </form>
-        )}
+        {/* Unirse como jugador ya NO se hace desde ui-web (ni siquiera el host):
+            esta pantalla es siempre el tablero de solo lectura, la única
+            superficie desde la que se juega de verdad es mobile-app. */}
 
         {isHost && (
           <button

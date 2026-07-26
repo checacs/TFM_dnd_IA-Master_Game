@@ -4,7 +4,7 @@ import { GameCodeGenerator } from '../../domain/ports/game-code-generator.port';
 // el móvil/tablet para unirse a la partida, así que se evitan los
 // caracteres que se confunden fácilmente entre sí.
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-const CODE_LENGTH = 10;
+const CODE_LENGTH = 6;
 
 export class RandomGameCodeGenerator implements GameCodeGenerator {
   generate(): string {

@@ -279,6 +279,14 @@
 
 .board-panel {
   width: 100%;
+  /* El mapa (a la derecha, ver .board-map-outer) tiene que poder estirarse al
+     100% del alto disponible en .game-right -- para eso toda la cadena de
+     contenedores desde aquí hasta el mapa necesita height:100% + flex en
+     vez de dejar que cada uno crezca solo con su contenido. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Dos columnas: la lista de jugadores/enemigos a la izquierda (ancho fijo) y
@@ -288,7 +296,9 @@
 .board-panel-body {
   display: flex;
   gap: 1.25rem;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .board-players-column {
@@ -296,6 +306,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .board-player-list {
@@ -325,28 +337,29 @@
 .board-player-name {
   font-weight: 700;
   color: var(--color-ink);
-  font-size: 1.15rem;
+  font-size: 1.4rem;
 }
 
 .board-player-class {
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: var(--color-ink-soft);
   text-transform: capitalize;
 }
 
 .board-player-hp {
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: var(--color-ink-soft);
 }
 
 .board-player-conditions {
-  font-size: 0.92rem;
+  font-size: 1.17rem;
   color: var(--color-danger);
 }
 
 .board-map-column {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
 }
 
@@ -356,15 +369,18 @@
    (cols/rows) — así el mapa se dimensiona igual que un object-fit:contain
    (nunca se recorta ni se deforma) en vez de forzar width:100% + max-height,
    que con tableros muy altos (más filas que columnas) recortaba la imagen y
-   desalineaba los marcadores respecto a la cuadrícula real. */
+   desalineaba los marcadores respecto a la cuadrícula real.
+   A petición del usuario, el mapa ocupa el 100% del alto de pantalla
+   disponible (antes estaba limitado a min(88vh, 820px)) -- ese 100% ya viene
+   acotado por toda la cadena flex de arriba (.game-screen tiene altura fija
+   de viewport, así que este 100% nunca desborda la página). */
 .board-map-outer {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
-  /* Con el panel de tiradas y la ficha de personaje eliminados, hay más alto
-     libre debajo — se aprovecha para que el mapa crezca un poco más. */
-  height: min(88vh, 820px);
+  height: 100%;
+  min-height: 0;
 }
 
 .board-map-wrapper {
@@ -433,19 +449,19 @@
   display: flex;
   gap: 1rem;
   margin-top: 0.75rem;
-  font-size: 1rem;
+  font-size: 1.25rem;
   color: var(--color-ink-soft);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .legend-dot {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   display: inline-block;
 }

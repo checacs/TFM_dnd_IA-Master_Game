@@ -14,10 +14,11 @@ export interface CreateGameResult {
   gameId: string;
 }
 
-// Con 10 caracteres alfanuméricos (32^10 combinaciones) una colisión real es
-// prácticamente imposible, pero se comprueba igualmente antes de guardar:
-// el repositorio hace upsert por _id, así que guardar sin comprobar podría
-// pisar silenciosamente la partida de otro grupo si el código coincidiera.
+// Con 6 caracteres alfanuméricos (32^6 = ~1073M combinaciones) una colisión
+// real sigue siendo prácticamente imposible, pero se comprueba igualmente
+// antes de guardar: el repositorio hace upsert por _id, así que guardar sin
+// comprobar podría pisar silenciosamente la partida de otro grupo si el
+// código coincidiera.
 const MAX_CODE_ATTEMPTS = 5;
 
 /** El host crea la partida (HU1) — arranca en estado "configuracion", a la espera de que se unan jugadores.
