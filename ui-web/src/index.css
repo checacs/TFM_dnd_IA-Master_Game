@@ -411,18 +411,66 @@ textarea {
    pantallas (login/lobby, que comparten .full-bleed-card/.brand-logo pero NO
    llevan .game-setup-card, así que no se ven afectadas). Primera versión
    (max-width:960, padding 3.5rem/4rem, fuentes a 1.5rem) se quedaba más alta
-   que la pantalla y obligaba a hacer scroll de toda la página -- se rebaja
-   aquí un escalón y se limita el alto de la tarjeta a la ventana disponible
-   (max-height + overflow-y:auto) para que quepa entera sin desbordar. */
+   que la pantalla y obligaba a hacer scroll de toda la página -- se rebajó
+   un escalón y se limita el alto de la tarjeta a la ventana disponible
+   (max-height + overflow-y:auto) para que quepa entera sin desbordar.
+   Después, "Crear nueva partida" pasó a vivir en su propia columna (ver
+   .game-setup-columns) en vez de apilada debajo de la lista de partidas --
+   con eso ya no hace falta el scroll interno en el caso normal, pero se deja
+   como red de seguridad para pantallas muy bajas o con muchas partidas. */
 .game-setup-card {
-  max-width: 760px;
+  max-width: 920px;
   max-height: calc(100vh - 4rem);
   overflow-y: auto;
-  padding: 2.25rem 2.75rem;
+  padding: 2rem 2.5rem;
 }
 
 .game-setup-card .brand-logo {
-  max-width: 380px;
+  max-width: 320px;
+}
+
+/* Dos columnas lado a lado (izquierda: partidas + código; derecha: crear
+   partida) en vez de todo apilado en vertical -- por eso .game-setup-card
+   pasó de 760px a 920px de ancho, para que ambas columnas quepan sin
+   apretarse. Por debajo de 640px de ancho de tarjeta (móvil/tablet estrecho)
+   se apilan en vertical igual que antes, porque a ese ancho dos columnas ya
+   no caben con un mínimo de comodidad. */
+.game-setup-columns {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.game-setup-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.game-setup-col-divider {
+  border-left: 1px solid rgba(212, 175, 55, 0.3);
+  padding-left: 2rem;
+}
+
+.game-setup-col-title {
+  margin: 0 0 1rem;
+  color: var(--color-gold-bright);
+  font-size: 1.3rem;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 640px) {
+  .game-setup-columns {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .game-setup-col-divider {
+    border-left: none;
+    padding-left: 0;
+    margin-top: 1.75rem;
+    padding-top: 1.75rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.3);
+  }
 }
 
 .game-setup-card h1 {

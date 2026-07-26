@@ -13,7 +13,6 @@ export function GameSetupScreen() {
   const createGame = useCreateGame();
   const auth = useAuth();
   const navigate = useNavigate();
-  const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [joinCode, setJoinCode] = useState('');
@@ -51,96 +50,95 @@ export function GameSetupScreen() {
         <h1>Tus partidas</h1>
         <p className="subtitle">Elige una partida o crea una nueva aventura</p>
 
-        {isLoading && <div className="loading-msg">Cargando...</div>}
+        {/* Dos columnas (a petición del usuario: antes todo iba apilado en
+            vertical y, al abrir "Crear nueva partida", la tarjeta crecía más
+            que la pantalla y obligaba a hacer scroll). Izquierda: partidas +
+            código. Derecha: crear partida, siempre visible (ya no hace falta
+            el botón "Crear nueva partida" para desplegar el formulario --
+            con columna propia no le quita sitio a la lista de partidas). */}
+        <div className="game-setup-columns">
+          <div className="game-setup-col">
+            {isLoading && <div className="loading-msg">Cargando...</div>}
 
-        {!isLoading && games && games.length === 0 && !showCreate && (
-          <p className="subtitle">Aún no tienes ninguna partida.</p>
-        )}
+            {!isLoading && games && games.length === 0 && (
+              <p className="subtitle">Aún no tienes ninguna partida.</p>
+            )}
 
-        {!isLoading && games && games.length > 0 && (
-          <ul className="game-list">
-            {games.map((game) => (
-              <li key={game.id}>
-                <button className="game-list-item" onClick={() => navigate(gameHref(game))}>
-                  <span className="game-list-name">{game.name}</span>
-                  <span className="game-list-meta">
-                    {game.players}/{game.maxPlayers} jugadores · {game.status}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="section-divider">o</div>
-
-        <form onSubmit={handleJoinByCode} style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-          <div className="field-group" style={{ flex: 1, minWidth: 0, marginBottom: 0 }}>
-            <label htmlFor="joinCode">¿Tienes un código de partida?</label>
-            <input
-              id="joinCode"
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="Pega el código aquí"
-            />
-          </div>
-          {/* .btn-gold es width:100% por defecto (pensado para botones a ancho
-              completo como "Crear nueva partida") — aquí hay que forzarlo a
-              su contenido para que no se coma toda la fila y deje sitio al
-              input de al lado. */}
-          <button
-            type="submit"
-            className="btn-gold"
-            style={{ width: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}
-            disabled={!joinCode.trim()}
-          >
-            Ir
-          </button>
-        </form>
-
-        <div className="section-divider">o</div>
-
-        {!showCreate && (
-          <button className="btn-gold" onClick={() => setShowCreate(true)}>
-            Crear nueva partida
-          </button>
-        )}
-
-        {showCreate && (
-          <form onSubmit={handleCreate} style={{ marginTop: '1rem' }}>
-            <div className="field-group">
-              <label htmlFor="gameName">Nombre de la partida</label>
-              <input
-                id="gameName"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="La torre olvidada"
-                autoFocus
-              />
-            </div>
-            <div className="field-group">
-              <label htmlFor="maxPlayers">Máximo de jugadores</label>
-              <select
-                id="maxPlayers"
-                value={maxPlayers}
-                onChange={(e) => setMaxPlayers(Number(e.target.value))}
-              >
-                {[1, 2, 3, 4].map((n) => (
-                  <option key={n} value={n}>{n}</option>
+            {!isLoading && games && games.length > 0 && (
+              <ul className="game-list">
+                {games.map((game) => (
+                  <li key={game.id}>
+                    <button className="game-list-item" onClick={() => navigate(gameHref(game))}>
+                      <span className="game-list-name">{game.name}</span>
+                      <span className="game-list-meta">
+                        {game.players}/{game.maxPlayers} jugadores · {game.status}
+                      </span>
+                    </button>
+                  </li>
                 ))}
-              </select>
-            </div>
-            <button type="submit" className="btn-gold" disabled={!name || createGame.isPending}>
-              {createGame.isPending ? 'Creando...' : 'Crear partida'}
-            </button>
-            <button type="button" className="btn-ghost" style={{ marginTop: '0.5rem' }} onClick={() => setShowCreate(false)}>
-              Cancelar
-            </button>
-            {createGame.error && <p className="error-msg">{createGame.error.message}</p>}
-          </form>
-        )}
+              </ul>
+            )}
+
+            <div className="section-divider">o</div>
+
+            <form onSubmit={handleJoinByCode} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+              <div className="field-group" style={{ flex: 1, minWidth: 0, marginBottom: 0 }}>
+                <label htmlFor="joinCode">¿Tienes un código de partida?</label>
+                <input
+                  id="joinCode"
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  placeholder="Pega el código aquí"
+                />
+              </div>
+              {/* .btn-gold es width:100% por defecto (pensado para botones a ancho
+                  completo como "Crear nueva partida") — aquí hay que forzarlo a
+                  su contenido para que no se coma toda la fila y deje sitio al
+                  input de al lado. */}
+              <button
+                type="submit"
+                className="btn-gold"
+                style={{ width: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}
+                disabled={!joinCode.trim()}
+              >
+                Ir
+              </button>
+            </form>
+          </div>
+
+          <div className="game-setup-col game-setup-col-divider">
+            <h2 className="game-setup-col-title">Crear nueva partida</h2>
+            <form onSubmit={handleCreate}>
+              <div className="field-group">
+                <label htmlFor="gameName">Nombre de la partida</label>
+                <input
+                  id="gameName"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="La torre olvidada"
+                />
+              </div>
+              <div className="field-group">
+                <label htmlFor="maxPlayers">Máximo de jugadores</label>
+                <select
+                  id="maxPlayers"
+                  value={maxPlayers}
+                  onChange={(e) => setMaxPlayers(Number(e.target.value))}
+                >
+                  {[1, 2, 3, 4].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" className="btn-gold" disabled={!name || createGame.isPending}>
+                {createGame.isPending ? 'Creando...' : 'Crear partida'}
+              </button>
+              {createGame.error && <p className="error-msg">{createGame.error.message}</p>}
+            </form>
+          </div>
+        </div>
 
         <button className="btn-ghost" style={{ marginTop: '1.5rem' }} onClick={auth.logout}>
           Cerrar sesión
