@@ -120,11 +120,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.ink,
   },
   logout: {
+    fontSize: 18,
     color: colors.ink,
     fontWeight: '600',
     borderWidth: 1.5,
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
   },
   joinByCodeLabel: {
     width: '100%',
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.ink,
     marginBottom: 8,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    fontSize: 13,
+    fontSize: 17,
     color: colors.ink,
     backgroundColor: 'rgba(255,255,255,0.55)',
   },
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: 'center',
   },
-  joinByCodeButtonText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
+  joinByCodeButtonText: { color: colors.ink, fontWeight: '700', fontSize: 18 },
   buttonDisabled: { opacity: 0.4 },
   card: {
     backgroundColor: 'rgba(237, 225, 196, 0.9)',
@@ -205,21 +206,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.ink,
   },
   cardMeta: {
-    fontSize: 12,
+    fontSize: 16,
     color: colors.inkSoft,
     marginTop: 4,
   },
   empty: {
+    fontSize: 18,
     color: colors.ink,
     textAlign: 'center',
     marginTop: 32,
   },
   error: {
+    fontSize: 18,
     color: colors.danger,
     textAlign: 'center',
     marginTop: 16,

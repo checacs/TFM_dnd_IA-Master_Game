@@ -225,88 +225,98 @@ export function CharacterSheetScreen({ route }: Props) {
           <Text style={styles.menuButtonText}>Ficha</Text>
         </Pressable>
 
-        <View style={styles.header}>
-          <View style={styles.headerCard}>
-            <View style={styles.headerIconWrap}>
-              <Text style={styles.headerIcon}>{CLASS_ICONS[character.class] ?? '⚔️'}</Text>
-            </View>
-            <View style={styles.headerInfo}>
-              <Text style={styles.name}>{character.name}</Text>
-              <Text style={styles.classLevel}>
-                {character.class} · Nivel {character.level}
-              </Text>
-              {isCaptain && (
-                <View style={styles.captainBadge}>
-                  <Text style={styles.captainBadgeText}>★ Capitán</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.combatSection}>
-          <Text style={styles.combatStatus}>{combatStatusText}</Text>
-          <View style={styles.actionButtonsRow}>
-            <Pressable
-              style={[styles.turnButton, !canClaimTurn && styles.buttonDisabled]}
-              disabled={!canClaimTurn || claimTurn.isPending}
-              onPress={handleClaimTurn}
-            >
-              <Text style={styles.turnButtonText}>{claimTurn.isPending ? 'Reclamando...' : 'Mi turno'}</Text>
-            </Pressable>
-            <Pressable
-              // Antes se podía pulsar "Tirar Dados" en cualquier momento, incluso
-              // fuera de tu turno o ya habiendo actuado esta ronda -- se gatea
-              // igual que el campo de acción (canAct: en combate solo en tu
-              // turno, fuera de combate solo el capitán) para que no se pueda
-              // tirar cuando no toca.
-              //
-              // El "opacity: 0.4" de buttonDisabled apenas se notaba sobre la
-              // imagen de fondo a color de los dados (a diferencia del tile
-              // "Mi turno", que es un color plano y sí se ve claramente
-              // apagado) -- un jugador reportó no poder distinguir a simple
-              // vista si el botón estaba activo o no. Se añade una capa oscura
-              // encima de la imagen y se cambia el texto cuando está
-              // deshabilitado, para que el estado sea inequívoco igual que en
-              // "Mi turno".
-              style={[styles.diceButton, (!canAct || playerRoll.isPending) && styles.buttonDisabled]}
-              disabled={!canAct || playerRoll.isPending}
-              onPress={handleRoll}
-            >
-              <View style={styles.diceImageWrap}>
-                <Image source={require('../../assets/boton-roll.jpg')} style={styles.diceButtonImage} resizeMode="cover" />
-                {!canAct && !playerRoll.isPending && <View style={styles.diceButtonLockOverlay} />}
+        {/* Los tiles de "Mi turno"/"Tirar Dados" ahora son mucho más altos
+            (x3, a petición del usuario) -- en móviles de pantalla más baja
+            el contenido de arriba (ficha + caja de combate) puede no caber
+            entero, así que va dentro de un ScrollView en vez de un View fijo
+            con "spacer". Así nunca se tapa ni se corta la barra de acción de
+            abajo (actionBar), que se queda fuera del scroll, siempre visible. */}
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <View style={styles.headerCard}>
+              <View style={styles.headerIconWrap}>
+                <Text style={styles.headerIcon}>{CLASS_ICONS[character.class] ?? '⚔️'}</Text>
               </View>
-              <Text style={styles.diceButtonText}>
-                {playerRoll.isPending ? 'Tirando...' : canAct ? 'Tirar Dados' : 'Espera tu turno'}
-              </Text>
-            </Pressable>
+              <View style={styles.headerInfo}>
+                <Text style={styles.name}>{character.name}</Text>
+                <Text style={styles.classLevel}>
+                  {character.class} · Nivel {character.level}
+                </Text>
+                {isCaptain && (
+                  <View style={styles.captainBadge}>
+                    <Text style={styles.captainBadgeText}>★ Capitán</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </View>
-          {lastRoll && (
-            <Text style={styles.rollResult}>
-              {lastRoll.notation}: {lastRoll.result}
+
+          <View style={styles.combatSection}>
+            <Text style={styles.combatStatus}>{combatStatusText}</Text>
+            <View style={styles.actionButtonsRow}>
+              <Pressable
+                style={[styles.turnButton, !canClaimTurn && styles.buttonDisabled]}
+                disabled={!canClaimTurn || claimTurn.isPending}
+                onPress={handleClaimTurn}
+              >
+                <Text style={styles.turnButtonText}>{claimTurn.isPending ? 'Reclamando...' : 'Mi turno'}</Text>
+              </Pressable>
+              <Pressable
+                // Antes se podía pulsar "Tirar Dados" en cualquier momento, incluso
+                // fuera de tu turno o ya habiendo actuado esta ronda -- se gatea
+                // igual que el campo de acción (canAct: en combate solo en tu
+                // turno, fuera de combate solo el capitán) para que no se pueda
+                // tirar cuando no toca.
+                //
+                // El "opacity: 0.4" de buttonDisabled apenas se notaba sobre la
+                // imagen de fondo a color de los dados (a diferencia del tile
+                // "Mi turno", que es un color plano y sí se ve claramente
+                // apagado) -- un jugador reportó no poder distinguir a simple
+                // vista si el botón estaba activo o no. Se añade una capa oscura
+                // encima de la imagen y se cambia el texto cuando está
+                // deshabilitado, para que el estado sea inequívoco igual que en
+                // "Mi turno".
+                style={[styles.diceButton, (!canAct || playerRoll.isPending) && styles.buttonDisabled]}
+                disabled={!canAct || playerRoll.isPending}
+                onPress={handleRoll}
+              >
+                <View style={styles.diceImageWrap}>
+                  <Image source={require('../../assets/boton-roll.jpg')} style={styles.diceButtonImage} resizeMode="cover" />
+                  {!canAct && !playerRoll.isPending && <View style={styles.diceButtonLockOverlay} />}
+                </View>
+                <Text style={styles.diceButtonText}>
+                  {playerRoll.isPending ? 'Tirando...' : canAct ? 'Tirar Dados' : 'Espera tu turno'}
+                </Text>
+              </Pressable>
+            </View>
+            {lastRoll && (
+              <Text style={styles.rollResult}>
+                {lastRoll.notation}: {lastRoll.result}
+              </Text>
+            )}
+            {claimTurn.error && <Text style={styles.error}>{claimTurn.error.message}</Text>}
+            {/* Antes, si "Tirar Dados" fallaba (ej. 403 del backend), no se veía
+                nada en pantalla -- el jugador solo notaba que "no pasaba nada"
+                al pulsar el botón, sin ninguna pista de por qué. */}
+            {playerRoll.error && <Text style={styles.error}>{playerRoll.error.message}</Text>}
+          </View>
+
+          {isCaptain && otherPlayers.length > 0 && (
+            <Pressable style={styles.captainSwapButtonFull} onPress={() => setCaptainPickerOpen(true)}>
+              <Text style={styles.captainSwapButtonFullText}>Cambiar capitán</Text>
+            </Pressable>
+          )}
+
+          {character.unassignedSkillPoints > 0 && (
+            <Text style={styles.skillPointsNotice}>
+              Tienes {character.unassignedSkillPoints} punto(s) de habilidad por asignar -- ábrelos desde "Ficha"
             </Text>
           )}
-          {claimTurn.error && <Text style={styles.error}>{claimTurn.error.message}</Text>}
-          {/* Antes, si "Tirar Dados" fallaba (ej. 403 del backend), no se veía
-              nada en pantalla -- el jugador solo notaba que "no pasaba nada"
-              al pulsar el botón, sin ninguna pista de por qué. */}
-          {playerRoll.error && <Text style={styles.error}>{playerRoll.error.message}</Text>}
-        </View>
-
-        {isCaptain && otherPlayers.length > 0 && (
-          <Pressable style={styles.captainSwapButtonFull} onPress={() => setCaptainPickerOpen(true)}>
-            <Text style={styles.captainSwapButtonFullText}>Cambiar capitán</Text>
-          </Pressable>
-        )}
-
-        <View style={styles.spacer} />
-
-        {character.unassignedSkillPoints > 0 && (
-          <Text style={styles.skillPointsNotice}>
-            Tienes {character.unassignedSkillPoints} punto(s) de habilidad por asignar -- ábrelos desde "Ficha"
-          </Text>
-        )}
+        </ScrollView>
 
         <View style={[styles.actionBar, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>
           <TextInput
@@ -529,8 +539,8 @@ const styles = StyleSheet.create({
   },
   headerIcon: { fontSize: 22 },
   headerInfo: { flex: 1 },
-  name: { fontSize: 20, fontWeight: '700', color: colors.ink },
-  classLevel: { fontSize: 13, color: colors.inkSoft, textTransform: 'capitalize', marginTop: 2 },
+  name: { fontSize: 24, fontWeight: '700', color: colors.ink },
+  classLevel: { fontSize: 17, color: colors.inkSoft, textTransform: 'capitalize', marginTop: 2 },
   captainBadge: {
     alignSelf: 'flex-start',
     marginTop: 5,
@@ -539,7 +549,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  captainBadgeText: { color: colors.ink, fontWeight: '700', fontSize: 10, letterSpacing: 0.5 },
+  captainBadgeText: { color: colors.ink, fontWeight: '700', fontSize: 14, letterSpacing: 0.5 },
   // "Ficha" ya no vive pegado a la tarjeta de personaje -- flota arriba a la
   // derecha, por encima de todo, tal como en el boceto del usuario.
   menuButtonFloating: {
@@ -580,23 +590,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 20,
   },
-  combatStatus: { fontSize: 13, color: colors.ink, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
+  combatStatus: { fontSize: 17, color: colors.ink, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
   actionButtonsRow: { flexDirection: 'row', gap: 10 },
-  // Tiles bastante más grandes (antes eran botones finos de paddingVertical:12)
-  // para acercarse al boceto: dos cuadros grandes lado a lado.
+  // Tiles bastante más grandes (antes eran botones finos de paddingVertical:12,
+  // luego 150 -- a petición del usuario, x3 sobre ese último valor: en un
+  // móvil real se quedaban pequeños e incómodos de pulsar/leer) para acercarse
+  // al boceto: dos cuadros grandes lado a lado.
   turnButton: {
     flex: 1,
-    height: 150,
+    height: 450,
     backgroundColor: colors.success,
     borderRadius: radius.lg,
     padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  turnButtonText: { color: '#fff', fontWeight: '700', fontSize: 17, textAlign: 'center' },
+  turnButtonText: { color: '#fff', fontWeight: '700', fontSize: 21, textAlign: 'center' },
   diceButton: {
     flex: 1,
-    height: 150,
+    height: 450,
     borderRadius: radius.lg,
     borderWidth: 1.5,
     borderColor: colors.ink,
@@ -626,12 +638,17 @@ const styles = StyleSheet.create({
   diceButtonText: {
     color: colors.ink,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 18,
     marginTop: 6,
   },
   rollResult: { marginTop: 8, textAlign: 'center', color: colors.ink, fontWeight: '700', fontSize: 15 },
   buttonDisabled: { opacity: 0.4 },
-  spacer: { flex: 1 },
+  // El contenido (ficha + caja de combate) ahora vive en un ScrollView -- ver
+  // comentario junto al JSX -- en vez de un "spacer" (flex:1) fijo, porque los
+  // tiles de Mi turno/Tirar Dados (height:450) ya no caben siempre enteros en
+  // pantallas de móvil más bajas.
+  scrollArea: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: 12 },
   skillPointsNotice: {
     fontSize: 13,
     fontWeight: '600',
