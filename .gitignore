@@ -9,6 +9,10 @@ yarn-error.log*
 .pnp.js
 .env
 Como jugar.docx
+
+# Muestras de audio para clonar voz (npm run clone-voice) -- son datos
+# biométricos personales, no van a un repo público.
+API_REST TFM/assets/voice-samples/
 .vscode/*
 .AGENTS.md
 DND-IA-Master-TFM.pptx

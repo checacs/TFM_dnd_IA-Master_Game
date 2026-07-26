@@ -24,6 +24,16 @@ import { Injectable } from '@nestjs/common';
  * proceso completo de alta/recarga de saldo). Si falta, se lanza un error
  * explícito en el primer synthesize() en vez de fallar más adelante con un
  * 401 críptico de DashScope.
+ *
+ * Voz clonada (opcional): si QWEN_TTS_CLONED_VOICE_ID está puesta en .env
+ * (el id que devuelve `npm run clone-voice`, ver scripts/clone-voice.ts),
+ * esa voz se usa como voz por defecto en vez de QWEN_TTS_VOICE (Bodega).
+ * Las voces clonadas NO funcionan con qwen3-tts-flash -- Qwen exige un
+ * modelo VC (voice-cloning) dedicado para sintetizar con ellas, así que
+ * synthesize() cambia de modelo automáticamente en cuanto la voz efectiva
+ * (voiceOverride o la de por defecto) coincide con la voz clonada. Con
+ * QWEN_TTS_CLONED_VOICE_ID vacía, el comportamiento es exactamente el de
+ * antes (siempre qwen3-tts-flash + voz de catálogo).
  */
 @Injectable()
 export class QwenTtsService {
@@ -32,6 +42,8 @@ export class QwenTtsService {
   private readonly model: string;
   private readonly voice: string;
   private readonly languageType: string;
+  private readonly clonedVoiceId: string | undefined;
+  private readonly vcModel: string;
 
   constructor() {
     this.apiKey = process.env.QWEN_TTS_API_KEY;
@@ -40,25 +52,28 @@ export class QwenTtsService {
     // (las API keys de cada región son distintas entre sí y no son intercambiables).
     this.baseUrl = process.env.QWEN_TTS_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1';
     this.model = process.env.QWEN_TTS_MODEL ?? 'qwen3-tts-flash';
-    // 'Bodega' es la ÚNICA voz del catálogo descrita explícitamente como
-    // española de España ("a passionate Spanish man") -- el resto son
-    // multilingües pero con acento por defecto latinoamericano (ej.
-    // 'Sonrisa', "Latin American woman") o neutro/sin acento marcado (ej.
-    // 'Bellona', que sonaba con acento sudamericano en la práctica pese a no
-    // tener ninguna nacionalidad indicada en su descripción oficial). Si se
-    // prefiere una voz "potente" de narrador en vez de esta, hay que asumir
-    // que probablemente venga con acento latino/neutro: 'Vincent' (rasgada y
-    // grave), 'Ryan' (dramática), 'Andre' (serena y magnética) -- ver
-    // catálogo completo (con audio de muestra por voz) en
+    this.clonedVoiceId = process.env.QWEN_TTS_CLONED_VOICE_ID;
+    // Tiene que ser el MISMO target_model que se usó al crear la voz con
+    // clone-voice.ts, o la síntesis falla -- ver comentario del script.
+    this.vcModel = process.env.QWEN_TTS_VC_MODEL ?? 'qwen3-tts-vc-2026-01-22';
+    // Si hay voz clonada configurada, es la que se usa por defecto (para eso
+    // se creó); si no, cae en 'Bodega'. 'Bodega' es la ÚNICA voz del
+    // catálogo descrita explícitamente como española de España ("a
+    // passionate Spanish man") -- el resto son multilingües pero con acento
+    // por defecto latinoamericano (ej. 'Sonrisa', "Latin American woman") o
+    // neutro/sin acento marcado (ej. 'Bellona', que sonaba con acento
+    // sudamericano en la práctica pese a no tener ninguna nacionalidad
+    // indicada en su descripción oficial). Ver catálogo completo (con audio
+    // de muestra por voz) en
     // https://www.alibabacloud.com/help/en/model-studio/qwen-tts-voice-list
-    this.voice = process.env.QWEN_TTS_VOICE ?? 'Bodega';
+    this.voice = process.env.QWEN_TTS_VOICE ?? this.clonedVoiceId ?? 'Bodega';
     this.languageType = process.env.QWEN_TTS_LANGUAGE ?? 'Spanish';
   }
 
   /**
    * Sintetiza texto en español a un audio y devuelve los bytes crudos.
-   * `voiceOverride` permite probar otra voz del catálogo puntualmente (ver
-   * SpeakDto.voice) sin tocar QWEN_TTS_VOICE ni redeployar.
+   * `voiceOverride` permite probar otra voz (del catálogo o clonada)
+   * puntualmente (ver SpeakDto.voice) sin tocar QWEN_TTS_VOICE ni redeployar.
    */
   async synthesize(text: string, voiceOverride?: string): Promise<Buffer> {
     if (!this.apiKey) {
@@ -68,6 +83,11 @@ export class QwenTtsService {
       );
     }
 
+    const effectiveVoice = voiceOverride ?? this.voice;
+    // La voz clonada exige el modelo VC dedicado; cualquier otra voz (de
+    // catálogo) sigue usando el modelo normal (qwen3-tts-flash por defecto).
+    const effectiveModel = this.clonedVoiceId && effectiveVoice === this.clonedVoiceId ? this.vcModel : this.model;
+
     const synthesisResponse = await fetch(`${this.baseUrl}/services/aigc/multimodal-generation/generation`, {
       method: 'POST',
       headers: {
@@ -75,10 +95,10 @@ export class QwenTtsService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: this.model,
+        model: effectiveModel,
         input: {
           text,
-          voice: voiceOverride ?? this.voice,
+          voice: effectiveVoice,
           language_type: this.languageType,
         },
       }),

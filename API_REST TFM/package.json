@@ -18,7 +18,8 @@
     "import:spells": "ts-node scripts/import-spells.ts",
     "import:rules-reference": "ts-node scripts/import-rules-reference.ts",
     "import:equipment": "ts-node scripts/import-equipment.ts",
-    "import:magic-items": "ts-node scripts/import-magic-items.ts"
+    "import:magic-items": "ts-node scripts/import-magic-items.ts",
+    "clone-voice": "ts-node scripts/clone-voice.ts"
   },
   "keywords": [],
   "license": "ISC",
