@@ -218,7 +218,7 @@ El proyecto se reparte en 4 repositorios públicos independientes:
 | **UI web** | https://ui-web-three.vercel.app/login (Vercel) |
 | **API REST + MCP** | https://api-dnd5e-dm-ia.onrender.com (Render) |
 | **dm-engine** | Desplegado en Render como servicio interno — solo lo consume la API, sin acceso público directo |
-| **App móvil** | APK para Android descargable directamente: https://drive.google.com/drive/folders/1ejz6q6_l_-dRtd8Ufp7BucAVcdWHRGku?usp=sharing |
+| **App móvil** | APK para Android descargable directamente: https://drive.google.com/drive/folders/1pkTKZx3bWznNbKZyov1UL4KT0kl_cXCK?usp=sharing |
 
 > Nota sobre el APK: en algunos dispositivos Xiaomi/MIUI, la instalación de APKs fuera de Play Store requiere desactivar "Optimización de MIUI" en Opciones de desarrollador antes de instalar.
 
