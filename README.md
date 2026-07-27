@@ -192,16 +192,9 @@ Cada uno de los cuatro proyectos de código tiene su propio `README.md` con inst
 
 ## f. Usuario y contraseña de prueba
 
-La API no permite registro público — estas cuentas ya existen en la base de datos de producción:
+La API no permite registro público — existen 4 cuentas de prueba en la base de datos de producción (1 admin + 3 jugador), pensadas para probar el flujo completo con varios jugadores a la vez en la misma partida (crear personaje, sala de espera, turnos) desde sesiones distintas.
 
-| Usuario | Contraseña | Rol |
-|---|---|---|
-| `carlos` | `@rquimed3s` | admin |
-| `sergio@mail.com` | `S3rgi0` | jugador |
-| `sandra@mail.com` | `S@ndra83` | jugador |
-| `checa@mail.com` | `Ch3k@81` | jugador |
-
-Cualquiera de las cuatro sirve para entrar tanto en `ui-web` como en `mobile-app`. Para probar el flujo completo con varios jugadores en la misma partida (crear personaje, sala de espera, turnos), se recomienda usar dos cuentas a la vez desde dos sesiones distintas.
+> Por seguridad, las credenciales reales **no se publican en este repositorio** (es público) — se facilitan por un canal privado aparte (correo/entrega directa). Si necesitas acceso, pide las credenciales de evaluación en lugar de buscarlas aquí.
 
 ---
 
@@ -225,7 +218,7 @@ El proyecto se reparte en 4 repositorios públicos independientes:
 | **UI web** | https://ui-web-three.vercel.app/login (Vercel) |
 | **API REST + MCP** | https://api-dnd5e-dm-ia.onrender.com (Render) |
 | **dm-engine** | Desplegado en Render como servicio interno — solo lo consume la API, sin acceso público directo |
-| **App móvil** | APK para Android descargable directamente: https://drive.google.com/file/d/1DON39_zIl3KlFrOcQA-AAh22GQV9gRrx/view?usp=sharing |
+| **App móvil** | APK para Android descargable directamente: https://drive.google.com/drive/folders/1ejz6q6_l_-dRtd8Ufp7BucAVcdWHRGku?usp=sharing |
 
 > Nota sobre el APK: en algunos dispositivos Xiaomi/MIUI, la instalación de APKs fuera de Play Store requiere desactivar "Optimización de MIUI" en Opciones de desarrollador antes de instalar.
 
