@@ -253,6 +253,30 @@ describe('Game', () => {
         game.addPlayer({ userId: 'user-3', characterId: 'char-3', name: 'Mira', class: 'guerrero', currentHp: 10 }),
       ).toThrow(DomainError);
     });
+
+    it('lanza DomainError si ya existe un personaje con ese mismo nombre en la partida', () => {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      expect(() =>
+        game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Elyndra', class: 'mago', currentHp: 9 }),
+      ).toThrow(DomainError);
+      expect(game.toSnapshot().players).toHaveLength(1); // no se ha añadido el segundo
+    });
+
+    it('la comprobación de nombre repetido ignora mayúsculas/minúsculas y espacios sobrantes', () => {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      expect(() =>
+        game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: '  elyndra  ', class: 'mago', currentHp: 9 }),
+      ).toThrow(DomainError);
+    });
+
+    it('permite nombres distintos sin problema', () => {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'mago', currentHp: 9 });
+      expect(game.toSnapshot().players).toHaveLength(2);
+    });
   });
 
   describe('launch', () => {

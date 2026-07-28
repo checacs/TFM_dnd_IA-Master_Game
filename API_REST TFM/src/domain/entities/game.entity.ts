@@ -258,6 +258,13 @@ export class Game {
     if (this.props.players.some((p) => p.userId === player.userId)) {
       throw new DomainError('Ya estás en esta partida');
     }
+    // Solo puede haber un personaje con un nombre dado en la misma partida --
+    // comparación case-insensitive y con espacios recortados para que
+    // "Elyndra", "elyndra" y "  Elyndra  " cuenten como el mismo nombre.
+    const normalizedName = player.name.trim().toLowerCase();
+    if (this.props.players.some((p) => p.name.trim().toLowerCase() === normalizedName)) {
+      throw new DomainError(`Ya existe un personaje llamado "${player.name.trim()}" en esta partida`);
+    }
     this.props.players.push({ ...player, conditions: player.conditions ?? [], position: null });
   }
 

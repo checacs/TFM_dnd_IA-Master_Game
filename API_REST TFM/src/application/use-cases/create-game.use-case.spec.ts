@@ -11,7 +11,15 @@ class FakeGameRepository implements GameRepository {
   async findById(id: string): Promise<Game | null> {
     return this.games.get(id) ?? null;
   }
-  async findByUserId(_userId: string): Promise<Game[]> { return []; }
+  // A diferencia del fake usado en otros specs (que siempre devuelve []), aquí
+  // sí hace falta simular de verdad findByUserId para poder testear el límite
+  // de partidas por host — devuelve las partidas donde el usuario es host O
+  // jugador, igual que hace el repositorio Mongoose real.
+  async findByUserId(userId: string): Promise<Game[]> {
+    return [...this.games.values()].filter(
+      (g) => g.toSnapshot().hostUserId === userId || g.toSnapshot().players.some((p) => p.userId === userId),
+    );
+  }
 
   async save(game: Game): Promise<void> {
     this.games.set(game.id, game);
@@ -94,5 +102,64 @@ describe('CreateGameUseCase', () => {
     const useCase = new CreateGameUseCase(games, codeGenerator);
 
     await expect(useCase.execute({ name: 'X', hostUserId: 'host-1', maxPlayers: 9 })).rejects.toThrow();
+  });
+
+  describe('límite de partidas por host', () => {
+    it('lanza DomainError si el host ya tiene 3 partidas activas y no crea una cuarta', async () => {
+      const games = new FakeGameRepository();
+      games.seed(Game.create({ name: 'Partida 1', hostUserId: 'host-1', maxPlayers: 2 }, 'GAME01'));
+      games.seed(Game.create({ name: 'Partida 2', hostUserId: 'host-1', maxPlayers: 2 }, 'GAME02'));
+      games.seed(Game.create({ name: 'Partida 3', hostUserId: 'host-1', maxPlayers: 2 }, 'GAME03'));
+      const codeGenerator = new FakeGameCodeGenerator(['GAME04']);
+      const useCase = new CreateGameUseCase(games, codeGenerator);
+
+      await expect(
+        useCase.execute({ name: 'Partida 4', hostUserId: 'host-1', maxPlayers: 2 }),
+      ).rejects.toThrow(/3 partidas/);
+
+      const fourth = await games.findById('GAME04');
+      expect(fourth).toBeNull(); // no se ha creado ni persistido
+    });
+
+    it('permite crear la partida si el host tiene menos de 3', async () => {
+      const games = new FakeGameRepository();
+      games.seed(Game.create({ name: 'Partida 1', hostUserId: 'host-1', maxPlayers: 2 }, 'GAME01'));
+      games.seed(Game.create({ name: 'Partida 2', hostUserId: 'host-1', maxPlayers: 2 }, 'GAME02'));
+      const codeGenerator = new FakeGameCodeGenerator(['GAME03']);
+      const useCase = new CreateGameUseCase(games, codeGenerator);
+
+      const result = await useCase.execute({ name: 'Partida 3', hostUserId: 'host-1', maxPlayers: 2 });
+
+      expect(result.gameId).toBe('GAME03');
+    });
+
+    it('el límite es por host: las partidas de otros usuarios no cuentan', async () => {
+      const games = new FakeGameRepository();
+      games.seed(Game.create({ name: 'Partida 1', hostUserId: 'host-2', maxPlayers: 2 }, 'GAME01'));
+      games.seed(Game.create({ name: 'Partida 2', hostUserId: 'host-2', maxPlayers: 2 }, 'GAME02'));
+      games.seed(Game.create({ name: 'Partida 3', hostUserId: 'host-2', maxPlayers: 2 }, 'GAME03'));
+      const codeGenerator = new FakeGameCodeGenerator(['GAME04']);
+      const useCase = new CreateGameUseCase(games, codeGenerator);
+
+      const result = await useCase.execute({ name: 'Partida de host-1', hostUserId: 'host-1', maxPlayers: 2 });
+
+      expect(result.gameId).toBe('GAME04');
+    });
+
+    it('ser jugador (no host) en 3 partidas de otros no bloquea crear una propia', async () => {
+      const games = new FakeGameRepository();
+      const g1 = Game.create({ name: 'Partida 1', hostUserId: 'host-2', maxPlayers: 2 }, 'GAME01');
+      g1.addPlayer({ userId: 'host-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 9 });
+      games.seed(g1);
+      const g2 = Game.create({ name: 'Partida 2', hostUserId: 'host-2', maxPlayers: 2 }, 'GAME02');
+      g2.addPlayer({ userId: 'host-1', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 14 });
+      games.seed(g2);
+      const codeGenerator = new FakeGameCodeGenerator(['GAME03']);
+      const useCase = new CreateGameUseCase(games, codeGenerator);
+
+      const result = await useCase.execute({ name: 'Mi propia partida', hostUserId: 'host-1', maxPlayers: 2 });
+
+      expect(result.gameId).toBe('GAME03');
+    });
   });
 });
