@@ -88,7 +88,10 @@ describe('runDmTurn', () => {
 
     expect(result.narrative).toBe('La posada está en silencio.');
     expect(result.events).toEqual([]);
-    expect(toolCaller.calls).toHaveLength(0);
+    // get_game_state se llama siempre al final del turno (resolveStaleDefeatedEncounter,
+    // el seguro de combate huérfano que se ejecuta incondicionalmente) -- no es una
+    // tool que el modelo haya pedido.
+    expect(toolCaller.calls).toEqual([{ name: 'get_game_state', args: { gameId: 'game-1' } }]);
   });
 
   it('ejecuta la tool pedida, genera su evento, y continúa hasta la respuesta final', async () => {
@@ -111,7 +114,11 @@ describe('runDmTurn', () => {
       'game-1',
     );
 
-    expect(toolCaller.calls).toEqual([{ name: 'roll_dice', args: { notation: '1d20' } }]);
+    // + get_game_state: seguro de combate huérfano incondicional al final del turno.
+    expect(toolCaller.calls).toEqual([
+      { name: 'roll_dice', args: { notation: '1d20' } },
+      { name: 'get_game_state', args: { gameId: 'game-1' } },
+    ]);
     expect(result.events).toEqual([{ type: 'tirada_realizada', payload: { notation: '1d20', result: 14 } }]);
     expect(result.narrative).toBe('Sacas un 14 en la tirada.');
   });
@@ -131,23 +138,32 @@ describe('runDmTurn', () => {
 
     const result = await runDmTurn(chatClient, toolCaller, [], 'game-1');
 
-    expect(toolCaller.calls).toHaveLength(1);
+    // 1 explícita del modelo + 1 automática del seguro de combate huérfano al final del turno.
+    expect(toolCaller.calls).toHaveLength(2);
     expect(result.events).toEqual([]);
   });
 
-  it('lanza un error si se supera el límite de iteraciones de tool-calling', async () => {
-    const infiniteToolCall = {
-      message: {
-        role: 'assistant' as const,
-        content: null,
-        tool_calls: [{ id: 'call-x', type: 'function' as const, function: { name: 'roll_dice', arguments: '{"notation":"1d20"}' } }],
-      },
-    };
-    const chatClient = new FakeChatClient([infiniteToolCall]); // siempre pide otra tool, nunca termina
-    const toolCaller = new FakeToolCaller([], { roll_dice: { result: 1 } });
+  it(
+      'ya NO lanza un error si se supera el límite de iteraciones de tool-calling -- corta el acceso a más tools ' +
+      'y cierra el turno con una narrativa mínima en vez de reventarlo (antes esto podía matar el proceso entero ' +
+      'de dm-engine, ver el comentario del límite en runDmTurn)',
+      async () => {
+        const infiniteToolCall = {
+          message: {
+            role: 'assistant' as const,
+            content: null,
+            tool_calls: [{ id: 'call-x', type: 'function' as const, function: { name: 'roll_dice', arguments: '{"notation":"1d20"}' } }],
+          },
+        };
+        const chatClient = new FakeChatClient([infiniteToolCall]); // siempre pide otra tool, nunca termina
+        const toolCaller = new FakeToolCaller([], { roll_dice: { result: 1 } });
 
-    await expect(runDmTurn(chatClient, toolCaller, [], 'game-1')).rejects.toThrow(/límite/i);
-  });
+        const result = await runDmTurn(chatClient, toolCaller, [], 'game-1');
+
+        expect(result.narrative).toBe('La escena queda preparada ante vosotros. ¿Qué hacéis?');
+        expect(toolCaller.calls.filter((c) => c.name === 'roll_dice')).toHaveLength(16); // MAX_TOOL_CALL_ITERATIONS
+      },
+  );
 
   it('si una tool falla, el error se pasa al modelo como resultado de la tool en vez de reventar el turno', async () => {
     const chatClient = new FakeChatClient([
@@ -198,7 +214,8 @@ describe('runDmTurn', () => {
 
     const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
-    expect(toolCaller.calls.map((c) => c.name)).toEqual(['describe_map', 'set_battle_map']);
+    // + get_game_state: seguro de combate huérfano incondicional al final del turno.
+    expect(toolCaller.calls.map((c) => c.name)).toEqual(['describe_map', 'set_battle_map', 'get_game_state']);
     expect(result.events).toEqual([{ type: 'mapa_aplicado', payload: { applied: true } }]);
     expect(result.narrative).toBe('Ahora sí, con el mapa fijado.');
 
@@ -230,7 +247,7 @@ describe('runDmTurn', () => {
 
     const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
-    expect(toolCaller.calls.map((c) => c.name)).toEqual(['get_battle_maps', 'clear_battle_map']);
+    expect(toolCaller.calls.map((c) => c.name)).toEqual(['get_battle_maps', 'clear_battle_map', 'get_game_state']);
     expect(result.events).toEqual([{ type: 'mapa_limpiado', payload: { cleared: true } }]);
     expect(result.narrative).toBe('Salís de la taberna y entráis en un almacén en penumbra.');
     expect(chatClient.receivedCalls).toHaveLength(3); // sin ronda de corrección extra
@@ -262,7 +279,7 @@ describe('runDmTurn', () => {
 
     const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
-    expect(toolCaller.calls.map((c) => c.name)).toEqual(['set_battle_map', 'place_participant']);
+    expect(toolCaller.calls.map((c) => c.name)).toEqual(['set_battle_map', 'place_participant', 'get_game_state']);
     expect(result.narrative).toBe('Ahora sí, con todos colocados.');
     const correctionCall = chatClient.receivedCalls[2];
     const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
@@ -340,38 +357,65 @@ describe('runDmTurn', () => {
     expect(chatClient.receivedCalls).toHaveLength(2); // sin ronda de corrección extra
   });
 
-  it('si resuelve ataques de enemigos pero no llama a advance_to_player_round, se le pide antes de narrar', async () => {
-    const chatClient = new FakeChatClient([
-      {
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{ id: 'call-1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"char-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } }],
-        },
-      },
-      { message: { role: 'assistant', content: 'El goblin te golpea (sin reabrir la ronda).' } },
-      {
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{ id: 'call-2', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } }],
-        },
-      },
-      { message: { role: 'assistant', content: 'Ronda de jugadores reabierta.' } },
-    ]);
-    const toolCaller = new FakeToolCaller([], {
-      resolve_attack: { hit: true, damage: 3 },
-      advance_to_player_round: { advanced: true },
-    });
+  it(
+      'si resuelve ataques de enemigos pero no llama a advance_to_player_round, se le pide antes de narrar -- el ' +
+      'aviso comprueba el estado REAL de la partida (roundPhase) antes de dispararse',
+      async () => {
+        // El aviso ahora solo se dispara si get_game_state confirma que la fase REAL
+        // sigue en 'enemigos' (ver el comentario de needsTurnChecks en protocolNudge) --
+        // este fake simula esa fase real: 'enemigos' hasta que el modelo llama a
+        // advance_to_player_round, y 'jugadores' después (evita que el seguro
+        // anti-atasco del final del turno vuelva a dispararse de más sobre un estado
+        // que ya se corrigió).
+        class EnemyPhaseToolCaller implements ToolCaller {
+          public readonly calls: { name: string; args: Record<string, unknown> }[] = [];
+          private advanced = false;
+          async listTools(): Promise<McpToolInfo[]> { return []; }
+          async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+            this.calls.push({ name, args });
+            if (name === 'resolve_attack') return { hit: true, damage: 3 };
+            if (name === 'advance_to_player_round') {
+              this.advanced = true;
+              return { advanced: true };
+            }
+            if (name === 'get_game_state') {
+              return { activeEncounter: { roundPhase: this.advanced ? 'jugadores' : 'enemigos', enemies: [] } };
+            }
+            return {};
+          }
+        }
 
-    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'call-1', type: 'function' as const, function: { name: 'resolve_attack', arguments: '{"gameId":"g1","targetId":"char-1","attackerModifier":2,"targetArmorClass":13,"damageDice":"1d6"}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'El goblin te golpea (sin reabrir la ronda).' } },
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'call-2', type: 'function' as const, function: { name: 'advance_to_player_round', arguments: '{"gameId":"g1"}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'Ronda de jugadores reabierta.' } },
+        ]);
+        const toolCaller = new EnemyPhaseToolCaller();
 
-    expect(toolCaller.calls.map((c) => c.name)).toEqual(['resolve_attack', 'advance_to_player_round']);
-    expect(result.narrative).toBe('Ronda de jugadores reabierta.');
-    const correctionCall = chatClient.receivedCalls[2];
-    const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
-    expect(lastMessage.content).toMatch(/advance_to_player_round/);
-  });
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(toolCaller.calls.map((c) => c.name)).toEqual([
+          'resolve_attack', 'get_game_state', 'advance_to_player_round', 'get_game_state',
+        ]);
+        expect(result.narrative).toBe('Ronda de jugadores reabierta.');
+        const correctionCall = chatClient.receivedCalls[2];
+        const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
+        expect(lastMessage.content).toMatch(/advance_to_player_round/);
+      },
+  );
 
   it('si resuelve ataques y reabre la ronda en el mismo turno, no se dispara ningún aviso', async () => {
     const chatClient = new FakeChatClient([
@@ -398,25 +442,31 @@ describe('runDmTurn', () => {
     expect(chatClient.receivedCalls).toHaveLength(2); // sin ronda de corrección extra
   });
 
-  it('solo corrige una vez: si el modelo insiste en no llamar a set_battle_map, se acepta su narrativa sin bucle infinito', async () => {
-    const chatClient = new FakeChatClient([
-      {
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{ id: 'call-1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"ruinas-bosque"}' } }],
-        },
+  it(
+      'corrige hasta MAX_CORRECTION_ATTEMPTS (2) veces el mismo problema: si el modelo insiste en no llamar a ' +
+      'set_battle_map, se acepta su narrativa sin bucle infinito',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'call-1', type: 'function' as const, function: { name: 'describe_map', arguments: '{"mapId":"ruinas-bosque"}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'Narración sin mapa (primer intento).' } },
+          { message: { role: 'assistant', content: 'Narración sin mapa (tras el aviso, insiste).' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], { describe_map: { name: 'mapa' } });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('Narración sin mapa (tras el aviso, insiste).');
+        // 1 (tool_calls) + 1 (1er intento) + 2 correcciones del MISMO aviso (MAX_CORRECTION_ATTEMPTS)
+        // -- no una quinta llamada de corrección adicional.
+        expect(chatClient.receivedCalls).toHaveLength(4);
       },
-      { message: { role: 'assistant', content: 'Narración sin mapa (primer intento).' } },
-      { message: { role: 'assistant', content: 'Narración sin mapa (tras el aviso, insiste).' } },
-    ]);
-    const toolCaller = new FakeToolCaller([], { describe_map: { name: 'mapa' } });
-
-    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
-
-    expect(result.narrative).toBe('Narración sin mapa (tras el aviso, insiste).');
-    expect(chatClient.receivedCalls).toHaveLength(3); // no una cuarta llamada de corrección adicional
-  });
+  );
 
   it('si el turno no toca mapas para nada, no se generan avisos ni iteraciones extra', async () => {
     const chatClient = new FakeChatClient([
@@ -424,7 +474,11 @@ describe('runDmTurn', () => {
     ]);
     const toolCaller = new FakeToolCaller();
 
-    const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Miro alrededor' }], 'g1');
+    // Historial vacío (no de 1 solo mensaje): con exactamente 1 mensaje,
+    // gameStartNudge trata el turno como "el primerísimo de la partida" y
+    // dispara su propio aviso (taberna/tablón), dominando el turno y rompiendo
+    // el propósito de este test (verificar que NO se genera ningún aviso).
+    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
     expect(result.narrative).toBe('Miras alrededor, todo en calma.');
     expect(chatClient.receivedCalls).toHaveLength(1);
@@ -520,8 +574,17 @@ describe('runDmTurn', () => {
         const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
         expect(result.narrative).toBe('El oso sigue en pie, malherido, y ataca de nuevo.');
-        expect(toolCaller.calls.map((c) => c.name)).toEqual(['resolve_attack', 'grant_xp', 'get_game_state']);
-        const correctionCall = chatClient.receivedCalls[1];
+        // El modelo insiste en el mismo problema más allá de MAX_CORRECTION_ATTEMPTS
+        // (checkCombatStateNudge se reevalúa -- y vuelve a llamar a get_game_state --
+        // en cada intento), y al final del turno el seguro de combate huérfano hace
+        // una comprobación más (el oso sigue vivo, así que no cierra nada).
+        expect(toolCaller.calls.map((c) => c.name)).toEqual([
+          'resolve_attack', 'grant_xp', 'get_game_state', 'get_game_state', 'get_game_state', 'get_game_state', 'get_game_state',
+        ]);
+        // receivedCalls[0] = tool_calls iniciales; [1] = tras ejecutarlas, todavía sin
+        // corrección (el modelo ya declaró la victoria prematura, pero el aviso se
+        // evalúa DESPUÉS de recibir esa respuesta); [2] = ya con el aviso correctivo.
+        const correctionCall = chatClient.receivedCalls[2];
         const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
         expect(lastMessage.content).toMatch(/Brown Bear/);
         expect(lastMessage.content).toMatch(/25/);
@@ -610,8 +673,9 @@ describe('runDmTurn', () => {
   );
 
   it(
-      'si TODOS los enemigos del combate están a 0 HP real pero no se llamó a end_combat, se avisa antes de ' +
-      'aceptar la narrativa -- caso real detectado en partida: el panel "Combate" y el marcador del Brown Bear ' +
+      'si TODOS los enemigos del combate están a 0 HP real pero no se llamó a end_combat, el seguro determinista ' +
+      'de última instancia lo cierra directamente por código (sin pedírselo al modelo, ya no hace falta una ronda ' +
+      'extra de corrección) -- caso real detectado en partida: el panel "Combate" y el marcador del Brown Bear ' +
       'derrotado se quedaban en el tablero indefinidamente, varias escenas después de acabar el combate',
       async () => {
         const chatClient = new FakeChatClient([
@@ -627,14 +691,6 @@ describe('runDmTurn', () => {
             },
           },
           { message: { role: 'assistant', content: 'El oso cae muerto. Has ganado 200 XP.' } },
-          {
-            message: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [{ id: 'c4', type: 'function' as const, function: { name: 'end_combat', arguments: '{"gameId":"g1"}' } }],
-            },
-          },
-          { message: { role: 'assistant', content: 'El combate ha terminado. El cadáver del oso yace a tus pies.' } },
         ]);
         const toolCaller = new FakeToolCaller([], {
           resolve_attack: { hit: true, damage: 25 },
@@ -648,34 +704,58 @@ describe('runDmTurn', () => {
 
         const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
-        expect(result.narrative).toBe('El combate ha terminado. El cadáver del oso yace a tus pies.');
+        // La narrativa del modelo se acepta tal cual -- cerrar el combate fantasma
+        // es limpieza de estado por código (resolveStaleDefeatedEncounter), no algo
+        // que el modelo tenga que volver a narrar.
+        expect(result.narrative).toBe('El oso cae muerto. Has ganado 200 XP.');
+        // 4 get_game_state antes de end_combat: checkCombatStateNudge (victoria
+        // prematura, no aplica -- HP real ya es 0), protocolNudge/needsTurnChecks
+        // (resolvedPlayerAttack sin end_player_turn), resolveMissingEndPlayerTurn
+        // (mismo motivo) y el chequeo anti-atasco de fase de enemigos al final del
+        // turno -- ninguno de los cuatro dispara nada (el mock no tiene
+        // turnClaims/roundPhase pendientes), solo comprueban el estado real.
         expect(toolCaller.calls.map((c) => c.name)).toEqual([
-          'resolve_attack', 'grant_xp', 'advance_to_player_round', 'get_game_state', 'end_combat',
+          'resolve_attack', 'grant_xp', 'advance_to_player_round',
+          'get_game_state', 'get_game_state', 'get_game_state', 'get_game_state',
+          'end_combat',
         ]);
-        const correctionCall = chatClient.receivedCalls[1];
-        const lastMessage = correctionCall.messages[correctionCall.messages.length - 1];
-        expect(lastMessage.content).toMatch(/end_combat/);
+        expect(result.events).toEqual([
+          { type: 'ataque_resuelto', payload: { hit: true, damage: 25 } },
+          { type: 'xp_otorgada', payload: { levelUp: false } },
+          { type: 'ronda_reabierta', payload: { advanced: true } },
+          { type: 'combate_terminado', payload: {} },
+        ]);
+        // Sin ronda de corrección extra: el modelo acierta a la primera y cerrar
+        // el combate no necesita pedirle nada más.
+        expect(chatClient.receivedCalls).toHaveLength(2);
       },
   );
 
-  it('si se llama a grant_xp sin haber resuelto ningún ataque este turno (ej. XP por completar una misión), no se comprueba nada ni se llama a get_game_state', async () => {
-    const chatClient = new FakeChatClient([
-      {
-        message: {
-          role: 'assistant',
-          content: null,
-          tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":100}' } }],
-        },
+  it(
+      'si se llama a grant_xp sin haber resuelto ningún ataque este turno (ej. XP por completar una misión), no ' +
+      'se dispara ningún aviso de victoria prematura (checkCombatStateNudge exige que se haya atacado a algún ' +
+      'enemigo este turno)',
+      async () => {
+        const chatClient = new FakeChatClient([
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'c1', type: 'function' as const, function: { name: 'grant_xp', arguments: '{"characterId":"char-1","amount":100}' } }],
+            },
+          },
+          { message: { role: 'assistant', content: 'Habéis completado la misión. Ganáis 100 XP.' } },
+        ]);
+        const toolCaller = new FakeToolCaller([], { grant_xp: { levelUp: false } });
+
+        const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
+
+        expect(result.narrative).toBe('Habéis completado la misión. Ganáis 100 XP.');
+        // get_game_state SÍ se llama, pero solo por el seguro de combate huérfano
+        // incondicional al final del turno -- no por ningún aviso relacionado con grant_xp.
+        expect(toolCaller.calls.map((c) => c.name)).toEqual(['grant_xp', 'get_game_state']);
       },
-      { message: { role: 'assistant', content: 'Habéis completado la misión. Ganáis 100 XP.' } },
-    ]);
-    const toolCaller = new FakeToolCaller([], { grant_xp: { levelUp: false } });
-
-    const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
-
-    expect(result.narrative).toBe('Habéis completado la misión. Ganáis 100 XP.');
-    expect(toolCaller.calls.map((c) => c.name)).toEqual(['grant_xp']); // sin get_game_state
-  });
+  );
 
   describe('NoMutationYetError -- distinguir fallos de DeepSeek según si ya se llamó a alguna tool', () => {
     it('si la PRIMERA llamada a createCompletion falla (antes de cualquier tool), lanza NoMutationYetError', async () => {
@@ -734,7 +814,10 @@ describe('runDmTurn', () => {
       ]);
       const toolCaller = new FakeToolCaller();
 
-      const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Lanzo misil magico' }], 'g1');
+      // Historial vacío (no de 1 solo mensaje): con exactamente 1 mensaje,
+      // gameStartNudge domina el turno con su propio aviso de arranque
+      // (taberna/tablón) antes de que este aviso llegue siquiera a evaluarse.
+      const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
       expect(result.narrative).toBe('¡Tira los dados! (corregido: sin resolve_attack todavía)');
       expect(chatClient.receivedCalls).toHaveLength(2);
@@ -761,7 +844,8 @@ describe('runDmTurn', () => {
         place_participant: { placed: true },
       });
 
-      const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Ataco' }], 'g1');
+      // Historial vacío por el mismo motivo que en el test anterior (evitar gameStartNudge).
+      const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
       expect(result.narrative).toBe('El combate empieza. Un goblin cae muerto en la primera embestida.');
       expect(chatClient.receivedCalls).toHaveLength(2); // 1 con el tool_call + 1 con la narrativa final, SIN corrección
@@ -902,7 +986,9 @@ describe('runDmTurn', () => {
           ]);
           const toolCaller = new FakeToolCaller([], {}, { start_combat: 'Enemigo enemigo-inexistente no encontrado en el catálogo' });
 
-          const result = await runDmTurn(chatClient, toolCaller, [{ role: 'user', content: 'Ataco' }], 'g1');
+          // Historial vacío para evitar que gameStartNudge domine el turno (ver
+          // los otros dos tests de este mismo describe block).
+          const result = await runDmTurn(chatClient, toolCaller, [], 'g1');
 
           // Este texto no menciona ninguna muerte/derrota, así que tampoco debería
           // disparar combatWithoutToolsNudge -- ningún aviso en absoluto.
