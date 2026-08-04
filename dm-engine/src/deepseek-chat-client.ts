@@ -32,6 +32,15 @@ export class DeepSeekChatClient implements ChatClient {
       apiKey: string,
       private readonly model: string,
       baseUrl: string,
+      /**
+       * Sin tope, el modelo podía generar respuestas mucho más largas de lo
+       * que el system prompt pide ("2-4 frases por turno salvo momentos
+       * clave") -- esa generación de más era una parte real de la latencia
+       * percibida (~10s+ por turno). 700 tokens da margen de sobra para una
+       * narración larga en un momento clave más los tool_calls (su JSON de
+       * argumentos es pequeño) sin dejar que el modelo divague sin límite.
+       */
+      private readonly maxTokens: number,
   ) {
     this.client = new OpenAI({ apiKey, baseURL: baseUrl, timeout: CHAT_CLIENT_TIMEOUT_MS, maxRetries: 0 });
   }
@@ -43,6 +52,7 @@ export class DeepSeekChatClient implements ChatClient {
       // convención OpenAI-compatible que espera DeepSeek.
       messages: params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
       tools: params.tools as OpenAI.Chat.ChatCompletionTool[],
+      max_tokens: this.maxTokens,
     });
 
     const choice = response.choices[0];

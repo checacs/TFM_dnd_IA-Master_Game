@@ -14,6 +14,10 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL;
 // (DeepSeek) si esta variable no se define -- así un despliegue ya
 // existente en Render que no la tenga configurada sigue funcionando igual.
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
+// Tope de tokens por respuesta del modelo (ver el comentario en
+// DeepSeekChatClient) -- configurable para poder ajustarlo sin redeploy de
+// código si 700 resulta corto o largo de más en la práctica.
+const DEEPSEEK_MAX_TOKENS = process.env.DEEPSEEK_MAX_TOKENS ? Number(process.env.DEEPSEEK_MAX_TOKENS) : 700;
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL;
 
 if (!DEEPSEEK_API_KEY) {
@@ -29,7 +33,7 @@ if (!MCP_SERVER_URL) {
   throw new Error('Falta la variable de entorno MCP_SERVER_URL (ej. http://localhost:3000/mcp)');
 }
 
-const chatClient = new DeepSeekChatClient(DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_BASE_URL);
+const chatClient = new DeepSeekChatClient(DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_BASE_URL, DEEPSEEK_MAX_TOKENS);
 const toolCaller = new McpToolCaller(MCP_SERVER_URL);
 
 const app = express();
