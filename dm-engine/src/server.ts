@@ -16,8 +16,13 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
 // Tope de tokens por respuesta del modelo (ver el comentario en
 // DeepSeekChatClient) -- configurable para poder ajustarlo sin redeploy de
-// código si 700 resulta corto o largo de más en la práctica.
-const DEEPSEEK_MAX_TOKENS = process.env.DEEPSEEK_MAX_TOKENS ? Number(process.env.DEEPSEEK_MAX_TOKENS) : 700;
+// código. Se probó primero con 700 y se detectó en partida real que cortaba
+// la narración a mitad de frase (el modelo suele escribir bastante más largo
+// que las "2-4 frases" que pide el system prompt, y si es un modelo
+// razonador el propio razonamiento interno también consume parte de este
+// mismo tope antes de llegar a escribir el texto visible). 2000 da mucho más
+// margen mantendiendo un techo real frente a una respuesta descontrolada.
+const DEEPSEEK_MAX_TOKENS = process.env.DEEPSEEK_MAX_TOKENS ? Number(process.env.DEEPSEEK_MAX_TOKENS) : 2000;
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL;
 
 if (!DEEPSEEK_API_KEY) {
