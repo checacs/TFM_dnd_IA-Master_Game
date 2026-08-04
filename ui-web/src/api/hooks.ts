@@ -86,6 +86,16 @@ export function useAssignCaptain(gameId: string) {
   });
 }
 
+export function useDeleteGame() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (gameId) => api.delete<void>(`/games/${gameId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myGames'] });
+    },
+  });
+}
+
 export function usePlayerAttack(gameId: string) {
   const queryClient = useQueryClient();
   return useMutation<PlayerAttackResult, Error, PlayerAttackInput>({

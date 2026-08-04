@@ -13,4 +13,12 @@ export class InMemoryCharacterRepository implements CharacterRepository {
   async save(character: Character): Promise<void> {
     this.characters.set(character.id, character);
   }
+
+  async deleteByGameId(gameId: string): Promise<void> {
+    for (const [id, character] of this.characters) {
+      if (character.toSnapshot().gameId === gameId) {
+        this.characters.delete(id);
+      }
+    }
+  }
 }

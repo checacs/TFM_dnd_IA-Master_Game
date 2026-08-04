@@ -28,6 +28,10 @@ class FakeGameRepository implements GameRepository {
   async save(game: Game): Promise<void> {
     this.snapshots.set(game.id, game.toSnapshot());
   }
+
+  async deleteById(id: string): Promise<void> {
+    this.snapshots.delete(id);
+  }
 }
 
 class FakeDmEngineClient implements DmEngineClient {

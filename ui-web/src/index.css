@@ -261,6 +261,37 @@ textarea {
   color: var(--color-parchment-dark);
 }
 
+.game-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.game-list-row .game-list-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Solo visible para el usuario admin (ver GameSetupScreen.tsx) -- borrado
+   administrativo e irreversible de una partida completa (en cascada, con sus
+   personajes), de ahí el color de aviso en vez de reusar .btn-ghost. */
+.btn-danger-icon {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-danger);
+  background: rgba(178, 58, 47, 0.1);
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.btn-danger-icon:hover {
+  background: var(--color-danger);
+  color: var(--color-parchment);
+}
+
 .player-slot-list {
   list-style: none;
   margin: 0 0 1rem;

@@ -15,6 +15,14 @@ class FakeCharacterRepository implements CharacterRepository {
   async save(character: Character): Promise<void> {
     this.characters.set(character.id, character);
   }
+
+  async deleteByGameId(gameId: string): Promise<void> {
+    for (const [id, character] of this.characters) {
+      if (character.toSnapshot().gameId === gameId) {
+        this.characters.delete(id);
+      }
+    }
+  }
 }
 
 class FakeGameRepository implements GameRepository {
@@ -28,6 +36,10 @@ class FakeGameRepository implements GameRepository {
   async findByUserId(_userId: string): Promise<Game[]> { return []; }
   async save(game: Game): Promise<void> {
     this.games.set(game.id, game);
+  }
+
+  async deleteById(id: string): Promise<void> {
+    this.games.delete(id);
   }
 }
 

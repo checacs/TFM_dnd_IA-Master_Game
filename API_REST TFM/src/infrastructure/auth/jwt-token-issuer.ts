@@ -6,7 +6,7 @@ import { TokenIssuer } from '../../domain/ports/token-issuer.port';
 export class JwtTokenIssuer implements TokenIssuer {
   constructor(private readonly jwtService: JwtService) {}
 
-  issue(payload: { userId: string }): string {
+  issue(payload: { userId: string; role: string }): string {
     return this.jwtService.sign(payload);
   }
 }

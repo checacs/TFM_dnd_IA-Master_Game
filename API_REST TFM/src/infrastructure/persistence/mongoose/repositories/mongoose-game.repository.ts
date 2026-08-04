@@ -26,4 +26,8 @@ export class MongooseGameRepository implements GameRepository {
     const raw = GameMapper.toPersistence(game);
     await this.model.findByIdAndUpdate(raw._id, raw, { upsert: true, returnDocument: 'after' }).exec();
   }
+
+  async deleteById(id: string): Promise<void> {
+    await this.model.findByIdAndDelete(id).exec();
+  }
 }

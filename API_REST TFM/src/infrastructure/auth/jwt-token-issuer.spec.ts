@@ -6,7 +6,7 @@ describe('JwtTokenIssuer', () => {
     const jwtService = new JwtService({ secret: 'test-secret' });
     const issuer = new JwtTokenIssuer(jwtService);
 
-    const token = issuer.issue({ userId: 'user-1' });
+    const token = issuer.issue({ userId: 'user-1', role: 'player' });
     const decoded = jwtService.verify(token) as { userId: string };
 
     expect(decoded.userId).toBe('user-1');
@@ -15,7 +15,7 @@ describe('JwtTokenIssuer', () => {
   it('lanza un error si se verifica con un secreto distinto', () => {
     const jwtService = new JwtService({ secret: 'test-secret' });
     const issuer = new JwtTokenIssuer(jwtService);
-    const token = issuer.issue({ userId: 'user-1' });
+    const token = issuer.issue({ userId: 'user-1', role: 'player' });
 
     const otroJwtService = new JwtService({ secret: 'otro-secreto' });
     expect(() => otroJwtService.verify(token)).toThrow();

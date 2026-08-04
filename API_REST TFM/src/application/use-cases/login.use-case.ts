@@ -33,6 +33,6 @@ export class LoginUseCase {
       throw new DomainError('Credenciales inválidas');
     }
 
-    return { token: this.tokens.issue({ userId: user.id }) };
+    return { token: this.tokens.issue({ userId: user.id, role: user.role }) };
   }
 }

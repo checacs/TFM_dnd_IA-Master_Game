@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CreateGameUseCase } from '../../../application/use-cases/create-game.use-case';
 import { JoinGameUseCase } from '../../../application/use-cases/join-game.use-case';
 import { LaunchGameUseCase } from '../../../application/use-cases/launch-game.use-case';
@@ -13,7 +13,9 @@ import { ClaimTurnUseCase } from '../../../application/use-cases/claim-turn.use-
 import { SendPlayerActionUseCase } from '../../../application/use-cases/send-player-action.use-case';
 import { PlayerRollUseCase } from '../../../application/use-cases/player-roll.use-case';
 import { AssignCaptainUseCase } from '../../../application/use-cases/assign-captain.use-case';
+import { DeleteGameUseCase } from '../../../application/use-cases/delete-game.use-case';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { CreateGameDto } from './dto/create-game.dto';
 import { JoinGameDto } from './dto/join-game.dto';
@@ -46,6 +48,7 @@ export class GamesController {
     private readonly sendPlayerAction: SendPlayerActionUseCase,
     private readonly playerRollUseCase: PlayerRollUseCase,
     private readonly assignCaptain: AssignCaptainUseCase,
+    private readonly deleteGame: DeleteGameUseCase,
   ) {}
 
   @Get()
@@ -61,6 +64,13 @@ export class GamesController {
   @Get(':gameId')
   getState(@Param('gameId') gameId: string) {
     return this.getGameState.execute({ gameId });
+  }
+
+  /** Borrado administrativo (y en cascada, de sus personajes) — solo admin, ver docs/10 sección 8. */
+  @Delete(':gameId')
+  @UseGuards(AdminGuard)
+  deleteGameAction(@Param('gameId') gameId: string) {
+    return this.deleteGame.execute({ gameId });
   }
 
   // A partir de aquí, los endpoints que mutan la partida DIRECTAMENTE pasan

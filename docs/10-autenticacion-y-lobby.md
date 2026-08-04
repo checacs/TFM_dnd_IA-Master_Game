@@ -128,7 +128,9 @@ Nota de nomenclatura: llamé a esto `LaunchGameUseCase` y no `StartGameUseCase` 
 
 ## 6bis. Alta de cuentas tras el arranque: `POST /auth/users`
 
-El script de semilla sigue siendo la forma de crear la primera cuenta (admin). Para altas posteriores (p. ej. dar de alta jugadores de prueba sin tocar Mongo a mano) existe `CreateUserUseCase`, expuesto como `POST /auth/users { username, password, role? }` — sigue sin haber registro público: el endpoint exige `JwtAuthGuard` + `AdminGuard`, y `AdminGuard` comprueba en la propia base de datos (no en el token) que quien llama tiene `role: 'admin'`. `User` ganó un campo `role: 'admin' | 'player'` (por defecto `'player'`); el rol admin no da ningún privilegio sobre partidas o personajes, solo permite crear más cuentas.
+El script de semilla sigue siendo la forma de crear la primera cuenta (admin). Para altas posteriores (p. ej. dar de alta jugadores de prueba sin tocar Mongo a mano) existe `CreateUserUseCase`, expuesto como `POST /auth/users { username, password, role? }` — sigue sin haber registro público: el endpoint exige `JwtAuthGuard` + `AdminGuard`, y `AdminGuard` comprueba en la propia base de datos (no en el token) que quien llama tiene `role: 'admin'`. `User` ganó un campo `role: 'admin' | 'player'` (por defecto `'player'`).
+
+El rol admin da dos privilegios: crear más cuentas (arriba) y, desde ui-web, eliminar cualquier partida (`DELETE /games/:gameId`, también protegido con `JwtAuthGuard` + `AdminGuard`) — el borrado es en cascada: `DeleteGameUseCase` borra también los `Character` que pertenecen a esa partida (`CharacterRepository.deleteByGameId`), para no dejarlos huérfanos. Ningún otro privilegio sobre partidas o personajes depende del rol. Para que ui-web sepa si debe pintar el botón "Eliminar", el JWT ahora lleva `{ userId, role }` (antes solo `userId`) — `AdminGuard` sigue sin fiarse de ese campo del token para autorizar, solo lo usa el frontend para decidir qué mostrar.
 
 ```ts
 // application/use-cases/create-user.use-case.ts

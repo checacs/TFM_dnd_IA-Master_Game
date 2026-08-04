@@ -31,6 +31,10 @@ class FakeGameRepository implements GameRepository {
   async save(game: Game): Promise<void> {
     this.games.set(game.id, game);
   }
+
+  async deleteById(id: string): Promise<void> {
+    this.games.delete(id);
+  }
 }
 
 class FakeCharacterRepository implements CharacterRepository {
@@ -42,6 +46,14 @@ class FakeCharacterRepository implements CharacterRepository {
     return this.characters.get(id) ?? null;
   }
   async save(): Promise<void> {}
+
+  async deleteByGameId(gameId: string): Promise<void> {
+    for (const [id, character] of this.characters) {
+      if (character.toSnapshot().gameId === gameId) {
+        this.characters.delete(id);
+      }
+    }
+  }
 }
 
 class FakeEquipmentRepository implements EquipmentRepository {

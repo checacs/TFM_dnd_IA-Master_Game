@@ -20,4 +20,8 @@ export class MongooseCharacterRepository implements CharacterRepository {
     const raw = CharacterMapper.toPersistence(character);
     await this.model.findByIdAndUpdate(raw._id, raw, { upsert: true, returnDocument: 'after' }).exec();
   }
+
+  async deleteByGameId(gameId: string): Promise<void> {
+    await this.model.deleteMany({ gameId }).exec();
+  }
 }

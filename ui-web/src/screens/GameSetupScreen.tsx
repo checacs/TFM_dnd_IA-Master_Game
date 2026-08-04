@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMyGames, useCreateGame } from '../api/hooks';
+import { useMyGames, useCreateGame, useDeleteGame } from '../api/hooks';
 import { useAuth } from '../auth/useAuth';
 import type { MyGameSummary } from '../types/api';
 
@@ -11,6 +11,7 @@ function gameHref(game: MyGameSummary): string {
 export function GameSetupScreen() {
   const { data: games, isLoading } = useMyGames();
   const createGame = useCreateGame();
+  const deleteGame = useDeleteGame();
   const auth = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -67,13 +68,29 @@ export function GameSetupScreen() {
             {!isLoading && games && games.length > 0 && (
               <ul className="game-list">
                 {games.map((game) => (
-                  <li key={game.id}>
+                  <li key={game.id} className="game-list-row">
                     <button className="game-list-item" onClick={() => navigate(gameHref(game))}>
                       <span className="game-list-name">{game.name}</span>
                       <span className="game-list-meta">
                         {game.players}/{game.maxPlayers} jugadores · {game.status}
                       </span>
                     </button>
+                    {auth.isAdmin && (
+                      <button
+                        type="button"
+                        className="btn-danger-icon"
+                        title="Eliminar partida"
+                        aria-label={`Eliminar partida ${game.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`¿Eliminar la partida "${game.name}"? Esta acción no se puede deshacer.`)) {
+                            deleteGame.mutate(game.id);
+                          }
+                        }}
+                      >
+                        Eliminar
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

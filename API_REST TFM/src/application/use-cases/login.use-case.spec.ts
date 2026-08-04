@@ -27,7 +27,7 @@ class FakePasswordHasher implements PasswordHasher {
 }
 
 class FakeTokenIssuer implements TokenIssuer {
-  issue(payload: { userId: string }): string {
+  issue(payload: { userId: string; role: string }): string {
     return `token-for:${payload.userId}`;
   }
 }
