@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Board, Player, EncounterEnemy, BoardPosition } from '../../types/api';
 
 interface BoardPanelProps {
@@ -44,6 +44,26 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
   // este tipo de mapa "solo ilustración" sin necesitar un flag nuevo.
   const showMarkers = board.zones.length > 0;
 
+  // El ancho del mapa se calcula a partir del alto disponible + board.cols/rows
+  // en JS (en vez de la propiedad CSS `aspect-ratio`, ver .board-map-wrapper)
+  // porque los navegadores de las Smart TV (LG webOS, etc.) suelen llevar un
+  // motor muy antiguo que no soporta `aspect-ratio`: sin ella la caja (con
+  // width:auto y la imagen en position:absolute, que no aporta tamaño
+  // intrínseco) colapsaba a 0px de ancho y solo se veía el borde -- una
+  // línea oscura de arriba a abajo en vez del mapa.
+  const mapOuterRef = useRef<HTMLDivElement | null>(null);
+  const [mapWidth, setMapWidth] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = mapOuterRef.current;
+    if (!mapImageUrl || !el) return;
+    const ratio = board.cols / board.rows;
+    const update = () => setMapWidth(el.clientHeight * ratio);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [mapImageUrl, board.cols, board.rows]);
+
   const positionedMarkers = useMemo(() => {
     if (!showMarkers) return [];
     const result: PositionedMarker[] = [];
@@ -85,8 +105,11 @@ export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }
         </div>
         <div className="board-map-column">
           {mapImageUrl ? (
-            <div className="board-map-outer">
-              <div className="board-map-wrapper" style={{ aspectRatio: `${board.cols} / ${board.rows}` }}>
+            <div className="board-map-outer" ref={mapOuterRef}>
+              <div
+                className="board-map-wrapper"
+                style={mapWidth ? { width: `${mapWidth}px` } : undefined}
+              >
                 <img src={mapImageUrl} alt="Mapa de batalla" className="board-map-image" />
                 {positionedMarkers.map((m, i) => (
                   <span

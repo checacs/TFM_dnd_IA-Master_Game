@@ -365,11 +365,14 @@
 
 /* .board-map-outer fija una altura EXPLÍCITA (no max-height) para que el hijo
    pueda resolver height:100% contra ella. El wrapper interior fija su alto a
-   esa altura y deja que el ancho se calcule solo a partir de aspect-ratio
-   (cols/rows) — así el mapa se dimensiona igual que un object-fit:contain
-   (nunca se recorta ni se deforma) en vez de forzar width:100% + max-height,
-   que con tableros muy altos (más filas que columnas) recortaba la imagen y
-   desalineaba los marcadores respecto a la cuadrícula real.
+   esa altura y su ancho lo calcula BoardPanel.tsx en JS a partir de
+   board.cols/rows (no con la propiedad CSS `aspect-ratio`: los navegadores
+   de Smart TV suelen llevar un motor demasiado antiguo para soportarla, y
+   sin ella la caja colapsaba a 0px de ancho) -- así el mapa se dimensiona
+   igual que un object-fit:contain (nunca se recorta ni se deforma) en vez
+   de forzar width:100% + max-height, que con tableros muy altos (más filas
+   que columnas) recortaba la imagen y desalineaba los marcadores respecto a
+   la cuadrícula real.
    A petición del usuario, el mapa ocupa el 100% del alto de pantalla
    disponible (antes estaba limitado a min(88vh, 820px)) -- ese 100% ya viene
    acotado por toda la cadena flex de arriba (.game-screen tiene altura fija
