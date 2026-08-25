@@ -752,4 +752,52 @@ describe('Game', () => {
       expect(() => game.assignCaptain('host-1', 'user-no-existe')).toThrow(DomainError);
     });
   });
+
+  describe('dmTurnInProgress', () => {
+    // Señal para que ui-web (pantalla de solo lectura, ver docs/10 y
+    // SendMessageUseCase) sepa que hay un turno del DM-IA en marcha y pueda
+    // mostrar un overlay épico de "el Master está pensando" mientras dura la
+    // llamada a dm-engine (20-40s) -- ya no es ui-web quien dispara el turno
+    // (ahora llega desde el móvil), así que necesita este flag en el snapshot
+    // para enterarse vía polling.
+    it('una partida recién creada no tiene ningún turno del DM en curso', () => {
+      const game = buildGame();
+      expect(game.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+
+    it('startDmTurn marca el turno del DM como en curso', () => {
+      const game = buildGame();
+      game.startDmTurn();
+      expect(game.toSnapshot().dmTurnInProgress).toBe(true);
+    });
+
+    it('endDmTurn cierra el turno del DM en curso', () => {
+      const game = buildGame();
+      game.startDmTurn();
+      game.endDmTurn();
+      expect(game.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+
+    it('reconstitute rehidrata dmTurnInProgress tal cual estaba guardado', () => {
+      const original = buildGame();
+      original.startDmTurn();
+
+      const rehydrated = Game.reconstitute(original.id, original.toSnapshot());
+
+      expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(true);
+    });
+
+    it('reconstitute migra partidas persistidas antes de este campo a dmTurnInProgress: false', () => {
+      const original = buildGame();
+      const legacySnapshot = original.toSnapshot() as unknown as Record<string, unknown>;
+      delete legacySnapshot.dmTurnInProgress;
+
+      const rehydrated = Game.reconstitute(
+        original.id,
+        legacySnapshot as unknown as Parameters<typeof Game.reconstitute>[1],
+      );
+
+      expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+  });
 });

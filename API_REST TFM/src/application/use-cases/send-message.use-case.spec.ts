@@ -325,6 +325,52 @@ describe('SendMessageUseCase', () => {
     );
   });
 
+  it('marca dmTurnInProgress=true mientras dm-engine está pensando y lo vuelve a false al terminar', async () => {
+    // Señal que ui-web lee vía polling (game.dmTurnInProgress) para mostrar el
+    // overlay épico de "el Master está pensando" -- ver Game.startDmTurn/endDmTurn.
+    const games = new FakeGameRepository();
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+    games.seed(game);
+
+    let flagDuringTurn: boolean | undefined;
+    const dmEngine = new FakeDmEngineClient(
+      { narrative: 'La puerta cruje al abrirse.', events: [] },
+      async () => {
+        const duringTurn = await games.findById(game.id);
+        flagDuringTurn = duringTurn!.toSnapshot().dmTurnInProgress;
+      },
+    );
+    const useCase = new SendMessageUseCase(games, dmEngine);
+
+    const before = await games.findById(game.id);
+    expect(before!.toSnapshot().dmTurnInProgress).toBe(false);
+
+    await useCase.execute({ gameId: game.id, messages: [{ role: 'user', content: 'Abro la puerta' }] });
+
+    expect(flagDuringTurn).toBe(true);
+    const saved = await games.findById(game.id);
+    expect(saved!.toSnapshot().dmTurnInProgress).toBe(false);
+  });
+
+  it('si dm-engine falla todos los intentos, dmTurnInProgress vuelve a false tras guardar el mensaje de fallback', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      const games = new FakeGameRepository();
+      const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
+      games.seed(game);
+
+      const dmEngine = new FailingDmEngineClient(new Error('dm-engine no respondió en 45000ms'));
+      const useCase = new SendMessageUseCase(games, dmEngine);
+
+      await useCase.execute({ gameId: game.id, messages: [{ role: 'user', content: 'Abro la puerta' }] });
+
+      const saved = await games.findById(game.id);
+      expect(saved!.toSnapshot().dmTurnInProgress).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  }, 30_000);
+
   it('lanza DomainError si la partida no existe, sin llegar a llamar al dm-engine', async () => {
     const games = new FakeGameRepository();
     const dmEngine = new FakeDmEngineClient({ narrative: '', events: [] });

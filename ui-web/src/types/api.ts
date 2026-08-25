@@ -234,4 +234,12 @@ export interface GameSnapshot {
   narrativeLog: NarrativeEntry[];
   /** Único jugador que puede escribir al DM fuera de combate — ver assignCaptain. */
   captainUserId: string | null;
+  /**
+   * true mientras dm-engine está resolviendo un turno del DM-IA (Game.startDmTurn/
+   * endDmTurn en el backend, ver SendMessageUseCase) — ui-web ya no dispara ella
+   * misma las acciones de partida (llegan del móvil), así que lo usa para mostrar
+   * el overlay "el Master está pensando" (ver DmThinkingOverlay) mientras dura la
+   * respuesta del DM-IA (20-40s).
+   */
+  dmTurnInProgress: boolean;
 }

@@ -108,6 +108,11 @@ export const gameMongooseSchema = new Schema(
     // DM-IA pueda consultarlo vía get_game_state y variar de escenario en vez
     // de repetir siempre el mismo mapa en campañas largas.
     mapHistory: { type: [String], default: [] },
+    // true mientras dm-engine resuelve un turno del DM-IA (Game.startDmTurn/
+    // endDmTurn, ver SendMessageUseCase) — lo lee ui-web vía polling para
+    // mostrar el overlay "el Master está pensando". default: false cubre
+    // también las partidas ya persistidas antes de este campo.
+    dmTurnInProgress: { type: Boolean, default: false },
   },
   { collection: 'games', timestamps: true },
 );

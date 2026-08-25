@@ -5,6 +5,7 @@ import { assetUrl } from '../api/client';
 import { ChatPanel } from '../components/game/ChatPanel';
 import { BoardPanel } from '../components/game/BoardPanel';
 import { EnemyPanel } from '../components/game/EnemyPanel';
+import { DmThinkingOverlay } from '../components/game/DmThinkingOverlay';
 import type { DmEngineChatMessage, NarrativeEntry } from '../types/api';
 import './GameScreen.css';
 
@@ -77,8 +78,17 @@ export function GameScreen() {
   const aliveEnemies = game.activeEncounter?.enemies.filter((e) => e.currentHp > 0) ?? [];
   const showCombat = !!game.activeEncounter && aliveEnemies.length > 0;
 
+  // sendMessage.isPending cubre el arranque de la escena inicial (disparado
+  // desde esta misma pestaña, ver el efecto de arriba); game.dmTurnInProgress
+  // cubre cualquier otro turno disparado desde el móvil (claim-turn ya no
+  // pasa por aquí) -- ver Game.startDmTurn/endDmTurn en el backend. Sin el
+  // segundo, ui-web (pantalla de solo lectura) no tendría forma de saber que
+  // hay un turno del DM en marcha mientras dura la llamada a dm-engine.
+  const dmThinking = sendMessage.isPending || game.dmTurnInProgress;
+
   return (
     <div className="game-screen">
+      <DmThinkingOverlay active={dmThinking} />
       <div className="game-top-bar">
         <div className="game-title-group">
           <img src="/logo_dnd.png" alt="Dungeons & Dragons" className="game-logo-small" />

@@ -65,10 +65,18 @@ export class SendMessageUseCase {
       const lastUserMsg = input.messages.filter((m) => m.role === 'user').pop();
       if (lastUserMsg) {
         game.appendNarrativeEntry({ role: 'user', content: lastUserMsg.content });
-        // Se guarda ya (antes de llamar al dm-engine) para que el mensaje del
-        // jugador quede registrado aunque el turno del DM falle.
-        await this.games.save(game);
       }
+      // Señala el arranque del turno (Game.startDmTurn) ANTES de llamar a
+      // dm-engine, para que ui-web -- que ya no dispara ella misma las
+      // acciones de partida (llegan del móvil vía SendPlayerActionUseCase /
+      // PlayerRollUseCase, que delegan aquí) -- pueda enterarse sondeando
+      // GET /games/:id y mostrar el overlay "el Master está pensando"
+      // mientras dura la respuesta (20-40s).
+      game.startDmTurn();
+      // Se guarda ya (antes de llamar al dm-engine) para que el mensaje del
+      // jugador y el flag de turno en marcha queden registrados aunque el
+      // turno del DM falle.
+      await this.games.save(game);
     });
 
     let result: DmEngineResult | null = null;
@@ -133,6 +141,11 @@ export class SendMessageUseCase {
       }
 
       freshGame.appendNarrativeEntry({ role: 'assistant', content: finalResult.narrative });
+      // Cierra el turno señalado al principio -- siempre, tanto si dm-engine
+      // respondió con éxito como si se agotaron los reintentos y se guardó el
+      // mensaje de fallback. Sin esto, un fallo dejaría el overlay de
+      // ui-web "pensando" colgado para siempre.
+      freshGame.endDmTurn();
       await this.games.save(freshGame);
 
       return finalResult;

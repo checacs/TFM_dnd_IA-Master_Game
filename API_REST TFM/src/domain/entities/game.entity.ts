@@ -102,6 +102,15 @@ export interface GameProps {
    * duplica si se reaplica el mismo mapa dos veces seguidas.
    */
   mapHistory: string[];
+  /**
+   * true mientras dm-engine está resolviendo un turno del DM-IA (SendMessageUseCase,
+   * llamado también desde SendPlayerActionUseCase y PlayerRollUseCase). Se expone en
+   * el snapshot para que ui-web (pantalla de solo lectura, ya no dispara ella misma
+   * las acciones de partida) pueda mostrar un overlay de "el Master está pensando"
+   * mientras dura la llamada (20-40s) sondeando GET /games/:id -- sin este flag no
+   * tendría forma de saber que hay un turno en marcha disparado desde el móvil.
+   */
+  dmTurnInProgress: boolean;
 }
 
 export type CreateGameInput = Pick<GameProps, 'name' | 'hostUserId' | 'maxPlayers'> & {
@@ -144,6 +153,12 @@ export class Game {
     if (!props.board.zones) props.board.zones = [];
     if (props.captainUserId === undefined) props.captainUserId = null;
     if (!props.mapHistory) props.mapHistory = [];
+    // Migración: partidas persistidas antes de introducir este campo no lo
+    // traen en su documento de Mongo -- se asume que no hay ningún turno del
+    // DM en marcha al rehidratarlas (nunca queda "colgado" a true entre
+    // reinicios del proceso, ver withGameLock/game-lock.ts: los candados en
+    // memoria tampoco sobreviven a un reinicio).
+    if (props.dmTurnInProgress === undefined) props.dmTurnInProgress = false;
     props.players = props.players.map((p) => ({ ...p, conditions: p.conditions ?? [], position: p.position ?? null }));
     if (props.activeEncounter) {
       props.activeEncounter.enemies = props.activeEncounter.enemies.map((e) => ({
@@ -177,6 +192,7 @@ export class Game {
       narrativeLog: [],
       captainUserId: null,
       mapHistory: [],
+      dmTurnInProgress: false,
       // Sin board explícito (el camino real de producción -- CreateGameUseCase
       // nunca lo pasa, solo lo usan algunos tests para un tablero plano de
       // tamaño concreto), se arranca con la imagen del pueblo en vez de un
@@ -426,6 +442,21 @@ export class Game {
       throw new DomainError('Ese usuario no es un jugador de esta partida');
     }
     this.props.captainUserId = targetUserId;
+  }
+
+  /**
+   * Señala el arranque de un turno del DM-IA (llamado por SendMessageUseCase justo
+   * antes de invocar a dm-engine, ver su comentario de candados) -- ui-web lo lee vía
+   * toSnapshot()/GET /games/:id para mostrar el overlay "el Master está pensando"
+   * mientras dura la respuesta (20-40s).
+   */
+  startDmTurn(): void {
+    this.props.dmTurnInProgress = true;
+  }
+
+  /** Cierra el turno señalado por startDmTurn -- se llama siempre, tanto si dm-engine respondió con éxito como si se agotaron los reintentos y se guardó el mensaje de fallback (ver SendMessageUseCase). */
+  endDmTurn(): void {
+    this.props.dmTurnInProgress = false;
   }
 
   /** Usado por ResolveAttackUseCase (docs/03) — busca tanto en jugadores como en enemigos del combate activo. */

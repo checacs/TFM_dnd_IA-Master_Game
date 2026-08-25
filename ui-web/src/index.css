@@ -685,3 +685,104 @@ textarea {
   font-size: 0.85rem;
   text-transform: capitalize;
 }
+
+/* ============================================================
+   DmThinkingOverlay -- overlay épico "el Master está pensando"
+   (ui-web, pantalla de solo lectura) mientras dura el turno del
+   DM-IA (game.dmTurnInProgress / sendMessage.isPending, 20-40s).
+   ============================================================ */
+.dm-thinking-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(10, 8, 6, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 500;
+  pointer-events: none;
+  animation: dm-thinking-fade-in 0.4s ease-out;
+}
+
+.dm-thinking-box {
+  max-width: 480px;
+  width: 100%;
+  padding: 1.75rem 2.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-gold);
+  background: linear-gradient(180deg, rgba(28, 22, 16, 0.94), rgba(20, 14, 10, 0.94));
+  box-shadow: var(--shadow-soft), 0 0 32px rgba(212, 175, 55, 0.25);
+  text-align: center;
+}
+
+.dm-thinking-visual {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 0.85rem;
+  animation: dm-thinking-die-bounce 1.3s ease-in-out infinite;
+}
+
+.dm-thinking-die {
+  width: 64px;
+  height: 64px;
+  animation: dm-thinking-die-spin 3.2s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.55));
+}
+
+.dm-thinking-sparkle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-gold-bright);
+  box-shadow: 0 0 6px 1px var(--color-gold-bright);
+  opacity: 0;
+  pointer-events: none;
+  animation: dm-thinking-sparkle-float 2.2s ease-in-out infinite;
+}
+
+.dm-thinking-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-gold-bright);
+}
+
+.dm-thinking-text {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--color-parchment);
+  font-style: italic;
+  animation: dm-thinking-text-fade 0.5s ease-out;
+}
+
+@keyframes dm-thinking-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dm-thinking-die-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dm-thinking-die-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes dm-thinking-sparkle-float {
+  0% { opacity: 0; transform: translate(-50%, -50%) translate(0, 0) scale(0.4); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) scale(1); }
+}
+
+@keyframes dm-thinking-text-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
