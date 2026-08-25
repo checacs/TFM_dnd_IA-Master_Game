@@ -16,6 +16,9 @@ import type {
   CharacterSnapshot,
   GameSnapshot,
   MyGameSummary,
+  AdminUserSummary,
+  CreateUserInput,
+  CreateUserResult,
 } from '../types/api';
 
 export function useMyGames() {
@@ -154,6 +157,45 @@ export function useLevelUp(characterId: string) {
     mutationFn: (input) => api.post<CharacterSnapshot>(`/characters/${characterId}/assign-skill-point`, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+    },
+  });
+}
+
+// --- Administración de usuarios (solo admin, ver UserAdminScreen) ---
+
+export function useUsers() {
+  return useQuery<AdminUserSummary[], Error>({
+    queryKey: ['users'],
+    queryFn: () => api.get<AdminUserSummary[]>('/auth/users'),
+  });
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+  return useMutation<CreateUserResult, Error, CreateUserInput>({
+    mutationFn: (input) => api.post<CreateUserResult>('/auth/users', input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (userId) => api.delete<void>(`/auth/users/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+
+export function useDeleteCharacterAdmin() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (characterId) => api.delete<void>(`/characters/${characterId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
 }

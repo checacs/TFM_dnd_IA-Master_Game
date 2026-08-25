@@ -188,6 +188,36 @@ export interface MyGameSummary {
   maxPlayers: number;
 }
 
+export type UserRole = 'admin' | 'player';
+
+/** Panel "Administración de Usuarios" (admin) — ver AdminUserSummary en el backend. */
+export interface AdminCharacterSummary {
+  id: string;
+  name: string;
+  class: CharacterClass;
+  level: number;
+  gameId: string;
+}
+
+export interface AdminUserSummary {
+  userId: string;
+  username: string;
+  role: UserRole;
+  characters: AdminCharacterSummary[];
+}
+
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  role?: UserRole;
+}
+
+export interface CreateUserResult {
+  userId: string;
+  username: string;
+  role: UserRole;
+}
+
 export interface NarrativeEntry {
   role: 'user' | 'assistant';
   content: string;

@@ -19,12 +19,12 @@
     &quot;assignee&quot;: &quot;checacs&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/checacs/TFM_dnd_IA-Master_Game.git",
-    "accountId": "d0b61d9c-cb0a-4ee0-bc94-ebbb21ce6e6f"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/checacs/TFM_dnd_IA-Master_Game.git&quot;,
+    &quot;accountId&quot;: &quot;d0b61d9c-cb0a-4ee0-bc94-ebbb21ce6e6f&quot;
   }
-}]]></component>
+}</component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
       <entry key="MS100" value="1.0603710205578027" />
@@ -141,6 +141,7 @@
       <workItem from="1784142133306" duration="15090000" />
       <workItem from="1784278169717" duration="5918000" />
       <workItem from="1784539422835" duration="2814000" />
+      <workItem from="1785856496021" duration="1264000" />
     </task>
     <task id="LOCAL-00001" summary="author">
       <option name="closed" value="true" />

@@ -19,9 +19,18 @@ export class MongooseUserRepository implements UserRepository {
     return doc ? UserMapper.toDomain(doc) : null;
   }
 
+  async findAll(): Promise<User[]> {
+    const docs = await this.model.find().lean<UserDocumentShape[]>().exec();
+    return docs.map((doc) => UserMapper.toDomain(doc));
+  }
+
   /** Usado por scripts/seed-users.ts y por CreateUserUseCase. */
   async save(user: User): Promise<void> {
     const raw = UserMapper.toPersistence(user);
     await this.model.findByIdAndUpdate(raw._id, raw, { upsert: true, returnDocument: 'after' }).exec();
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.model.findByIdAndDelete(id).exec();
   }
 }

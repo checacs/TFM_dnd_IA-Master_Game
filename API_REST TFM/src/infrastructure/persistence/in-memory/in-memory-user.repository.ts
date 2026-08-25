@@ -14,8 +14,16 @@ export class InMemoryUserRepository implements UserRepository {
     return this.users.get(id) ?? null;
   }
 
+  async findAll(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
   /** Usado por el script de siembra de usuarios y por CreateUserUseCase. */
   async save(user: User): Promise<void> {
     this.users.set(user.id, user);
+  }
+
+  async deleteById(id: string): Promise<void> {
+    this.users.delete(id);
   }
 }

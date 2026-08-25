@@ -12,6 +12,13 @@ class FakeUserRepository implements UserRepository {
   async findById(id: string): Promise<User | null> {
     return this.users.find((u) => u.id === id) ?? null;
   }
+  async findAll(): Promise<User[]> {
+    return [...this.users];
+  }
+  async deleteById(id: string): Promise<void> {
+    const idx = this.users.findIndex((u) => u.id === id);
+    if (idx >= 0) this.users.splice(idx, 1);
+  }
   async save(user: User): Promise<void> {
     this.users.push(user);
   }

@@ -7,6 +7,8 @@ import { AdminGuard } from '../interface/http/auth/admin.guard';
 import { LoginUseCase } from '../application/use-cases/login.use-case';
 import { CreateUserUseCase } from '../application/use-cases/create-user.use-case';
 import { ChangePasswordUseCase } from '../application/use-cases/change-password.use-case';
+import { ListUsersUseCase } from '../application/use-cases/list-users.use-case';
+import { DeleteUserUseCase } from '../application/use-cases/delete-user.use-case';
 import { PASSWORD_HASHER } from '../domain/ports/password-hasher.port';
 import { TOKEN_ISSUER } from '../domain/ports/token-issuer.port';
 import { BcryptPasswordHasher } from '../infrastructure/auth/bcrypt-password-hasher';
@@ -48,6 +50,8 @@ const JWT_EXPIRES_IN = /^\d+$/.test(JWT_EXPIRES_IN_RAW) ? Number(JWT_EXPIRES_IN_
     LoginUseCase,
     CreateUserUseCase,
     ChangePasswordUseCase,
+    ListUsersUseCase,
+    DeleteUserUseCase,
     JwtStrategy,
     AdminGuard,
     { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },

@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Inject, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { LevelUpUseCase } from '../../../application/use-cases/level-up.use-case';
 import { AddToInventoryUseCase } from '../../../application/use-cases/add-to-inventory.use-case';
 import { EquipItemUseCase } from '../../../application/use-cases/equip-item.use-case';
+import { DeleteCharacterUseCase } from '../../../application/use-cases/delete-character.use-case';
 import { CharacterRepository, CHARACTER_REPOSITORY } from '../../../domain/ports/character.repository.port';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { LevelUpDto } from './dto/level-up.dto';
 import { AddToInventoryDto } from './dto/add-to-inventory.dto';
@@ -22,6 +24,7 @@ export class CharactersController {
     // llamando al mismo endpoint sin tener que saber de antemano qué tipo de
     // objeto es.
     private readonly equipItem: EquipItemUseCase,
+    private readonly deleteCharacter: DeleteCharacterUseCase,
     @Inject(CHARACTER_REPOSITORY) private readonly characters: CharacterRepository,
   ) {}
 
@@ -32,6 +35,13 @@ export class CharactersController {
       throw new NotFoundException('Personaje no encontrado');
     }
     return character.toSnapshot();
+  }
+
+  /** Borrado individual desde el panel de administración de usuarios — solo admin (mismo patrón que DELETE /games/:gameId). */
+  @Delete(':id')
+  @UseGuards(AdminGuard)
+  delete(@Param('id') id: string) {
+    return this.deleteCharacter.execute({ characterId: id });
   }
 
   @Post(':id/assign-skill-point')

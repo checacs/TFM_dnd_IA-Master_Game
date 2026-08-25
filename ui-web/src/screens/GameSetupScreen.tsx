@@ -157,7 +157,17 @@ export function GameSetupScreen() {
           </div>
         </div>
 
-        <button className="btn-ghost" style={{ marginTop: '1.5rem' }} onClick={auth.logout}>
+        {auth.isAdmin && (
+          <button
+            className="btn-ghost"
+            style={{ marginTop: '1.5rem' }}
+            onClick={() => navigate('/admin/users')}
+          >
+            Administración de Usuarios
+          </button>
+        )}
+
+        <button className="btn-ghost" style={{ marginTop: '0.75rem' }} onClick={auth.logout}>
           Cerrar sesión
         </button>
       </div>

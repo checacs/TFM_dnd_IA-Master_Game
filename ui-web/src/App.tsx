@@ -7,6 +7,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { GameSetupScreen } from './screens/GameSetupScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
+import { UserAdminScreen } from './screens/UserAdminScreen';
 import { BackgroundMusicController } from './audio/BackgroundMusicController';
 import { MusicControl } from './audio/MusicControl';
 import type { ReactNode } from 'react';
@@ -23,11 +24,20 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Como ProtectedRoute, pero además exige role: 'admin' (ver AuthContext.isAdmin) — usada por /admin/users. */
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isAdmin } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginScreen />} />
       <Route path="/" element={<ProtectedRoute><GameSetupScreen /></ProtectedRoute>} />
+      <Route path="/admin/users" element={<AdminRoute><UserAdminScreen /></AdminRoute>} />
       <Route path="/game/:gameId/lobby" element={<ProtectedRoute><LobbyScreen /></ProtectedRoute>} />
       <Route path="/game/:gameId" element={<ProtectedRoute><GameScreen /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />

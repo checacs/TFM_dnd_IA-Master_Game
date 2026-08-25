@@ -45,6 +45,12 @@ class FakeCharacterRepository implements CharacterRepository {
   async findById(id: string): Promise<Character | null> {
     return this.characters.get(id) ?? null;
   }
+  async findByOwnerId(ownerId: string): Promise<Character[]> {
+    return Array.from(this.characters.values()).filter((c) => c.toSnapshot().ownerId === ownerId);
+  }
+  async deleteById(id: string): Promise<void> {
+    this.characters.delete(id);
+  }
   async save(): Promise<void> {}
 
   async deleteByGameId(gameId: string): Promise<void> {

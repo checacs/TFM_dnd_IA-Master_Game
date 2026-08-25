@@ -16,9 +16,18 @@ export class MongooseCharacterRepository implements CharacterRepository {
     return doc ? CharacterMapper.toDomain(doc) : null;
   }
 
+  async findByOwnerId(ownerId: string): Promise<Character[]> {
+    const docs = await this.model.find({ ownerId }).lean<CharacterDocumentShape[]>().exec();
+    return docs.map((doc) => CharacterMapper.toDomain(doc));
+  }
+
   async save(character: Character): Promise<void> {
     const raw = CharacterMapper.toPersistence(character);
     await this.model.findByIdAndUpdate(raw._id, raw, { upsert: true, returnDocument: 'after' }).exec();
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.model.findByIdAndDelete(id).exec();
   }
 
   async deleteByGameId(gameId: string): Promise<void> {
