@@ -132,7 +132,7 @@ const DEFAULT_BOARD_SIZE = 8;
  */
 const INITIAL_VILLAGE_BOARD = { rows: 30, cols: 20, imageUrl: '/maps/battleMap0-pueblo.png' } as const;
 
-const MIN_PLAYERS_TO_LAUNCH = 1;
+const MIN_PLAYERS_TO_LAUNCH = 2;
 
 /**
  * Aggregate root de una partida (docs/02-modelo-datos-mongodb.md).
@@ -181,8 +181,8 @@ export class Game {
   }
 
   static create(input: CreateGameInput, id: string = crypto.randomUUID()): Game {
-    if (input.maxPlayers < 1 || input.maxPlayers > 4) {
-      throw new DomainError('El número de jugadores debe estar entre 1 y 4');
+    if (input.maxPlayers < 2 || input.maxPlayers > 4) {
+      throw new DomainError('El número de jugadores debe estar entre 2 y 4');
     }
     return new Game(id, {
       ...input,

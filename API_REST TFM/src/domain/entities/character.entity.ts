@@ -98,10 +98,10 @@ const STARTING_ATTRIBUTES: Record<CharacterClass, Record<AttributeKey, number>> 
 };
 
 const BASE_HP_BY_CLASS: Record<CharacterClass, number> = {
-  guerrero: 12,
-  picaro: 10,
-  mago: 8,
-  clerigo: 10,
+  guerrero: 16,
+  picaro: 13,
+  mago: 10,
+  clerigo: 11,
 };
 
 const BASE_AC = 10; // sin armadura equipada — CA = 10 + mod. destreza
