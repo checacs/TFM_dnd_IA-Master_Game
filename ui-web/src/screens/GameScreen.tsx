@@ -6,6 +6,7 @@ import { ChatPanel } from '../components/game/ChatPanel';
 import { BoardPanel } from '../components/game/BoardPanel';
 import { EnemyPanel } from '../components/game/EnemyPanel';
 import { DmThinkingOverlay } from '../components/game/DmThinkingOverlay';
+import { GameOverOverlay } from '../components/game/GameOverOverlay';
 import type { DmEngineChatMessage, NarrativeEntry } from '../types/api';
 import './GameScreen.css';
 
@@ -84,10 +85,16 @@ export function GameScreen() {
   // pasa por aquí) -- ver Game.startDmTurn/endDmTurn en el backend. Sin el
   // segundo, ui-web (pantalla de solo lectura) no tendría forma de saber que
   // hay un turno del DM en marcha mientras dura la llamada a dm-engine.
-  const dmThinking = sendMessage.isPending || game.dmTurnInProgress;
+  // Si la partida ya terminó (todo el grupo caído, ver Game.checkForPartyWipe
+  // en el backend), el overlay de fin de partida manda -- no tiene sentido
+  // seguir mostrando "el Master está pensando" sobre una historia que ya
+  // cerró.
+  const gameOver = game.status === 'finalizada';
+  const dmThinking = !gameOver && (sendMessage.isPending || game.dmTurnInProgress);
 
   return (
     <div className="game-screen">
+      {gameOver && <GameOverOverlay />}
       <DmThinkingOverlay active={dmThinking} />
       <div className="game-top-bar">
         <div className="game-title-group">

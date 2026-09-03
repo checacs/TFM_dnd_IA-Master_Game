@@ -227,10 +227,11 @@ describe('Game', () => {
     });
 
     it('lanza DomainError si la partida ya está completa', () => {
-      const game = buildGame({ maxPlayers: 1 });
+      const game = buildGame({ maxPlayers: 2 });
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 12 });
       expect(() =>
-        game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 12 }),
+        game.addPlayer({ userId: 'user-3', characterId: 'char-3', name: 'Mira', class: 'picaro', currentHp: 10 }),
       ).toThrow(DomainError);
     });
 
@@ -344,10 +345,74 @@ describe('Game', () => {
     });
   });
 
+  describe('fin de partida por muerte de todo el grupo (todos los jugadores a 0 HP)', () => {
+    // CASO REAL detectado en partida: cuando el último jugador con vida
+    // llegaba a 0 HP no pasaba nada -- la partida seguía 'en_curso' para
+    // siempre y el DM-IA, sin ninguna señal de que la aventura había
+    // terminado, se quedaba sin saber qué tool llamar ante un grupo entero
+    // ya muerto hasta agotar sus reintentos y mostrar el mensaje de fallback
+    // "El DM-IA no ha podido responder ahora mismo" -- un error técnico
+    // disfrazando lo que en realidad era el final natural de la partida.
+    function buildTwoPlayerGame() {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 5 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 14 });
+      game.assignCaptain('host-1', 'user-1');
+      game.launch('host-1');
+      return game;
+    }
+
+    it('no termina la partida mientras quede algún jugador con vida', () => {
+      const game = buildTwoPlayerGame();
+      game.applyDamageToParticipant('char-1', 999);
+      expect(game.toSnapshot().status).toBe('en_curso');
+    });
+
+    it('termina la partida (finalizada) en cuanto el ÚLTIMO jugador con vida llega a 0 HP', () => {
+      const game = buildTwoPlayerGame();
+      game.applyDamageToParticipant('char-1', 999);
+      game.applyDamageToParticipant('char-2', 999);
+      expect(game.toSnapshot().status).toBe('finalizada');
+    });
+
+    it('añade un mensaje narrativo anunciando la caída del grupo', () => {
+      const game = buildTwoPlayerGame();
+      game.applyDamageToParticipant('char-1', 999);
+      game.applyDamageToParticipant('char-2', 999);
+
+      const log = game.toSnapshot().narrativeLog;
+      expect(log[log.length - 1]).toEqual(
+        expect.objectContaining({ role: 'assistant', content: expect.stringMatching(/grupo ha caído/i) }),
+      );
+    });
+
+    it('no repite el mensaje de caída del grupo si se sigue aplicando daño tras la muerte total', () => {
+      const game = buildTwoPlayerGame();
+      game.applyDamageToParticipant('char-1', 999);
+      game.applyDamageToParticipant('char-2', 999);
+      game.applyDamageToParticipant('char-2', 5); // ya estaba a 0, sigue a 0
+
+      const wipeMessages = game.toSnapshot().narrativeLog.filter((e) => /grupo ha caído/i.test(e.content));
+      expect(wipeMessages).toHaveLength(1);
+    });
+
+    it('dañar a un enemigo no dispara por error el fin de partida', () => {
+      const game = buildTwoPlayerGame();
+      game.startEncounter({
+        enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
+      });
+
+      game.applyDamageToParticipant('enc-1-goblin-a', 999);
+
+      expect(game.toSnapshot().status).toBe('en_curso');
+    });
+  });
+
   describe('placeParticipant', () => {
     function buildGameWithEncounter() {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -482,6 +547,7 @@ describe('Game', () => {
     it('empieza en fase de jugadores, sin candado y sin nadie que haya actuado', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -620,6 +686,7 @@ describe('Game', () => {
     it('vuelve a abrir la fase de jugadores, libera el candado y resetea quién ha actuado', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -651,6 +718,7 @@ describe('Game', () => {
     it('pone activeEncounter a null, cerrando el combate de verdad', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -669,6 +737,7 @@ describe('Game', () => {
       // sobrescribir el anterior.
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       // El host no es jugador: hay que asignar capitán antes de lanzar (regla de Game.launch).
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -693,6 +762,7 @@ describe('Game', () => {
     it('al lanzar la partida, el host se convierte en capitán por defecto SI TAMBIÉN es jugador de la partida', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'host-1', characterId: 'char-host', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       game.launch('host-1');
       expect(game.toSnapshot().captainUserId).toBe('host-1');
     });
@@ -704,6 +774,7 @@ describe('Game', () => {
         () => {
           const game = buildGame();
           game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+          game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
 
           expect(() => game.launch('host-1')).toThrow(DomainError);
           expect(game.toSnapshot().status).toBe('configuracion'); // no se lanzó
@@ -714,6 +785,7 @@ describe('Game', () => {
     it('el host puede asignar a un jugador como capitán ANTES de lanzar (sala de espera), y launch lo respeta', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
 
       game.assignCaptain('host-1', 'user-1');
       game.launch('host-1');
@@ -746,6 +818,7 @@ describe('Game', () => {
     it('lanza DomainError si se asigna a alguien que no es jugador de la partida', () => {
       const game = buildGame();
       game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
       game.assignCaptain('host-1', 'user-1'); // capitán válido asignado antes de lanzar
       game.launch('host-1');
 

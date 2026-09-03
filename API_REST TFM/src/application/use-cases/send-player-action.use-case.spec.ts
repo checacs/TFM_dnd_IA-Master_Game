@@ -239,4 +239,28 @@ describe('SendPlayerActionUseCase', () => {
       useCase.execute({ gameId: game.id, requestingUserId: 'user-2', characterId: 'char-1', content: 'Hola' }),
     ).rejects.toThrow();
   });
+
+  it(
+      'lanza DomainError si la partida ya ha terminado (todo el grupo caído, ver Game.checkForPartyWipe) -- ' +
+      'antes nada impedía seguir enviando acciones a una partida "muerta", y era eso lo que dejaba al DM-IA ' +
+      'sin saber cómo reaccionar, mostrando el error genérico "no ha podido responder ahora mismo"',
+      async () => {
+        const { game, games } = buildGameInCombat();
+        game.claimTurn('char-1');
+        const finished = Game.reconstitute(game.id, { ...game.toSnapshot(), status: 'finalizada' });
+        await games.save(finished);
+        const dmEngine = new FakeDmEngineClient();
+        const sendMessage = new SendMessageUseCase(games, dmEngine);
+        const useCase = new SendPlayerActionUseCase(games, sendMessage);
+
+        await expect(
+          useCase.execute({
+            gameId: game.id,
+            requestingUserId: 'user-1',
+            characterId: 'char-1',
+            content: 'Ataco al goblin',
+          }),
+        ).rejects.toThrow(/terminad/i);
+      },
+  );
 });

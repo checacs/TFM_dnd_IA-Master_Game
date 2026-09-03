@@ -139,9 +139,9 @@ describe('Character', () => {
     });
 
     it('calcula el HP inicial como base de clase + modificador de constitución', () => {
-      // Guerrero: base 12, con 14 -> mod +2 => HP 14
+      // Guerrero: base 18, con 14 -> mod +2 => HP 20
       const guerrero = Character.createNew({ ownerId: 'user-1', gameId: 'game-1', name: 'Thane', class: 'guerrero' });
-      expect(guerrero.toSnapshot().hp).toEqual({ current: 14, max: 14 });
+      expect(guerrero.toSnapshot().hp).toEqual({ current: 20, max: 20 });
     });
 
     it('calcula la CA inicial como 10 + modificador de destreza', () => {

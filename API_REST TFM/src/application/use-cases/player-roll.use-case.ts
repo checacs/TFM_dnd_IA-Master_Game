@@ -60,6 +60,14 @@ export class PlayerRollUseCase {
     }
 
     const snapshot = game.toSnapshot();
+
+    // Ver Game.checkForPartyWipe: en cuanto todo el grupo llega a 0 HP, el
+    // status pasa a 'finalizada' de forma automática y permanente -- misma
+    // guarda y misma razón que en SendPlayerActionUseCase (ver su comentario).
+    if (snapshot.status === 'finalizada') {
+      throw new DomainError('La partida ha terminado: todo el grupo ha caído');
+    }
+
     const player = snapshot.players.find((p) => p.characterId === input.characterId);
     if (!player || player.userId !== input.requestingUserId) {
       throw new DomainError('Ese personaje no te pertenece en esta partida');

@@ -786,3 +786,73 @@ textarea {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================
+   GameOverOverlay -- fin de partida por muerte de todo el grupo
+   (game.status === 'finalizada', ver Game.checkForPartyWipe en el
+   backend). A diferencia de dm-thinking-overlay, este SÍ acepta
+   clics (pointer-events auto) porque incluye un botón para volver
+   al menú, y no desaparece solo -- la partida ha terminado de verdad.
+   ============================================================ */
+.game-over-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(10, 4, 4, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 600;
+  animation: dm-thinking-fade-in 0.5s ease-out;
+}
+
+.game-over-box {
+  max-width: 480px;
+  width: 100%;
+  padding: 2rem 2.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-danger);
+  background: linear-gradient(180deg, rgba(30, 10, 10, 0.96), rgba(16, 6, 6, 0.96));
+  box-shadow: var(--shadow-soft), 0 0 40px rgba(178, 34, 34, 0.35);
+  text-align: center;
+}
+
+.game-over-visual {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 1rem;
+  animation: game-over-skull-pulse 2.4s ease-in-out infinite;
+}
+
+.game-over-skull {
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 0 8px rgba(178, 34, 34, 0.6));
+}
+
+.game-over-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.game-over-text {
+  margin: 0 0 1.5rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--color-parchment);
+}
+
+.game-over-btn {
+  width: auto !important;
+  padding: 0.65rem 1.75rem !important;
+}
+
+@keyframes game-over-skull-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.06); opacity: 1; }
+}

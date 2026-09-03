@@ -97,11 +97,21 @@ const STARTING_ATTRIBUTES: Record<CharacterClass, Record<AttributeKey, number>> 
   clerigo: { str: 12, dex: 8, con: 14, int: 8, wis: 16, cha: 10 },
 };
 
+/**
+ * Segunda subida (la primera fue guerrero 12->16, pícaro 10->13, mago 8->10,
+ * clérigo 10->11): se detectó en partida real que un mago con 11 HP (base 10
+ * + con +1) podía quedar casi a 0 de un solo golpe de un enemigo con daño
+ * medio ~9-10 (ej. 2d6+2), y con TPK ahora terminando la partida de verdad
+ * (ver Game.checkForPartyWipe) un grupo entero puede caer en un único mal
+ * turno demasiado pronto. Se sube un poco más, sobre todo a las clases
+ * frágiles (mago/clérigo +3 en vez de +2) para dar más margen sin blindar
+ * del todo a los conjuradores.
+ */
 const BASE_HP_BY_CLASS: Record<CharacterClass, number> = {
-  guerrero: 16,
-  picaro: 13,
-  mago: 10,
-  clerigo: 11,
+  guerrero: 18,
+  picaro: 15,
+  mago: 13,
+  clerigo: 14,
 };
 
 const BASE_AC = 10; // sin armadura equipada — CA = 10 + mod. destreza

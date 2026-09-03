@@ -66,6 +66,7 @@ describe('LaunchGameUseCase', () => {
       async () => {
         const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
         game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
         const repo = new FakeGameRepository();
         repo.seed(game);
         const useCase = new LaunchGameUseCase(repo);
@@ -80,6 +81,7 @@ describe('LaunchGameUseCase', () => {
   it('pasa la partida a en_curso si el host también es jugador de la partida (capitán por defecto)', async () => {
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'host-1', characterId: 'char-host', name: 'Grommash', class: 'guerrero', currentHp: 14 });
+    game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
     const repo = new FakeGameRepository();
     repo.seed(game);
     const useCase = new LaunchGameUseCase(repo);

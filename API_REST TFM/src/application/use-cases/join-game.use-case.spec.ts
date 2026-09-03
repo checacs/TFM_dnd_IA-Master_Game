@@ -208,17 +208,18 @@ describe('JoinGameUseCase', () => {
     const games = new FakeGameRepository();
     const characters = new FakeCharacterRepository();
     const equipment = new FakeEquipmentRepository([]);
-    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 1 });
+    const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 2 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
     games.seed(game);
 
     const useCase = new JoinGameUseCase(games, characters, equipment);
 
     await expect(
-      useCase.execute({ gameId: game.id, userId: 'user-2', characterName: 'Thane', characterClass: 'guerrero' }),
+      useCase.execute({ gameId: game.id, userId: 'user-3', characterName: 'Mira', characterClass: 'picaro' }),
     ).rejects.toThrow();
 
     const savedGame = await games.findById(game.id);
-    expect(savedGame?.toSnapshot().players).toHaveLength(1); // sin cambios
+    expect(savedGame?.toSnapshot().players).toHaveLength(2); // sin cambios
   });
 });

@@ -464,6 +464,7 @@ export class Game {
     const player = this.props.players.find((p) => p.characterId === participantId);
     if (player) {
       player.currentHp = Math.max(0, player.currentHp - damage);
+      this.checkForPartyWipe();
       return;
     }
 
@@ -474,6 +475,40 @@ export class Game {
     }
 
     throw new DomainError('Participante no encontrado en la partida');
+  }
+
+  /**
+   * CASO REAL detectado en partida: cuando el último jugador con vida llegaba
+   * a 0 HP, nada en el dominio lo reflejaba -- la partida seguía 'en_curso'
+   * indefinidamente. El DM-IA (dm-engine), sin ninguna señal clara de que la
+   * aventura había terminado, intentaba seguir resolviendo el turno como si
+   * la partida continuara -- sin saber qué tool llamar ante un grupo entero
+   * ya muerto -- y acababa agotando sus reintentos con el mensaje de
+   * fallback genérico "El DM-IA no ha podido responder ahora mismo": un
+   * fallo técnico disfrazando lo que en realidad era el final natural de la
+   * partida. Ahora se cierra aquí mismo, de forma determinista y sin
+   * depender de que el modelo se dé cuenta por su cuenta: en cuanto TODOS
+   * los jugadores están a 0 HP, la partida pasa a 'finalizada' y se deja
+   * constancia en la narrativa (ui-web la muestra como un mensaje más del
+   * DM, y puede usarla para mostrar un aviso de "fin de la partida" en
+   * pantalla). Guarda por `status !== 'en_curso'` para no repetir el
+   * mensaje si se sigue aplicando daño después de la muerte total (ej.
+   * varios enemigos atacando en la misma ronda a jugadores que ya estaban a
+   * 0 HP).
+   */
+  private checkForPartyWipe(): void {
+    if (this.props.status !== 'en_curso') {
+      return;
+    }
+    const allDead = this.props.players.length > 0 && this.props.players.every((p) => p.currentHp <= 0);
+    if (!allDead) {
+      return;
+    }
+    this.props.status = 'finalizada';
+    this.appendNarrativeEntry({
+      role: 'assistant',
+      content: '💀 **EL GRUPO HA CAÍDO.** Todos los jugadores han sido derrotados — la aventura termina aquí.',
+    });
   }
 
   /** Devuelve las condiciones activas de un jugador o enemigo — [] si no tiene ninguna. */

@@ -24,11 +24,14 @@ class FakeGameRepository implements GameRepository {
 function buildGameWithClaimedTurn(): { game: Game; repo: FakeGameRepository } {
   const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
   game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+  game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 20 });
   game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
   game.launch('host-1');
   game.startEncounter({
     enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
   });
+  game.claimTurn('char-2');
+  game.releaseTurnAfterAction('char-2'); // char-2 ya actuó -> solo queda char-1 en la ronda
   game.claimTurn('char-1');
   const repo = new FakeGameRepository();
   repo.seed(game);
@@ -45,8 +48,8 @@ describe('EndPlayerTurnUseCase', () => {
     const saved = await repo.findById(game.id);
     const encounter = saved?.toSnapshot().activeEncounter;
     expect(encounter?.turnClaims).toEqual([]);
-    expect(encounter?.actedThisRound).toEqual(['char-1']);
-    // único jugador vivo del combate -> al actuar, la fase pasa a 'enemigos'
+    expect(encounter?.actedThisRound).toEqual(['char-2', 'char-1']);
+    // char-1 es el último en actuar de la ronda -> al actuar, la fase pasa a 'enemigos'
     expect(encounter?.roundPhase).toBe('enemigos');
   });
 

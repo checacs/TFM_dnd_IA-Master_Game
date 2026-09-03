@@ -46,6 +46,18 @@ export class SendPlayerActionUseCase {
     }
 
     const snapshot = game.toSnapshot();
+
+    // Ver Game.checkForPartyWipe: en cuanto todo el grupo llega a 0 HP, el
+    // status pasa a 'finalizada' de forma automática y permanente. Sin esta
+    // guarda, el móvil podía seguir enviando acciones a una partida ya
+    // "muerta" y era eso lo que dejaba al DM-IA sin ninguna señal clara de
+    // que la historia había terminado -- acababa fallando y mostrando el
+    // mensaje genérico "no ha podido responder ahora mismo" en vez de un
+    // cierre de partida explícito.
+    if (snapshot.status === 'finalizada') {
+      throw new DomainError('La partida ha terminado: todo el grupo ha caído');
+    }
+
     const owns = snapshot.players.some(
       (p) => p.userId === input.requestingUserId && p.characterId === input.characterId,
     );

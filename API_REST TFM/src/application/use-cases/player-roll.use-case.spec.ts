@@ -55,6 +55,7 @@ describe('PlayerRollUseCase', () => {
   function buildGame() {
     const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
     game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+    game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
     game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
     game.launch('host-1');
     return game;
@@ -185,4 +186,23 @@ describe('PlayerRollUseCase', () => {
     ).rejects.toThrow();
     expect(dmEngine.receivedMessages).toBeNull();
   });
+
+  it(
+      'lanza DomainError si la partida ya ha terminado (todo el grupo caído, ver Game.checkForPartyWipe) -- ' +
+      'antes nada impedía seguir tirando dados en una partida "muerta", y era eso lo que dejaba al DM-IA sin ' +
+      'saber cómo reaccionar, mostrando el error genérico "no ha podido responder ahora mismo"',
+      async () => {
+        const games = new FakeGameRepository();
+        const game = buildGame();
+        const finished = Game.reconstitute(game.id, { ...game.toSnapshot(), status: 'finalizada' });
+        games.seed(finished);
+        const dmEngine = new FakeDmEngineClient({ narrative: 'Ok.', events: [] });
+        const sendMessage = new SendMessageUseCase(games, dmEngine);
+        const useCase = new PlayerRollUseCase(games, new FakeDiceRoller(10), sendMessage);
+
+        await expect(
+          useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1' }),
+        ).rejects.toThrow(/terminad/i);
+      },
+  );
 });

@@ -24,13 +24,16 @@ class FakeGameRepository implements GameRepository {
 function buildGameInEnemyPhase(): { game: Game; repo: FakeGameRepository } {
   const game = Game.create({ name: 'La torre olvidada', hostUserId: 'host-1', maxPlayers: 4 });
   game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'mago', currentHp: 14 });
+  game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 20 });
   game.assignCaptain('host-1', 'user-1'); // launch() exige un capitán válido asignado
   game.launch('host-1');
   game.startEncounter({
     enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
   });
   game.claimTurn('char-1');
-  game.releaseTurnAfterAction('char-1'); // único jugador vivo → fase pasa a 'enemigos'
+  game.claimTurn('char-2');
+  game.releaseTurnAfterAction('char-1');
+  game.releaseTurnAfterAction('char-2'); // todos actuaron → fase pasa a 'enemigos'
   const repo = new FakeGameRepository();
   repo.seed(game);
   return { game, repo };
