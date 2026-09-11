@@ -1,0 +1,118 @@
+# D&D con IA Master — todo el sistema en local con un solo comando.
+#
+#   docker compose up --build -d                       # arranca mongo + api + dm-engine + ui-web
+#   docker compose --profile seed run --rm seed        # SOLO la 1ª vez: usuarios, mapas y catálogo SRD
+#   docker compose logs -f api dm-engine               # ver qué hace el DM
+#   docker compose down                                # parar (los datos de Mongo se conservan)
+#
+# Secretos: se reutilizan los .env que ya tienes en cada proyecto
+# ("API_REST TFM/.env" y "dm-engine/.env"). Aquí solo se sobrescriben las
+# variables que cambian dentro de Docker (URLs entre servicios, puertos, BD).
+# Variables propias de este compose: ver .env.example en la raíz.
+#
+# mobile-app (Expo) no va en Docker: se arranca en el PC con `npx expo start`
+# (dentro de mobile-app) y detecta sola la IP del PC -- ver "Jugar desde el
+# móvil en local" en el README.
+
+name: dnd-ia-master
+
+x-internal-key: &internal-key
+  # Mismo secreto en la API y en dm-engine (protege /mcp y /turn).
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-clave-local-solo-para-docker}
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # Expuesto solo en tu PC (puerto 27018 para no chocar con un Mongo local),
+    # por si quieres mirarlo con MongoDB Compass: mongodb://localhost:27018
+    ports:
+      - "127.0.0.1:27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./API_REST TFM
+      target: runtime
+    restart: unless-stopped
+    env_file:
+      - path: ./API_REST TFM/.env
+        required: false
+    environment:
+      <<: *internal-key
+      PORT: "3000"
+      # Por defecto, la BD del contenedor mongo -- NUNCA la de producción. Para
+      # usar otra (p.ej. tu Atlas) define MONGODB_URI en el .env de la raíz.
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/dnd-ia-master}
+      DM_ENGINE_URL: http://dm-engine:4000
+      CORS_ORIGIN: http://localhost:3001,http://localhost:8081,http://localhost:19006
+      # Acepta también orígenes de la red local (navegador del móvil con
+      # mobile-app en modo web: http://IP-de-tu-PC:8081). Solo para local.
+      CORS_ALLOW_LAN: "true"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # En todas las interfaces: el móvil (Expo) tiene que llegar por la IP de tu PC.
+    ports:
+      - "3000:3000"
+
+  dm-engine:
+    build:
+      context: ./dm-engine
+      target: runtime
+    restart: unless-stopped
+    env_file:
+      - path: ./dm-engine/.env
+        required: false
+    environment:
+      <<: *internal-key
+      PORT: "4000"
+      MCP_SERVER_URL: http://api:3000/mcp
+    # Sin "ports": solo lo usa la API por la red interna de Docker.
+
+  ui-web:
+    build:
+      context: ./ui-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3001:80"
+
+  # Carga inicial de datos (idempotente: se puede repetir sin duplicar nada).
+  # Descarga el catálogo SRD de dnd5eapi.co, así que tarda varios minutos.
+  seed:
+    profiles: ["seed"]
+    build:
+      context: ./API_REST TFM
+      target: deps
+    env_file:
+      - path: ./API_REST TFM/.env
+        required: false
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/dnd-ia-master}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ -f scripts/seed-users.ts ]; then npm run seed:users; else echo "AVISO: no hay scripts/seed-users.ts (está en .gitignore): crea los usuarios a mano"; fi
+        npm run seed:maps
+        npm run import:monsters
+        npm run import:spells
+        npm run import:rules-reference
+        npm run import:equipment
+        npm run import:magic-items
+        echo "Seed completo."
+
+volumes:
+  mongo-data:

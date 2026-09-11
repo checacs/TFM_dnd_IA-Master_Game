@@ -1,0 +1,12 @@
+node_modules
+dist
+public_old_unused
+.idea
+.vscode
+.DS_Store
+*.tsbuildinfo
+*.pptx
+DOCUMENTACION-TFM.md
+# .env.production trae VITE_API_URL=pon-la-url: fuera, en Docker se usa /api (ver Dockerfile).
+.env
+.env.*

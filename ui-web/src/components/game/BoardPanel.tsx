@@ -1,0 +1,143 @@
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Board, Player, EncounterEnemy, BoardPosition } from '../../types/api';
+
+interface BoardPanelProps {
+  board: Board;
+  players: Player[];
+  enemies: EncounterEnemy[];
+  mapImageUrl: string | null;
+  /** La caja de combate (EnemyPanel) se pasa aquí en vez de renderizarse como
+   * panel aparte debajo — así queda pegada al roster de jugadores/enemigos en
+   * la misma columna estrecha, en lugar de duplicar la lista de enemigos en
+   * una caja ancha separada. */
+  belowRoster?: ReactNode;
+}
+
+interface PositionedMarker {
+  type: 'player' | 'enemy';
+  label: string;
+  position: BoardPosition;
+}
+
+/**
+ * Centro de la celda en % dentro del wrapper. El wrapper se dimensiona con
+ * aspect-ratio = cols/rows (ver CSS .board-map-wrapper) exactamente igual que
+ * lo haría una imagen con object-fit:contain, pero en la propia caja — así no
+ * queda letterboxing entre el borde del wrapper y la imagen real, y el % de
+ * cada marcador coincide con la celda real de la cuadrícula del mapa.
+ */
+function cellToPercent(position: BoardPosition, board: Board) {
+  return {
+    left: `${((position.col + 0.5) / board.cols) * 100}%`,
+    top: `${((position.row + 0.5) / board.rows) * 100}%`,
+  };
+}
+
+export function BoardPanel({ board, players, enemies, mapImageUrl, belowRoster }: BoardPanelProps) {
+  // El tablonAnuncios (y cualquier otro mapa sin salas catalogadas) es solo
+  // una ilustración de calle en primer plano para simular que el grupo está
+  // delante del tablón -- no una planta con cuadrícula real, así que no
+  // tiene sentido pintar marcadores de personajes encima (el DM ni siquiera
+  // llama a place_participant ahí, ver dm-system-prompt.ts). zones.length===0
+  // con imagen ya aplicada es la señal: todo mapa real del catálogo trae al
+  // menos una zona, así que esta combinación identifica de forma fiable a
+  // este tipo de mapa "solo ilustración" sin necesitar un flag nuevo.
+  const showMarkers = board.zones.length > 0;
+
+  // El ancho del mapa se calcula a partir del alto disponible + board.cols/rows
+  // en JS (en vez de la propiedad CSS `aspect-ratio`, ver .board-map-wrapper)
+  // porque los navegadores de las Smart TV (LG webOS, etc.) suelen llevar un
+  // motor muy antiguo que no soporta `aspect-ratio`: sin ella la caja (con
+  // width:auto y la imagen en position:absolute, que no aporta tamaño
+  // intrínseco) colapsaba a 0px de ancho y solo se veía el borde -- una
+  // línea oscura de arriba a abajo en vez del mapa.
+  const mapOuterRef = useRef<HTMLDivElement | null>(null);
+  const [mapWidth, setMapWidth] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = mapOuterRef.current;
+    if (!mapImageUrl || !el) return;
+    const ratio = board.cols / board.rows;
+    const update = () => setMapWidth(el.clientHeight * ratio);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [mapImageUrl, board.cols, board.rows]);
+
+  const positionedMarkers = useMemo(() => {
+    if (!showMarkers) return [];
+    const result: PositionedMarker[] = [];
+    players.forEach((p) => {
+      if (p.position) result.push({ type: 'player', label: p.name[0].toUpperCase(), position: p.position });
+    });
+    enemies.forEach((e) => {
+      if (e.position) result.push({ type: 'enemy', label: e.name[0].toUpperCase(), position: e.position });
+    });
+    return result;
+  }, [players, enemies, showMarkers]);
+
+  return (
+    <div className="board-panel">
+      <h3 className="section-title">Jugadores</h3>
+      <div className="board-panel-body">
+        <div className="board-players-column">
+          {/* Solo jugadores reales aquí — los enemigos ya tienen su propia caja
+              de Combate (belowRoster/EnemyPanel) justo debajo; listarlos
+              también aquí los hacía parecer jugadores más y duplicaba la
+              información. */}
+          <ul className="board-player-list">
+            {players.map((p) => (
+              <li key={p.characterId} className="board-player-card">
+                <span className="board-player-name">{p.name}</span>
+                <span className="board-player-class">{p.class}</span>
+                <span className="board-player-hp">HP {p.currentHp}</span>
+                {p.conditions.length > 0 && (
+                  <span className="board-player-conditions">{p.conditions.join(', ')}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="legend">
+            <span className="legend-item"><span className="legend-dot player" /> Jugador</span>
+            <span className="legend-item"><span className="legend-dot enemy" /> Enemigo</span>
+          </div>
+          {belowRoster}
+        </div>
+        <div className="board-map-column">
+          {mapImageUrl ? (
+            <div className="board-map-outer" ref={mapOuterRef}>
+              <div
+                className="board-map-wrapper"
+                style={mapWidth ? { width: `${mapWidth}px` } : undefined}
+              >
+                <img src={mapImageUrl} alt="Mapa de batalla" className="board-map-image" />
+                {positionedMarkers.map((m, i) => (
+                  <span
+                    key={i}
+                    className={`board-map-marker ${m.type}`}
+                    style={cellToPercent(m.position, board)}
+                    title={m.label}
+                  >
+                    {m.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            // Antes de que el DM cargue el primer mapa (justo al arrancar la
+            // historia, de pie en la calle del pueblo) no hay imagen que
+            // mostrar todavía. En vez de una cuadrícula vacía en bruto (que
+            // no representa nada real y confundía, dando la impresión de que
+            // ya había un mapa cargado), un mensaje de espera simple -- no
+            // afecta en nada a cómo el DM-IA elige el mapa (eso es lógica de
+            // backend/dm-engine, independiente de esta pantalla) ni a la
+            // columna de jugadores de la izquierda (arriba, sin cambios).
+            <div className="board-map-placeholder">
+              <p>Esperando a que el Dungeon Master describa la escena...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

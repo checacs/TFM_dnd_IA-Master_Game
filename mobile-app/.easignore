@@ -1,0 +1,35 @@
+# EAS Build reinstala dependencias en la nube (npm ci) -- no hace falta subir
+# node_modules local, y es con diferencia lo más pesado del proyecto.
+node_modules/
+node_modules_broken*/
+node_modules_stale_staging/
+
+# Carpetas residuales de instalaciones interrumpidas en el sandbox de Claude
+# (ver comentario equivalente en .gitignore) -- no aportan nada al build.
+stale2/
+.stale_sweep/
+
+# Cachés/config locales, irrelevantes para el build en la nube.
+.expo/
+.idea/
+.git/
+
+# Documentación y entregables del TFM que viven en esta carpeta por
+# comodidad pero no son parte de la app (memoria, presentación) -- no hace
+# falta subirlos a EAS para compilar.
+DOCUMENTACION-TFM.md
+DND-IA-Master-TFM.pptx
+README.md
+LICENSE
+
+# Carpetas nativas generadas (ya en .gitignore) -- EAS las regenera con
+# prebuild si el proyecto es managed.
+/ios
+/android
+
+# Logs y archivos de depuración.
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+.DS_Store

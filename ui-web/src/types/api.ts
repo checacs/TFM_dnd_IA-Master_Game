@@ -1,0 +1,176 @@
+export type GameStatus = 'configuracion' | 'en_curso' | 'pausada' | 'finalizada';
+
+export type CharacterClass = 'guerrero' | 'picaro' | 'mago' | 'clerigo';
+
+export interface DmEngineChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export type GameEventType =
+  | 'combate_iniciado'
+  | 'ataque_resuelto'
+  | 'tirada_realizada'
+  | 'xp_otorgada'
+  | 'mapa_aplicado'
+  | 'mapa_limpiado'
+  | 'participante_colocado'
+  | 'ronda_reabierta';
+
+export interface GameEvent {
+  type: GameEventType;
+  payload: unknown;
+}
+
+export interface DmEngineResult {
+  narrative: string;
+  events: GameEvent[];
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
+}
+
+export interface LoginResult {
+  token: string;
+}
+
+export interface CreateGameInput {
+  name: string;
+  maxPlayers: number;
+}
+
+export interface CreateGameResult {
+  gameId: string;
+}
+
+export interface BoardPosition {
+  row: number;
+  col: number;
+}
+
+export interface Player {
+  userId: string;
+  characterId: string;
+  name: string;
+  class: CharacterClass;
+  currentHp: number;
+  conditions: string[];
+  position: BoardPosition | null;
+}
+
+export interface EncounterEnemy {
+  instanceId: string;
+  enemyRefId: string;
+  name: string;
+  currentHp: number;
+  ac: number;
+  conditions: string[];
+  position: BoardPosition | null;
+  /** Imagen del catálogo (dnd5eapi.co) -- null/ausente si el monstruo no tiene arte oficial. */
+  imageUrl?: string | null;
+}
+
+export type RoundPhase = 'jugadores' | 'enemigos';
+
+/**
+ * Modelo de rondas (sustituye a la iniciativa 1d20+destreza entre
+ * jugadores): roundPhase indica si toca actuar a los jugadores o al DM-IA
+ * (enemigos); turnClaims son los characterId que tienen el turno reclamado
+ * desde el móvil ("Mi turno") -- YA NO es exclusivo de uno solo, varios
+ * jugadores pueden reclamarlo a la vez sin bloquearse entre ellos;
+ * actedThisRound son los characterId que ya actuaron en la ronda de
+ * jugadores actual.
+ */
+export interface ActiveEncounter {
+  roundPhase: RoundPhase;
+  turnClaims: string[];
+  actedThisRound: string[];
+  enemies: EncounterEnemy[];
+  log: string[];
+}
+
+export interface MapZoneCells {
+  rowStart: number;
+  rowEnd: number;
+  colStart: number;
+  colEnd: number;
+}
+
+export interface MapZone {
+  name: string;
+  cells: MapZoneCells[];
+}
+
+export interface Board {
+  rows: number;
+  cols: number;
+  imageUrl: string | null;
+  combatPoint: { row: number; col: number } | null;
+  zones: MapZone[];
+}
+
+export interface MyGameSummary {
+  id: string;
+  name: string;
+  status: string;
+  players: number;
+  maxPlayers: number;
+}
+
+export type UserRole = 'admin' | 'player';
+
+/** Panel "Administración de Usuarios" (admin) — ver AdminUserSummary en el backend. */
+export interface AdminCharacterSummary {
+  id: string;
+  name: string;
+  class: CharacterClass;
+  level: number;
+  gameId: string;
+}
+
+export interface AdminUserSummary {
+  userId: string;
+  username: string;
+  role: UserRole;
+  characters: AdminCharacterSummary[];
+}
+
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  role?: UserRole;
+}
+
+export interface CreateUserResult {
+  userId: string;
+  username: string;
+  role: UserRole;
+}
+
+export interface NarrativeEntry {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface GameSnapshot {
+  name: string;
+  hostUserId: string;
+  maxPlayers: number;
+  status: GameStatus;
+  players: Player[];
+  activeEncounter: ActiveEncounter | null;
+  board: Board;
+  narrativeLog: NarrativeEntry[];
+  /** Único jugador que puede escribir al DM fuera de combate — ver assignCaptain. */
+  captainUserId: string | null;
+  /**
+   * true mientras dm-engine está resolviendo un turno del DM-IA (Game.startDmTurn/
+   * endDmTurn en el backend, ver SendMessageUseCase) — ui-web ya no dispara ella
+   * misma las acciones de partida (llegan del móvil), así que lo usa para mostrar
+   * el overlay "el Master está pensando" (ver DmThinkingOverlay) mientras dura la
+   * respuesta del DM-IA (20-40s).
+   */
+  dmTurnInProgress: boolean;
+}

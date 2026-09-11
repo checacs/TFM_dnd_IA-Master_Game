@@ -1,0 +1,84 @@
+import OpenAI from 'openai';
+import { ChatClient, ChatMessage, ToolDefinition, ChatCompletionResult } from './ports';
+
+/**
+ * DeepSeek es compatible con la API de OpenAI (docs/05-motor-ia-dm-deepseek.md)
+ * — se reutiliza el paquete `openai` apuntando a su base URL, en vez de un
+ * SDK propio. No se puede llamar en vivo desde este entorno (sin red hacia
+ * api.deepseek.com); el tipado sí está verificado contra el paquete instalado.
+ *
+ * baseUrl ahora es un parámetro explícito (antes iba fijo a
+ * 'https://api.deepseek.com') porque cualquier proveedor compatible con la
+ * API de OpenAI/function-calling (Kimi K2/K3 de Moonshot en
+ * api.moonshot.ai/v1, Qwen vía DashScope, GLM, o el propio OpenAI) puede
+ * pasar por esta misma clase sin más cambios de código -- solo cambia la
+ * URL, la key y el nombre del modelo (ver DEEPSEEK_BASE_URL en server.ts).
+ * El nombre de la clase se mantiene como DeepSeekChatClient para no romper
+ * las referencias existentes, pero deja de ser específico de DeepSeek.
+ */
+
+/**
+ * Sin esto, un colgado de la red hacia el proveedor dejaba la promesa de
+ * createCompletion sin resolver ni rechazar nunca, y con ella runDmTurn,
+ * el fetch de la API y la mutación de React Query en ui-web — el chat se
+ * quedaba en "El DM esta pensando..." para siempre con el botón deshabilitado.
+ */
+const CHAT_CLIENT_TIMEOUT_MS = 30_000;
+
+export class DeepSeekChatClient implements ChatClient {
+  private readonly client: OpenAI;
+
+  constructor(
+      apiKey: string,
+      private readonly model: string,
+      baseUrl: string,
+      /**
+       * Sin tope, el modelo podía generar respuestas mucho más largas de lo
+       * que el system prompt pide ("2-4 frases por turno salvo momentos
+       * clave") -- esa generación de más era una parte real de la latencia
+       * percibida (~10s+ por turno). 700 tokens da margen de sobra para una
+       * narración larga en un momento clave más los tool_calls (su JSON de
+       * argumentos es pequeño) sin dejar que el modelo divague sin límite.
+       */
+      private readonly maxTokens: number,
+  ) {
+    this.client = new OpenAI({ apiKey, baseURL: baseUrl, timeout: CHAT_CLIENT_TIMEOUT_MS, maxRetries: 0 });
+  }
+
+  async createCompletion(params: { messages: ChatMessage[]; tools: ToolDefinition[] }): Promise<ChatCompletionResult> {
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      // El formato de mensajes/tools de nuestros puertos ya sigue la
+      // convención OpenAI-compatible que espera DeepSeek.
+      messages: params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      tools: params.tools as OpenAI.Chat.ChatCompletionTool[],
+      max_tokens: this.maxTokens,
+    });
+
+    const choice = response.choices?.[0];
+    if (!choice) {
+      throw new Error('El proveedor del modelo devolvió una respuesta sin choices');
+    }
+    if (choice.finish_reason === 'length') {
+      // La respuesta se cortó por max_tokens (visto en producción con 700):
+      // se registra para poder ajustar DEEPSEEK_MAX_TOKENS.
+      console.warn(`[dm-engine] Respuesta del modelo truncada por max_tokens (${this.maxTokens}).`);
+    }
+    return {
+      message: {
+        role: 'assistant',
+        content: choice.message.content,
+        tool_calls: choice.message.tool_calls
+            ?.filter((toolCall) => toolCall.type === 'function')
+            .map((toolCall) => ({
+              id: toolCall.id,
+              type: 'function' as const,
+              function: {
+                name: toolCall.function.name,
+                arguments: toolCall.function.arguments,
+              },
+            })),
+      },
+    };
+  }
+}

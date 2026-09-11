@@ -1,0 +1,29 @@
+{
+  "name": "ui-web",
+  "author": "Jose Carlos Muñoz Ferrer",
+  "email": "checa.munoz.dev@gmail.com",
+  "nick": "cHeKaDev",
+  "private": true,
+  "version": "0.1.8",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "start": "vite preview --host 0.0.0.0 --port ${PORT:-3001}"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.59.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

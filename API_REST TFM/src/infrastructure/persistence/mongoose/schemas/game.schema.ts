@@ -1,0 +1,121 @@
+import { Schema } from 'mongoose';
+
+const boardPositionSchema = new Schema(
+  {
+    row: { type: Number, required: true },
+    col: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+const mapZoneCellsSchema = new Schema(
+  {
+    rowStart: { type: Number, required: true },
+    rowEnd: { type: Number, required: true },
+    colStart: { type: Number, required: true },
+    colEnd: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+const mapZoneSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    cells: { type: [mapZoneCellsSchema], required: true },
+  },
+  { _id: false },
+);
+
+const playerSchema = new Schema(
+  {
+    userId: { type: String, required: true },
+    characterId: { type: String, required: true },
+    name: { type: String, required: true },
+    class: { type: String, required: true, enum: ['guerrero', 'picaro', 'mago', 'clerigo'] },
+    currentHp: { type: Number, required: true },
+    conditions: { type: [String], default: [] },
+    position: { type: boardPositionSchema, default: null },
+  },
+  { _id: false },
+);
+
+const encounterEnemySchema = new Schema(
+  {
+    instanceId: { type: String, required: true },
+    enemyRefId: { type: String, required: true },
+    name: { type: String, required: true },
+    currentHp: { type: Number, required: true },
+    ac: { type: Number, required: true },
+    conditions: { type: [String], default: [] },
+    position: { type: boardPositionSchema, default: null },
+    imageUrl: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+const activeEncounterSchema = new Schema(
+  {
+    // Modelo de rondas (sustituye a initiativeOrder/currentTurnIndex, ver
+    // Game.startEncounter/claimTurn/releaseTurnAfterAction en el dominio):
+    // roundPhase indica si toca actuar a jugadores o al DM-IA (enemigos),
+    // turnClaims son los characterId que han reclamado "Mi turno" del móvil
+    // y aún no lo han cerrado (YA NO es un candado exclusivo de uno solo,
+    // ver comentario de ActiveEncounter en game.entity.ts), actedThisRound
+    // son los characterId que ya actuaron en la ronda de jugadores actual.
+    roundPhase: { type: String, required: true, enum: ['jugadores', 'enemigos'] },
+    turnClaims: { type: [String], default: [] },
+    actedThisRound: { type: [String], default: [] },
+    enemies: { type: [encounterEnemySchema], required: true },
+    log: { type: [String], required: true },
+  },
+  { _id: false },
+);
+
+const boardSchema = new Schema(
+  {
+    rows: { type: Number, required: true },
+    cols: { type: Number, required: true },
+    imageUrl: { type: String, default: null },
+    combatPoint: { type: Object, default: null },
+    zones: { type: [mapZoneSchema], default: [] },
+  },
+  { _id: false },
+);
+
+export const gameMongooseSchema = new Schema(
+  {
+    _id: { type: String, required: true },
+    name: { type: String, required: true, index: true },
+    hostUserId: { type: String, required: true },
+    maxPlayers: { type: Number, required: true },
+    status: {
+      type: String,
+      required: true,
+      enum: ['configuracion', 'en_curso', 'pausada', 'finalizada'],
+      index: true,
+    },
+    players: { type: [playerSchema], required: true },
+    activeEncounter: { type: activeEncounterSchema, default: null },
+    board: { type: boardSchema, required: true },
+    narrativeLog: {
+      type: [{ role: { type: String, enum: ['user', 'assistant'] }, content: String }],
+      default: [],
+    },
+    // Único jugador que puede escribir al DM fuera de combate (ver
+    // Game.assignCaptain) — null hasta que se lanza la partida.
+    captainUserId: { type: String, default: null },
+    // mapIds ya aplicados en esta partida (Game.setBattleMap) — para que el
+    // DM-IA pueda consultarlo vía get_game_state y variar de escenario en vez
+    // de repetir siempre el mismo mapa en campañas largas.
+    mapHistory: { type: [String], default: [] },
+    // true mientras dm-engine resuelve un turno del DM-IA (Game.startDmTurn/
+    // endDmTurn, ver SendMessageUseCase) — lo lee ui-web vía polling para
+    // mostrar el overlay "el Master está pensando". default: false cubre
+    // también las partidas ya persistidas antes de este campo.
+    dmTurnInProgress: { type: Boolean, default: false },
+    // Epoch (ms) de arranque del turno en curso (Game.startDmTurn): permite
+    // rechazar turnos concurrentes y caducar un flag huérfano tras un reinicio.
+    dmTurnStartedAt: { type: Number, default: null },
+  },
+  { collection: 'games', timestamps: true },
+);

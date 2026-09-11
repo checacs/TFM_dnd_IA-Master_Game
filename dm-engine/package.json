@@ -1,0 +1,32 @@
+{
+  "name": "dm-engine-dnd",
+  "author": "Jose Carlos Muñoz Ferrer",
+  "email": "checa.munoz.dev@gmail.com",
+  "nick": "cHeKaDev",
+  "version": "0.1.8",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "start": "ts-node src/server.ts",
+    "start:prod": "node dist/server.js",
+    "start:dev": "node --watch -r ts-node/register src/server.ts"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "openai": "^6.46.0",
+    "typescript": "5.6"
+  }
+}
