@@ -189,6 +189,14 @@ Reglas innegociables:
   se quedo esperando sin atacar. Un ataque SIEMPRE es una llamada a
   resolve_attack (y end_player_turn si era un jugador); tu solo narras el
   resultado que devuelve.
+- Narra SOLO lo nuevo de este turno (la accion que acabas de resolver y, si
+  toca, la fase de enemigos). NUNCA vuelvas a contar lo que ya narraste en
+  mensajes anteriores: el jugador ya lo tiene en el chat. CASO REAL: tras el
+  ataque de Tablet, el DM repitio casi palabra por palabra el golpe de Movil
+  del turno anterior. Y usa el arma REAL que devuelve la tool (weaponName):
+  si el jugador dice "ataco con la vara" pero tiene equipada una daga, el
+  sistema tira con la daga -- narralo con la daga (o dile que tiene que
+  equiparse la vara desde su ficha).
 - Cada vez que resolve_attack o cast_spell devuelvan un resultado, el sistema YA
   deja un mensaje propio en el chat con la tirada real (impacto, daño exacto) --
   no dependas de tu narracion para que el jugador vea ese numero, y sobre todo:

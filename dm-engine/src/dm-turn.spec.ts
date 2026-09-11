@@ -1341,6 +1341,70 @@ describe('runDmTurn', () => {
     });
   });
 
+  describe('narración repetida', () => {
+    // CASO REAL: en el turno del ataque de Tablet, el DM volvió a contar casi
+    // palabra por palabra el golpe de Movil que ya había narrado en el turno
+    // anterior ("Movil descarga su vara contra el Goblin más cercano...").
+    it('quita los párrafos que repiten una narración ya contada en mensajes anteriores', async () => {
+      const previous = 'Movil descarga su vara contra el Goblin más cercano y le acierta de lleno en el costado: la ' +
+          'criatura suelta un gañido y se tambalea, sangrando entre la arpillera desgarrada, herida pero aún en pie y ' +
+          'con el cuchillo bien sujeto.';
+      const repeated = 'Movil descarga su vara contra el Goblin más cercano y le acierta de lleno en el costado: la ' +
+          'criatura suelta un gañido agudo y se tambalea entre la arpillera desgarrada, sangrando, pero sigue en pie, ' +
+          'con el cuchillo bien sujeto.';
+      const fresh = 'Tablet blande su espada buscando al segundo Goblin; la hoja pasa silbando demasiado alta y se ' +
+          'clava en un fardo, levantando una nube de harina vieja.';
+      const history: ChatMessage[] = [
+        ...ongoingGameHistory('**Movil:** 🎲 tira 1d20: **17**').slice(0, -1),
+        { role: 'user', content: '**Movil:** 🎲 tira 1d20: **17**' },
+        { role: 'assistant', content: `${previous}\n\nTablet, ¿qué hace tu personaje?` },
+        { role: 'user', content: '**Tablet:** Ataco al otro goblin' },
+      ];
+      const chatClient = new FakeChatClient([{ message: { role: 'assistant', content: `${repeated}\n\n${fresh}` } }]);
+
+      const result = await runDmTurn(chatClient, new FakeToolCaller(), history, 'g1');
+
+      expect(result.narrative).toBe(fresh);
+    });
+
+    it('no confunde la versión corregida con su propio borrador rechazado en este mismo turno', async () => {
+      const draft = 'Del mecanismo caen tres goblins de piel grisácea, orejas puntiagudas y cuchillos oxidados en las ' +
+          'manos. ¡Empieza el combate! Movil, ¿qué hace tu personaje?';
+      const chatClient = new FakeChatClient([
+        { message: { role: 'assistant', content: draft } },
+        {
+          message: {
+            role: 'assistant', content: null,
+            tool_calls: [{ id: 's1', type: 'function' as const, function: { name: 'start_combat', arguments: '{"gameId":"g1","enemyIds":["goblin","goblin","goblin"]}' } }],
+          },
+        },
+        { message: { role: 'assistant', content: draft } },
+      ]);
+      const toolCaller = new FakeToolCaller([], {
+        get_game_state: { players: [{ characterId: 'char-1', name: 'Movil' }], activeEncounter: null, mapHistory: [] },
+        start_combat: { started: true, enemies: [{ instanceId: 'g-1' }, { instanceId: 'g-2' }, { instanceId: 'g-3' }] },
+      });
+
+      const result = await runDmTurn(chatClient, toolCaller, ongoingGameHistory('**Movil:** Bajamos a la sala'), 'g1');
+
+      expect(result.narrative).toBe(draft);
+    });
+
+    it('no toca una narración nueva aunque mencione a los mismos personajes', async () => {
+      const history: ChatMessage[] = [
+        ...ongoingGameHistory('**Tablet:** Ataco').slice(0, -1),
+        { role: 'assistant', content: 'Movil descarga su vara contra el Goblin más cercano y le acierta de lleno en el costado.' },
+        { role: 'user', content: '**Tablet:** Ataco' },
+      ];
+      const narration = 'El Goblin malherido lanza su cimitarra contra Movil, pero tropieza con un saco y el tajo se pierde en el aire.';
+      const chatClient = new FakeChatClient([{ message: { role: 'assistant', content: narration } }]);
+
+      const result = await runDmTurn(chatClient, new FakeToolCaller(), history, 'g1');
+
+      expect(result.narrative).toBe(narration);
+    });
+  });
+
   describe('salidas reales entre mapas (connections)', () => {
     const sotanoConnections = [
       { mapId: 'tabernaMercenarios', via: 'la escalera de caracol que sube a la cocina de la taberna' },

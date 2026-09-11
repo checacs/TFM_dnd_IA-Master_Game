@@ -960,6 +960,53 @@ function turnHandOffLine(combat: CombatSnapshot, narrativeText: string): string 
   return `\n\n👉 ${list}, os toca. ¿Qué hacéis?`;
 }
 
+/** Palabras significativas (3+ letras, sin tildes) de un párrafo. */
+function significantWords(text: string): Set<string> {
+  return new Set(normalizePlace(text).split(/[^a-z0-9ñ]+/).filter((w) => w.length >= 3));
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  let shared = 0;
+  for (const word of a) {
+    if (b.has(word)) shared += 1;
+  }
+  return shared / (a.size + b.size - shared);
+}
+
+/** Similitud a partir de la cual un párrafo se considera la misma narración reescrita. */
+const REPEATED_PARAGRAPH_SIMILARITY = 0.6;
+
+/**
+ * CASO REAL: en el turno del ataque de Tablet, el DM volvió a contar casi
+ * palabra por palabra el golpe de Movil que ya había narrado en el turno
+ * anterior. El chat ya muestra ese mensaje: se quitan de la narración nueva
+ * los párrafos que repiten uno de los últimos mensajes del DM.
+ */
+function removeRepeatedParagraphs(narrativeText: string, history: ChatMessage[]): string {
+  const previousParagraphs = history
+      .filter((m) => m.role === 'assistant' && typeof m.content === 'string')
+      .slice(-8)
+      .flatMap((m) => (m.content as string).split(/\n{2,}/))
+      .map(significantWords)
+      .filter((words) => words.size >= 8);
+  if (previousParagraphs.length === 0) {
+    return narrativeText;
+  }
+  const paragraphs = narrativeText.split(/\n{2,}/);
+  const kept = paragraphs.filter((paragraph) => {
+    const words = significantWords(paragraph);
+    return words.size < 8 || !previousParagraphs.some((prev) => jaccard(words, prev) >= REPEATED_PARAGRAPH_SIMILARITY);
+  });
+  if (kept.length === paragraphs.length || kept.length === 0) {
+    return narrativeText;
+  }
+  console.log(
+      `[dm-engine] Narración repetida: ${paragraphs.length - kept.length} párrafo(s) que ya se habían contado en ` +
+      'mensajes anteriores eliminados de la respuesta del DM.',
+  );
+  return kept.join('\n\n').trim();
+}
+
 /** La narración da el combate por empezado ("¡Empieza el combate!", "entráis en combate"...). */
 const COMBAT_START_CUES =
   /(empieza|comienza|arranca|da comienzo a)\s+(el\s+)?combate|entr[aá]is\s+en\s+combate|la\s+(pelea|batalla|lucha)\s+(est[aá]\s+servida|comienza|empieza)|tirad\s+iniciativa|preparaos\s+para\s+(luchar|el\s+combate|la\s+batalla)/i;
@@ -2463,6 +2510,15 @@ export async function runDmTurn(
         content: cleaned || 'Los combatientes se miden con la mirada, a la espera del siguiente movimiento.',
       },
     };
+  }
+  if (!fallbackNarrative && response.message.content) {
+    // Solo el historial ANTERIOR a este turno: messages también acumula los
+    // borradores rechazados por los avisos correctivos de este mismo turno, y
+    // la versión corregida se parece (a propósito) a su propio borrador.
+    const deduplicated = removeRepeatedParagraphs(response.message.content, messages.slice(0, initialMessageCount));
+    if (deduplicated !== response.message.content) {
+      response = { ...response, message: { ...response.message, content: deduplicated } };
+    }
   }
   if (!fallbackNarrative) {
     // Mismo tipo de seguro para las salidas reales entre mapas (sótano ->
