@@ -1,6 +1,6 @@
 import { useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useGame, useSendMessage } from '../api/hooks';
+import { useGame, useStartOpeningScene } from '../api/hooks';
 import { assetUrl } from '../api/client';
 import { ChatPanel } from '../components/game/ChatPanel';
 import { BoardPanel } from '../components/game/BoardPanel';
@@ -36,8 +36,8 @@ function toChatMessages(log: NarrativeEntry[]): DmEngineChatMessage[] {
 export function GameScreen() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
-  const { data: game } = useGame(gameId);
-  const sendMessage = useSendMessage(gameId!);
+  const { data: game, error: gameError } = useGame(gameId);
+  const sendMessage = useStartOpeningScene(gameId!);
 
   const chatMessages = useMemo(
     () => (game ? toChatMessages(game.narrativeLog) : []),
@@ -51,17 +51,25 @@ export function GameScreen() {
     if (initialMessageSentForGame.has(gameId)) return;
     initialMessageSentForGame.add(gameId);
 
-    sendMessage.mutate({
-      messages: [{ role: 'user', content: 'La partida ha comenzado. Describe la escena inicial.' }],
-    });
+    // El mensaje de arranque lo construye el servidor (StartOpeningSceneUseCase).
+    sendMessage.mutate();
     // El siguiente sondeo de useGame recogerá la narrativa ya guardada en
     // game.narrativeLog — no hace falta guardar el resultado a mano aquí.
   }, [game, gameId, sendMessage]);
 
   if (!game) {
+    // Sin esto, una partida inexistente o un error de red dejaban "Cargando
+    // partida..." para siempre.
     return (
       <div className="game-screen">
-        <div className="loading-msg">Cargando partida...</div>
+        <div className="loading-msg">
+          {gameError ? `No se pudo cargar la partida: ${gameError.message}` : 'Cargando partida...'}
+          {gameError && (
+            <div>
+              <button className="btn-ghost" onClick={() => navigate('/')}>Volver</button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -108,7 +116,13 @@ export function GameScreen() {
           <ChatPanel
             messages={chatMessages}
             isLoading={sendMessage.isPending}
-            errorMessage={sendMessage.isError ? sendMessage.error.message : undefined}
+            // Si otra pantalla ya arrancó la escena (la API rechaza el segundo
+            // arranque), no es un error que deba ver el jugador.
+            errorMessage={
+              sendMessage.isError && game.narrativeLog.length === 0 && !game.dmTurnInProgress
+                ? sendMessage.error.message
+                : undefined
+            }
           />
         </div>
         <div className="game-right">

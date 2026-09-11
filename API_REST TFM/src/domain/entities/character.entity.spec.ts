@@ -85,6 +85,43 @@ describe('Character', () => {
           .toThrow(DomainError);
     });
 
+    // Depuración: el escudo del SRD es categoría "Armor" con armor_class
+    // {base: 2, dex_bonus: false}; se equipaba con equipArmor, que SUSTITUYE
+    // la CA por base + destreza -> un personaje con CA 12 se quedaba en CA 2.
+    it('equipShield suma +2 a la CA actual en vez de sustituirla', () => {
+      const character = buildCharacter({ attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 } });
+      character.addToInventory({ equipmentId: 'shield', name: 'Shield' });
+      const before = character.toSnapshot().ac;
+      character.equipShield('shield');
+
+      const snapshot = character.toSnapshot();
+      expect(snapshot.ac).toBe(before + 2);
+      expect(snapshot.equippedShieldId).toBe('shield');
+    });
+
+    it('equipShield dos veces no acumula el bonificador', () => {
+      const character = buildCharacter();
+      character.addToInventory({ equipmentId: 'shield', name: 'Shield' });
+      const before = character.toSnapshot().ac;
+      character.equipShield('shield');
+      character.equipShield('shield');
+      expect(character.toSnapshot().ac).toBe(before + 2);
+    });
+
+    it('equipArmor conserva el +2 del escudo ya equipado', () => {
+      const character = buildCharacter({ attributes: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 11 } });
+      character.addToInventory({ equipmentId: 'shield', name: 'Shield' });
+      character.addToInventory({ equipmentId: 'leather-armor', name: 'Leather Armor' });
+      character.equipShield('shield');
+      character.equipArmor('leather-armor', { base: 11, dexBonus: true, maxBonus: null });
+      expect(character.toSnapshot().ac).toBe(15); // 11 + 2 (dex) + 2 (escudo)
+    });
+
+    it('equipShield lanza DomainError si el escudo no está en el inventario', () => {
+      const character = buildCharacter();
+      expect(() => character.equipShield('shield')).toThrow(DomainError);
+    });
+
     it('equipAccessory marca un objeto mágico como equipado (sin efecto mecánico) si está en el inventario', () => {
       const character = buildCharacter();
       character.addToInventory({ equipmentId: 'ring-of-protection', name: 'Anillo de Protección' });

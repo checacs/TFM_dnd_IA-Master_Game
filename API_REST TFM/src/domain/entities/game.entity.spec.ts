@@ -1,4 +1,4 @@
-import { Game } from './game.entity';
+import { Game, GAME_PROCESS_STARTED_AT } from './game.entity';
 import { DomainError } from '../errors/domain-error';
 
 function buildGame(overrides: Partial<Parameters<typeof Game.create>[0]> = {}) {
@@ -871,6 +871,153 @@ describe('Game', () => {
       );
 
       expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+
+    // Bug de concurrencia: con turnClaims no exclusivo, dos jugadores podían
+    // disparar dos turnos del DM a la vez. dm-engine reutilizaba la promesa
+    // del primero para el segundo: la acción del segundo jugador se guardaba
+    // en el log pero NUNCA llegaba al LLM, y la narración del primero se
+    // anotaba dos veces en el chat.
+    it('startDmTurn rechaza un segundo turno mientras el anterior sigue en curso', () => {
+      const game = buildGame();
+      game.startDmTurn(1_000_000);
+      expect(() => game.startDmTurn(1_000_000 + 30_000)).toThrow(DomainError);
+    });
+
+    it('startDmTurn permite arrancar un turno si el anterior quedó colgado más allá del umbral de caducidad', () => {
+      const game = buildGame();
+      game.startDmTurn(1_000_000);
+      expect(() => game.startDmTurn(1_000_000 + 11 * 60_000)).not.toThrow();
+      expect(game.toSnapshot().dmTurnInProgress).toBe(true);
+    });
+
+    it('endDmTurn deja arrancar el siguiente turno sin esperar', () => {
+      const game = buildGame();
+      game.startDmTurn(1_000_000);
+      game.endDmTurn();
+      expect(() => game.startDmTurn(1_000_001)).not.toThrow();
+    });
+
+    it('reconstitute limpia un dmTurnInProgress caducado (p.ej. el proceso se reinició a mitad de turno)', () => {
+      const original = buildGame();
+      original.startDmTurn(Date.now() - 11 * 60_000);
+
+      const rehydrated = Game.reconstitute(original.id, original.toSnapshot());
+
+      expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+
+    // Un turno no sobrevive a un reinicio de la API (ni sus candados en
+    // memoria): si el flag es de antes de que arrancara este proceso, está
+    // huérfano -- sin esto, tras un deploy a mitad de turno la partida
+    // quedaba bloqueada hasta 10 minutos.
+    it('reconstitute limpia un dmTurnInProgress iniciado antes de arrancar este proceso', () => {
+      const original = buildGame();
+      original.startDmTurn(GAME_PROCESS_STARTED_AT - 1);
+
+      const rehydrated = Game.reconstitute(original.id, original.toSnapshot());
+
+      expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+
+    it('reconstitute limpia un dmTurnInProgress heredado sin marca de tiempo (documentos anteriores a dmTurnStartedAt)', () => {
+      const original = buildGame();
+      original.startDmTurn();
+      const legacy = original.toSnapshot() as unknown as Record<string, unknown>;
+      delete legacy.dmTurnStartedAt;
+
+      const rehydrated = Game.reconstitute(original.id, legacy as unknown as Parameters<typeof Game.reconstitute>[1]);
+
+      expect(rehydrated.toSnapshot().dmTurnInProgress).toBe(false);
+    });
+  });
+
+  describe('depuración — invariantes que faltaban', () => {
+    function buildGameInCombat() {
+      const game = buildGame();
+      game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      game.addPlayer({ userId: 'user-2', characterId: 'char-2', name: 'Thane', class: 'guerrero', currentHp: 16 });
+      game.assignCaptain('host-1', 'user-1');
+      game.launch('host-1');
+      game.startEncounter({
+        enemies: [{ instanceId: 'enc-1-goblin-a', enemyRefId: 'enemy-1', name: 'Goblin explorador', currentHp: 7, ac: 15 }],
+      });
+      return game;
+    }
+
+    it('un jugador inconsciente (0 HP) no puede reclamar turno', () => {
+      const game = buildGameInCombat();
+      game.applyDamageToParticipant('char-1', 999);
+      expect(() => game.claimTurn('char-1')).toThrow(DomainError);
+    });
+
+    it('no se puede reclamar turno en una partida finalizada', () => {
+      const game = buildGameInCombat();
+      game.applyDamageToParticipant('char-1', 999);
+      game.applyDamageToParticipant('char-2', 999);
+      expect(game.toSnapshot().status).toBe('finalizada');
+      expect(() => game.claimTurn('char-2')).toThrow(DomainError);
+    });
+
+    it('un daño negativo (p.ej. 1d4-3 = -2) no cura por encima del máximo: cuenta como 0', () => {
+      const game = buildGameInCombat();
+      game.applyDamageToParticipant('char-1', -5);
+      game.applyDamageToParticipant('enc-1-goblin-a', -5);
+      const snap = game.toSnapshot();
+      expect(snap.players.find((p) => p.characterId === 'char-1')!.currentHp).toBe(14);
+      expect(snap.activeEncounter!.enemies[0].currentHp).toBe(7);
+    });
+
+    it('toSnapshot devuelve una copia de turnClaims (mutarla no altera la entidad)', () => {
+      const game = buildGameInCombat();
+      game.claimTurn('char-1');
+      game.toSnapshot().activeEncounter!.turnClaims.push('char-2');
+      expect(game.toSnapshot().activeEncounter!.turnClaims).toEqual(['char-1']);
+    });
+
+    it('el mensaje de mínimo de jugadores está en plural', () => {
+      const game = buildGame();
+      game.addPlayer({ userId: 'host-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+      expect(() => game.launch('host-1')).toThrow('Se necesitan al menos 2 jugadores');
+    });
+
+    describe('removePlayer (borrado administrativo de un personaje o usuario)', () => {
+      it('quita al jugador de la partida', () => {
+        const game = buildGameInCombat();
+        game.removePlayer('char-2');
+        expect(game.toSnapshot().players.map((p) => p.characterId)).toEqual(['char-1']);
+      });
+
+      it('si era el capitán, pasa la capitanía al primer jugador que quede', () => {
+        const game = buildGameInCombat();
+        game.removePlayer('char-1');
+        expect(game.toSnapshot().captainUserId).toBe('user-2');
+      });
+
+      it('si no queda nadie, el capitán vuelve a null', () => {
+        const game = buildGame();
+        game.addPlayer({ userId: 'user-1', characterId: 'char-1', name: 'Elyndra', class: 'guerrero', currentHp: 14 });
+        game.assignCaptain('host-1', 'user-1');
+        game.removePlayer('char-1');
+        expect(game.toSnapshot().captainUserId).toBeNull();
+      });
+
+      it('limpia su turno reclamado y, si ya actuaron los demás vivos, pasa la ronda a enemigos', () => {
+        const game = buildGameInCombat();
+        game.claimTurn('char-1');
+        game.releaseTurnAfterAction('char-1');
+        game.claimTurn('char-2');
+        game.removePlayer('char-2');
+        const encounter = game.toSnapshot().activeEncounter!;
+        expect(encounter.turnClaims).toEqual([]);
+        expect(encounter.roundPhase).toBe('enemigos');
+      });
+
+      it('es idempotente si el personaje no está en la partida', () => {
+        const game = buildGameInCombat();
+        expect(() => game.removePlayer('no-existe')).not.toThrow();
+        expect(game.toSnapshot().players).toHaveLength(2);
+      });
     });
   });
 });

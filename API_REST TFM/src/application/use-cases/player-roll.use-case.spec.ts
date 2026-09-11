@@ -1,3 +1,4 @@
+import { DomainError } from '../../domain/errors/domain-error';
 import { GameRepository } from '../../domain/ports/game.repository.port';
 import { DiceRoller } from '../../domain/ports/dice-roller.port';
 import { DmEngineClient, DmEngineChatMessage, DmEngineResult } from '../../domain/ports/dm-engine.port';
@@ -92,7 +93,7 @@ describe('PlayerRollUseCase', () => {
     expect(dmEngine.receivedMessages).not.toBeNull();
     const lastMessage = dmEngine.receivedMessages![dmEngine.receivedMessages!.length - 1];
     expect(lastMessage.role).toBe('user');
-    expect(lastMessage.content).toContain('**Elyndra**');
+    expect(lastMessage.content).toContain('**Elyndra:**');
     expect(lastMessage.content).toContain('17');
 
     const saved = await games.findById(game.id);
@@ -102,7 +103,7 @@ describe('PlayerRollUseCase', () => {
     // tirada, PlayerRollUseCase ya NO lo guarda por su cuenta antes).
     expect(log).toHaveLength(2);
     expect(log[0].role).toBe('user');
-    expect(log[0].content).toContain('**Elyndra**');
+    expect(log[0].content).toContain('**Elyndra:**');
     expect(log[0].content).toContain('1d20');
     expect(log[0].content).toContain('17');
     expect(log[1].role).toBe('assistant');
@@ -205,4 +206,55 @@ describe('PlayerRollUseCase', () => {
         ).rejects.toThrow(/terminad/i);
       },
   );
+
+  // Depuración: la notación la elegía el cliente sin restricciones -- con
+  // "1d1+19" un jugador publicaba "tira 1d1+19: **20**" y el DM lo resolvía
+  // como un 20 natural.
+  describe('notación permitida para la tirada del jugador', () => {
+    for (const notation of ['1d1+19', '1d20+5', '1d20-1', '1d3', '50d20', 'd20']) {
+      it(`rechaza "${notation}" sin llamar al DM`, async () => {
+        const games = new FakeGameRepository();
+        const game = buildGame();
+        games.seed(game);
+        const dmEngine = new FakeDmEngineClient({ narrative: 'Ok.', events: [] });
+        const useCase = new PlayerRollUseCase(games, new FakeDiceRoller(20), new SendMessageUseCase(games, dmEngine));
+
+        await expect(
+          useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1', notation }),
+        ).rejects.toThrow(DomainError);
+        expect(dmEngine.receivedMessages).toBeNull();
+      });
+    }
+
+    for (const notation of ['1d20', '2d6', '1d100', '4d4']) {
+      it(`acepta "${notation}"`, async () => {
+        const games = new FakeGameRepository();
+        const game = buildGame();
+        games.seed(game);
+        const dmEngine = new FakeDmEngineClient({ narrative: 'Ok.', events: [] });
+        const useCase = new PlayerRollUseCase(games, new FakeDiceRoller(7), new SendMessageUseCase(games, dmEngine));
+
+        const result = await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1', notation });
+        expect(result.notation).toBe(notation);
+      });
+    }
+  });
+
+  // Caso real: con un personaje llamado "Tu", el mensaje "🎲 **Tu** tira
+  // 1d20: 5" se leía como "tú tiras" y el DM respondió que no sabía de qué
+  // personaje era la tirada. Ahora sigue el mismo formato que las acciones
+  // ("**Nombre:** ..."), que el DM ya asocia a un personaje (y que ui-web usa
+  // como etiqueta del mensaje).
+  it('publica la tirada con el prefijo "**Nombre:**" de los mensajes de jugador', async () => {
+    const games = new FakeGameRepository();
+    const game = buildGame();
+    games.seed(game);
+    const dmEngine = new FakeDmEngineClient({ narrative: 'Ok.', events: [] });
+    const useCase = new PlayerRollUseCase(games, new FakeDiceRoller(5), new SendMessageUseCase(games, dmEngine));
+
+    await useCase.execute({ gameId: game.id, requestingUserId: 'user-1', characterId: 'char-1' });
+
+    const log = (await games.findById(game.id))!.toSnapshot().narrativeLog;
+    expect(log[0].content).toBe('**Elyndra:** 🎲 tira 1d20: **5**');
+  });
 });

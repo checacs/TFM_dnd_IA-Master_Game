@@ -48,9 +48,9 @@ export interface EncounterEnemy {
  * jugador y en el mismo mensaje le pedía la tirada a otro). Ahora cada
  * personaje puede reclamar y actuar de forma independiente dentro de la
  * misma ronda: el único bloqueo real es no poder actuar dos veces en la
- * misma ronda (actedThisRound) -- el candado por partida de dm-engine (ver
- * server.ts) ya serializa los turnos de la IA, así que no hay riesgo de que
- * dos acciones se pisen aunque se reclamen "a la vez".
+ * misma ronda (actedThisRound). Los turnos de la IA se serializan en
+ * Game.startDmTurn: si llega una segunda acción mientras el DM sigue
+ * respondiendo a la primera, se rechaza con un error claro en vez de perderse.
  */
 export interface ActiveEncounter {
   enemies: EncounterEnemy[];
@@ -111,6 +111,13 @@ export interface GameProps {
    * tendría forma de saber que hay un turno en marcha disparado desde el móvil.
    */
   dmTurnInProgress: boolean;
+  /**
+   * Epoch (ms) en que arrancó el turno del DM en curso -- null si no hay
+   * ninguno. Permite (1) rechazar un segundo turno mientras el primero sigue
+   * vivo (ver startDmTurn) y (2) dar por caducado un flag que se quedó a
+   * true porque el proceso se reinició a mitad de turno (ver reconstitute).
+   */
+  dmTurnStartedAt: number | null;
 }
 
 export type CreateGameInput = Pick<GameProps, 'name' | 'hostUserId' | 'maxPlayers'> & {
@@ -135,6 +142,24 @@ const INITIAL_VILLAGE_BOARD = { rows: 30, cols: 20, imageUrl: '/maps/battleMap0-
 const MIN_PLAYERS_TO_LAUNCH = 2;
 
 /**
+ * Peor caso real de un turno del DM visto desde la API: SendMessageUseCase
+ * hace hasta 3 intentos, cada uno con hasta 2 llamadas de 90s a dm-engine
+ * (HttpDmEngineClient) más las esperas entre reintentos -- unos 9,5 minutos.
+ * Pasado este umbral, un dmTurnInProgress=true solo puede ser un flag
+ * huérfano (proceso reiniciado a mitad de turno) y se ignora.
+ */
+export const DM_TURN_STALE_AFTER_MS = 10 * 60_000;
+
+/**
+ * Momento en que arrancó este proceso de la API. Un turno del DM no sobrevive
+ * a un reinicio (ni los candados en memoria de game-lock.ts), así que un
+ * dmTurnInProgress anterior a esto es un flag huérfano -- sin este criterio,
+ * tras un deploy a mitad de turno la partida quedaba bloqueada hasta
+ * DM_TURN_STALE_AFTER_MS. Supone una única instancia de la API (como en Render).
+ */
+export const GAME_PROCESS_STARTED_AT = Date.now();
+
+/**
  * Aggregate root de una partida (docs/02-modelo-datos-mongodb.md).
  * Embebe el combate activo a propósito: es el mismo documento que la UI
  * necesita leer entero para pintar tablero + enemigos + turno actual.
@@ -153,12 +178,25 @@ export class Game {
     if (!props.board.zones) props.board.zones = [];
     if (props.captainUserId === undefined) props.captainUserId = null;
     if (!props.mapHistory) props.mapHistory = [];
-    // Migración: partidas persistidas antes de introducir este campo no lo
-    // traen en su documento de Mongo -- se asume que no hay ningún turno del
-    // DM en marcha al rehidratarlas (nunca queda "colgado" a true entre
-    // reinicios del proceso, ver withGameLock/game-lock.ts: los candados en
-    // memoria tampoco sobreviven a un reinicio).
+    // Migración: partidas persistidas antes de introducir estos campos no los
+    // traen en su documento de Mongo.
     if (props.dmTurnInProgress === undefined) props.dmTurnInProgress = false;
+    if (props.dmTurnStartedAt === undefined) props.dmTurnStartedAt = null;
+    // Un flag a true SÍ puede quedarse colgado: si el proceso de la API se
+    // reinicia (deploy, cold start de Render...) a mitad de turno, nadie llega
+    // a llamar a endDmTurn y ui-web mostraba el overlay "el Master está
+    // pensando" hasta el siguiente turno completo. Se da por caducado si no
+    // tiene marca de tiempo (documentos anteriores a dmTurnStartedAt) o si
+    // supera el peor caso de duración de un turno.
+    if (
+      props.dmTurnInProgress &&
+      (props.dmTurnStartedAt === null ||
+        props.dmTurnStartedAt < GAME_PROCESS_STARTED_AT ||
+        Date.now() - props.dmTurnStartedAt > DM_TURN_STALE_AFTER_MS)
+    ) {
+      props.dmTurnInProgress = false;
+      props.dmTurnStartedAt = null;
+    }
     props.players = props.players.map((p) => ({ ...p, conditions: p.conditions ?? [], position: p.position ?? null }));
     if (props.activeEncounter) {
       props.activeEncounter.enemies = props.activeEncounter.enemies.map((e) => ({
@@ -193,6 +231,7 @@ export class Game {
       captainUserId: null,
       mapHistory: [],
       dmTurnInProgress: false,
+      dmTurnStartedAt: null,
       // Sin board explícito (el camino real de producción -- CreateGameUseCase
       // nunca lo pasa, solo lo usan algunos tests para un tablero plano de
       // tamaño concreto), se arranca con la imagen del pueblo en vez de un
@@ -293,7 +332,7 @@ export class Game {
       throw new DomainError('La partida ya ha empezado');
     }
     if (this.props.players.length < MIN_PLAYERS_TO_LAUNCH) {
-      throw new DomainError(`Se necesita al menos ${MIN_PLAYERS_TO_LAUNCH} jugador`);
+      throw new DomainError(`Se necesitan al menos ${MIN_PLAYERS_TO_LAUNCH} jugadores para iniciar la partida`);
     }
 
     // Sin capitán no hay quien pueda hablar con el DM-IA fuera de combate
@@ -355,12 +394,21 @@ export class Game {
    * jugador es idempotente (retry-safe).
    */
   claimTurn(characterId: string): void {
+    if (this.props.status !== 'en_curso') {
+      throw new DomainError('La partida no está en curso');
+    }
     const encounter = this.requireActiveEncounter();
     if (encounter.roundPhase !== 'jugadores') {
       throw new DomainError('No es la fase de jugadores de esta ronda');
     }
-    if (!this.props.players.some((p) => p.characterId === characterId)) {
+    const player = this.props.players.find((p) => p.characterId === characterId);
+    if (!player) {
       throw new DomainError('Ese personaje no es un jugador de esta partida');
+    }
+    // 0 HP = inconsciente (docs/01): no actúa. Sin esta guarda un jugador
+    // caído podía reclamar turno, tirar dados y disparar turnos del DM.
+    if (player.currentHp <= 0) {
+      throw new DomainError('Ese personaje está inconsciente y no puede actuar');
     }
     if (encounter.actedThisRound.includes(characterId)) {
       throw new DomainError('Ese jugador ya ha actuado en esta ronda');
@@ -388,6 +436,40 @@ export class Game {
     const aliveIds = this.props.players.filter((p) => p.currentHp > 0).map((p) => p.characterId);
     if (aliveIds.every((id) => encounter.actedThisRound.includes(id))) {
       encounter.roundPhase = 'enemigos';
+    }
+  }
+
+  /**
+   * Saca a un jugador de la partida -- lo usan los borrados administrativos
+   * (DeleteCharacterUseCase / DeleteUserUseCase). Antes esos borrados solo
+   * eliminaban el documento del personaje y dejaban un jugador "fantasma" en
+   * Game.players: con HP > 0 y sin nadie que pudiera reclamar su turno, la
+   * ronda de jugadores nunca pasaba a 'enemigos' (el combate se atascaba) y
+   * la capitanía podía quedarse en un usuario ya borrado. Idempotente.
+   */
+  removePlayer(characterId: string): void {
+    const removed = this.props.players.find((p) => p.characterId === characterId);
+    if (!removed) {
+      return;
+    }
+    this.props.players = this.props.players.filter((p) => p.characterId !== characterId);
+
+    if (this.props.captainUserId === removed.userId) {
+      this.props.captainUserId = this.props.players[0]?.userId ?? null;
+    }
+
+    const encounter = this.props.activeEncounter;
+    if (encounter) {
+      encounter.turnClaims = encounter.turnClaims.filter((id) => id !== characterId);
+      encounter.actedThisRound = encounter.actedThisRound.filter((id) => id !== characterId);
+      const aliveIds = this.props.players.filter((p) => p.currentHp > 0).map((p) => p.characterId);
+      if (
+        encounter.roundPhase === 'jugadores' &&
+        aliveIds.length > 0 &&
+        aliveIds.every((id) => encounter.actedThisRound.includes(id))
+      ) {
+        encounter.roundPhase = 'enemigos';
+      }
     }
   }
 
@@ -450,17 +532,32 @@ export class Game {
    * toSnapshot()/GET /games/:id para mostrar el overlay "el Master está pensando"
    * mientras dura la respuesta (20-40s).
    */
-  startDmTurn(): void {
+  startDmTurn(now: number = Date.now()): void {
+    // Un solo turno del DM por partida a la vez. turnClaims ya no es
+    // exclusivo (varios jugadores pueden tener turno reclamado), así que dos
+    // acciones casi simultáneas disparaban dos turnos: dm-engine reutilizaba
+    // la ejecución del primero para el segundo, la acción del segundo jugador
+    // nunca llegaba al LLM y la narración del primero se guardaba dos veces.
+    // Ahora el segundo recibe un error claro y puede reintentar al terminar.
+    const startedAt = this.props.dmTurnStartedAt;
+    if (this.props.dmTurnInProgress && startedAt !== null && now - startedAt < DM_TURN_STALE_AFTER_MS) {
+      throw new DomainError('El Máster todavía está respondiendo al turno anterior. Espera a que termine y vuelve a intentarlo.');
+    }
     this.props.dmTurnInProgress = true;
+    this.props.dmTurnStartedAt = now;
   }
 
   /** Cierra el turno señalado por startDmTurn -- se llama siempre, tanto si dm-engine respondió con éxito como si se agotaron los reintentos y se guardó el mensaje de fallback (ver SendMessageUseCase). */
   endDmTurn(): void {
     this.props.dmTurnInProgress = false;
+    this.props.dmTurnStartedAt = null;
   }
 
   /** Usado por ResolveAttackUseCase (docs/03) — busca tanto en jugadores como en enemigos del combate activo. */
-  applyDamageToParticipant(participantId: string, damage: number): void {
+  applyDamageToParticipant(participantId: string, rawDamage: number): void {
+    // Una tirada con modificador negativo (ej. 1d4-3) puede dar < 0: el daño
+    // mínimo es 0, nunca cura (antes subía el HP por encima del máximo).
+    const damage = Math.max(0, rawDamage);
     const player = this.props.players.find((p) => p.characterId === participantId);
     if (player) {
       player.currentHp = Math.max(0, player.currentHp - damage);
@@ -613,6 +710,7 @@ export class Game {
               position: e.position ? { ...e.position } : null,
             })),
             log: [...this.props.activeEncounter.log],
+            turnClaims: [...this.props.activeEncounter.turnClaims],
             actedThisRound: [...this.props.activeEncounter.actedThisRound],
           }
         : null,

@@ -45,6 +45,12 @@ export interface CharacterProps {
   inventory: InventoryItem[];
   equippedWeaponId: string | null;
   equippedArmorId: string | null;
+  /**
+   * Escudo equipado (SRD: +2 a la CA, se suma a la armadura en vez de
+   * sustituirla -- ver equipShield). Antes el escudo pasaba por equipArmor y
+   * dejaba la CA en 2.
+   */
+  equippedShieldId: string | null;
   // Objetos mágicos (anillos, amuletos, varitas...) del catálogo de objetos
   // mágicos: a diferencia de arma/armadura, hoy no tienen ningún efecto
   // mecánico modelado (el catálogo de objetos mágicos no captura sus
@@ -59,12 +65,12 @@ export interface CharacterProps {
 export type CreateCharacterInput = Omit<
   CharacterProps,
   | 'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'
-  | 'equippedArmorId' | 'equippedAccessoryId' | 'currency'
+  | 'equippedArmorId' | 'equippedShieldId' | 'equippedAccessoryId' | 'currency'
 > &
   Partial<Pick<
     CharacterProps,
     | 'level' | 'xp' | 'spellcaster' | 'spells' | 'inventory' | 'equippedWeaponId'
-    | 'equippedArmorId' | 'equippedAccessoryId' | 'currency'
+    | 'equippedArmorId' | 'equippedShieldId' | 'equippedAccessoryId' | 'currency'
   >>;
 
 const SPELLCASTER_CLASSES: CharacterClass[] = ['mago', 'clerigo'];
@@ -116,6 +122,9 @@ const BASE_HP_BY_CLASS: Record<CharacterClass, number> = {
 
 const BASE_AC = 10; // sin armadura equipada — CA = 10 + mod. destreza
 
+/** Bonificador de CA del escudo del SRD 5e (armor_class.base = 2 en dnd5eapi). */
+export const SHIELD_AC_BONUS = 2;
+
 const MAX_LEVEL = 5;
 const SKILL_POINTS_PER_LEVEL = 2;
 
@@ -151,6 +160,7 @@ export class Character {
       inventory: input.inventory ?? [],
       equippedWeaponId: input.equippedWeaponId ?? null,
       equippedArmorId: input.equippedArmorId ?? null,
+      equippedShieldId: input.equippedShieldId ?? null,
       equippedAccessoryId: input.equippedAccessoryId ?? null,
       currency: input.currency ?? { ...ZERO_MONEY },
     });
@@ -251,7 +261,23 @@ export class Character {
       ? (armorClass.maxBonus !== null ? Math.min(dexModifier, armorClass.maxBonus) : dexModifier)
       : 0;
     this.props.equippedArmorId = equipmentId;
-    this.props.ac = armorClass.base + dexContribution;
+    const shieldBonus = this.props.equippedShieldId ? SHIELD_AC_BONUS : 0;
+    this.props.ac = armorClass.base + dexContribution + shieldBonus;
+  }
+
+  /**
+   * Equipa un escudo: +2 a la CA actual (se suma a la armadura, no la
+   * sustituye). Idempotente -- equiparlo dos veces no acumula el bonificador.
+   */
+  equipShield(equipmentId: string): void {
+    const owns = this.props.inventory.some((item) => item.equipmentId === equipmentId);
+    if (!owns) {
+      throw new DomainError('No puedes equipar un objeto que no está en tu inventario');
+    }
+    if (!this.props.equippedShieldId) {
+      this.props.ac += SHIELD_AC_BONUS;
+    }
+    this.props.equippedShieldId = equipmentId;
   }
 
   /**

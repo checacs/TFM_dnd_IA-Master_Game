@@ -45,6 +45,14 @@ export interface PlayerRollResult {
  * capitán del grupo -- si no, cualquier jugador podría forzar el turno del
  * DM fuera de su turno con solo pulsar "Tirar Dados".
  */
+/**
+ * Tiradas que puede pedir un jugador: 1 a 10 dados estándar de D&D, SIN
+ * modificador. Antes la notación era libre y "1d1+19" publicaba en el chat
+ * "tira 1d1+19: **20**", que el DM-IA resolvía como un 20 natural. Los
+ * modificadores los aplica siempre el backend (resolve_attack, etc.).
+ */
+export const PLAYER_ROLL_NOTATION = /^(?:[1-9]|10)d(?:4|6|8|10|12|20|100)$/;
+
 @Injectable()
 export class PlayerRollUseCase {
   constructor(
@@ -54,6 +62,11 @@ export class PlayerRollUseCase {
   ) {}
 
   async execute(input: PlayerRollInput): Promise<PlayerRollResult> {
+    const notation = input.notation ?? '1d20';
+    if (!PLAYER_ROLL_NOTATION.test(notation)) {
+      throw new DomainError(`Tirada no permitida: "${notation}". Usa entre 1 y 10 dados estándar sin modificador (ej. 1d20, 2d6)`);
+    }
+
     const game = await this.games.findById(input.gameId);
     if (!game) {
       throw new DomainError('Partida no encontrada');
@@ -81,11 +94,14 @@ export class PlayerRollUseCase {
       throw new DomainError('Solo el capitán puede tirar dados fuera de combate');
     }
 
-    const notation = input.notation ?? '1d20';
     const result = this.diceRoller.roll(notation);
     // Nombre en negrita Markdown (**Nombre**) para distinguir de un vistazo
     // quién tiró qué en el chat -- ui-web/ChatPanel ya sabe parsear negrita.
-    const rollContent = `🎲 **${player.name}** tira ${notation}: **${result}**`;
+    // Formato "**Nombre:** ..." (con dos puntos), el mismo prefijo que llevan
+    // los mensajes de chat de los jugadores. CASO REAL: un personaje llamado
+    // "Tu" tiraba y el chat mostraba "🎲 **Tu** tira 1d20: 5" -- el DM-IA lo
+    // leyó como "tú tiras" y preguntó qué personaje era.
+    const rollContent = `**${player.name}:** 🎲 tira ${notation}: **${result}**`;
 
     // No se guarda aquí directamente: se construye el historial completo y se
     // delega en SendMessageUseCase, que es quien persiste el mensaje de la
